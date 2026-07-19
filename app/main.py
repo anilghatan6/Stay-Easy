@@ -30,8 +30,8 @@ load_dotenv()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # async with engine.begin() as conn:
+    #     await conn.run_sync(Base.metadata.create_all)
     yield
     # shutdown
     await engine.dispose()
@@ -41,7 +41,6 @@ app = FastAPI(
 )
 
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS").split(",")
-print(ALLOWED_ORIGINS)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
