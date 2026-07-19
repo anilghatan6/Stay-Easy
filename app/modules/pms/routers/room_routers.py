@@ -61,27 +61,6 @@ async def create_rooms(
     )
     return {"success": True, "data": response}
 
-
-@router.delete(
-    "/{room_id}",
-    response_model=StandardResponse[dict],
-    status_code=status.HTTP_200_OK,
-    summary="Delete a room",
-)
-async def delete_room(
-    property_id: uuid.UUID,
-    room_id: uuid.UUID,
-    user: CurrentUser,
-    room_service: RoomService = Depends(get_room_service),
-) -> StandardResponse[dict]:
-    verify_tenant(user)
-    response = await room_service.delete_room(
-        property_id=property_id,
-        tenant_id=user.tenant_id,
-        room_id=room_id,
-    )
-    return {"success": True, "data": response}
-
 @router.post(
     "/room-type",
     response_model=StandardResponse[RoomTypeResponse],
@@ -158,5 +137,41 @@ async def get_all_bed_types(
     response = await room_service.get_all_bed_types(
         property_id=property_id,
         tenant_id=user.tenant_id,
+    )
+    return {"success": True, "data": response}
+
+
+@router.get("/{room_id}", response_model=StandardResponse[RoomResponse], status_code=status.HTTP_200_OK, summary="Get a room")
+async def get_room(
+    property_id: uuid.UUID,
+    room_id: uuid.UUID,
+    user: CurrentUser,
+    room_service: RoomService = Depends(get_room_service),
+) -> StandardResponse[RoomResponse]:
+    verify_tenant(user)
+    response = await room_service.get_room(
+        property_id=property_id,
+        tenant_id=user.tenant_id,
+        room_id=room_id,
+    )
+    return {"success": True, "data": response}
+
+@router.delete(
+    "/{room_id}",
+    response_model=StandardResponse[dict],
+    status_code=status.HTTP_200_OK,
+    summary="Delete a room",
+)
+async def delete_room(
+    property_id: uuid.UUID,
+    room_id: uuid.UUID,
+    user: CurrentUser,
+    room_service: RoomService = Depends(get_room_service),
+) -> StandardResponse[dict]:
+    verify_tenant(user)
+    response = await room_service.delete_room(
+        property_id=property_id,
+        tenant_id=user.tenant_id,
+        room_id=room_id,
     )
     return {"success": True, "data": response}
