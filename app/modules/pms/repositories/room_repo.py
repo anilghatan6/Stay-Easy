@@ -1,0 +1,321 @@
+from app.utils.exceptions import RoomNotFoundException
+import uuid
+
+from sqlalchemy import func, select, or_
+from sqlalchemy.orm import joinedload
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.modules.pms.models.rooms_model import (
+    BedType,
+    Rooms,
+    RoomType,
+)
+from app.utils.exceptions import (
+    RepositoryException,
+)
+from app.utils.logging import LoggerFactory
+import psycopg.errors
+from typing import Sequence
+
+logger = LoggerFactory.get_logger(__name__)
+
+
+class RoomRepository:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    async def create_rooms(
+        self, property_id: uuid.UUID, rooms_data: list[dict]
+    ) -> list[dict]:
+        logger.info(
+            f"[RoomRepository] Initiating bulk transaction for {len(rooms_data)} rooms"
+        )
+        try:
+            rooms = [
+                Rooms(
+                    id=room.get("id", uuid.uuid4()),
+                    property_id=property_id,
+                    room_type_id=room["room_type_id"],
+                    bed_type_id=room["bed_type_id"],
+                    floor_number=room["floor_number"],
+                    room_name=room["room_name"],
+                    max_adults=room["max_adults"],
+                    max_children=room["max_children"],
+                    base_rate=room["base_rate"],
+                    status=room["status"],
+                    cancellation_policy=room["cancellation_policy"],
+                    cancellation_title=room["cancellation_title"],
+                    cancellation_description=room["cancellation_description"],
+                    photos=room["photos"],
+                    system_amenity_ids=room["system_amenity_ids"],
+                    custom_amenities=room["custom_amenities"],
+                )
+                for room in rooms_data
+            ]
+            self.db.add_all(rooms)
+            await self.db.flush()
+
+            room_ids = [room.id for room in rooms]
+
+            await self.db.commit()
+
+            stmt = (
+                select(Rooms)
+                .where(Rooms.id.in_(room_ids))
+                .options(joinedload(Rooms.room_type), joinedload(Rooms.bed_type))
+            )
+            result = await self.db.execute(stmt)
+            return result.scalars().all()
+
+        except IntegrityError as e:
+            await self.db.rollback()
+
+            # Extract the underlying driver error (asyncpg)
+            orig_err = getattr(e, "orig", None)
+
+            if orig_err and hasattr(orig_err, "__cause__"):
+                pg_exc = orig_err.__cause__
+
+                if isinstance(pg_exc, psycopg.errors.UniqueViolation):
+                    # Target unique index/constraints (e.g., uq_room_types_property_id_room_type_name or your rooms unique name index)
+                    constraint_name = pg_exc.constraint_name or pg_exc.index_name
+                    logger.warning(
+                        f"[RoomRepository] Unique key or index conflict hit: {constraint_name}"
+                    )
+                    raise RepositoryException(
+                        internal_detail=f"A room configuration or name collision occurred (Violated: {constraint_name}).",
+                        status_code=400,
+                    )
+
+                elif isinstance(pg_exc, psycopg.errors.CheckViolation):
+                    # Target check constraints (e.g., chk_room_types_default_property_consistency)
+                    constraint_name = pg_exc.constraint_name
+                    logger.warning(
+                        f"[RoomRepository] Check constraint broken: {constraint_name}"
+                    )
+                    raise RepositoryException(
+                        internal_detail=f"Data failed business logic checks. Ensure standard/default flags are valid (Violated: {constraint_name}).",
+                        status_code=400,
+                    )
+
+                elif isinstance(pg_exc, psycopg.errors.ForeignKeyViolation):
+                    logger.warning(
+                        f"[RoomRepository] Foreign key link missing: {pg_exc.detail}"
+                    )
+                    raise RepositoryException(
+                        internal_detail="The specified room type, bed type, or property ID does not exist.",
+                        status_code=400,
+                    )
+
+            # Fallback for generic integrity issues (e.g. non-nullable failures)
+            logger.error(f"[RoomRepository] Database consistency violation: {str(e)}")
+            raise RepositoryException(
+                f"Database consistency error during batch processing: {str(e)}"
+            )
+
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(
+                f"[RoomRepository] Unexpected bulk creation collapse: {str(e)}"
+            )
+            raise RepositoryException(f"Failed to batch create rooms: {str(e)}")
+
+    async def get_exisitng_room_type_name(self, property_id: uuid.UUID, name: str):
+        """check name collision"""
+        logger.info("[RoomRepository] Validating room type name collision")
+        try:
+            stmt = select(RoomType).where(
+                # Match either this specific property OR a global default (property_id is NULL)
+                or_(
+                    RoomType.property_id == property_id, RoomType.property_id.is_(None)
+                ),
+                func.lower(RoomType.room_type_name) == func.lower(name),
+            )
+            result = await self.db.execute(stmt)
+            return result.scalar_one_or_none()
+
+        except Exception as e:
+            logger.error(
+                f"[RoomRepository] Unexpected error checking room type name collision: {str(e)}"
+            )
+            raise RepositoryException(
+                f"Failed to check room type name collision: {str(e)}"
+            )
+
+    async def get_exisiting_bed_type_name(self, property_id: uuid.UUID, name: str):
+        logger.info("[RoomRepository] validating bed type name collision")
+        try:
+            stmt = select(BedType).where(
+                # Match either this specific property OR a global default (property_id is NULL)
+                or_(BedType.property_id == property_id, BedType.property_id.is_(None)),
+                func.lower(BedType.bed_name) == func.lower(name),
+            )
+            result = await self.db.execute(stmt)
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(
+                f"[RoomRepository] Unexpected error checking bed type name collision: {str(e)}"
+            )
+            raise RepositoryException(
+                f"Failed to check bed type name collision: {str(e)}"
+            )
+
+    async def create_room_type(self, property_id: uuid.UUID, room_type_data: dict):
+        try:
+            room_type = RoomType(
+                property_id=property_id,
+                room_type_name=room_type_data["room_type_name"],
+                is_default=False,
+            )
+            self.db.add(room_type)
+            await self.db.commit()
+            await self.db.refresh(room_type)
+            return room_type
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(
+                f"[RoomRepository] Unexpected error creating room type: {str(e)}"
+            )
+            raise RepositoryException(f"Failed to create room type: {str(e)}")
+
+    async def create_bed_type(self, property_id: uuid.UUID, bed_type_data: dict):
+        try:
+            bed_type = BedType(
+                property_id=property_id,
+                bed_name=bed_type_data["bed_name"],
+                is_default=False,
+            )
+            self.db.add(bed_type)
+            await self.db.commit()
+            await self.db.refresh(bed_type)
+            return bed_type
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(
+                f"[RoomRepository] Unexpected error creating bed type: {str(e)}"
+            )
+            raise RepositoryException(f"Failed to create bed type: {str(e)}")
+
+    async def get_existing_room_names(
+        self, property_id: uuid.UUID, room_names: list[str]
+    ):
+
+        logger.info(
+            f"[RoomRepository] getting all the room names for the property {property_id} and room names {room_names}"
+        )
+        try:
+            lower_room_names = [name.lower() for name in room_names]
+
+            stmt = select(Rooms).where(
+                Rooms.property_id == property_id,
+                func.lower(Rooms.room_name).in_(lower_room_names),
+            )
+
+            result = await self.db.execute(stmt)
+            return result.scalars().all()
+        except Exception as e:
+            logger.error(
+                f"[RoomRepository] Unexpected error getting room names: {str(e)}"
+            )
+            raise RepositoryException(f"Failed to get room names: {str(e)}")
+
+    async def get_all_rooms(self, property_id: uuid.UUID) -> Sequence[Rooms]:
+        """Get all rooms for a property, including room types and bed types."""
+        logger.info(f"[RoomRepository] Getting all rooms for property {property_id}")
+        try:
+            stmt = (
+                select(Rooms)
+                .where(Rooms.property_id == property_id)
+                .options(joinedload(Rooms.room_type), joinedload(Rooms.bed_type))
+            )
+
+            result = await self.db.execute(stmt)
+            rooms = result.scalars().all()
+
+            logger.info(
+                f"[RoomRepository] Found {len(rooms)} rooms for property {property_id}"
+            )
+            return rooms
+        except Exception as e:
+            logger.error(f"[RoomRepository] Unexpected error getting rooms: {str(e)}")
+            raise RepositoryException(f"Failed to get rooms: {str(e)}")
+
+    async def get_all_room_types(self, property_id: uuid.UUID) -> Sequence[RoomType]:
+        """Get all room types for a property."""
+        logger.info(
+            f"[RoomRepository] Getting all room types for property {property_id}"
+        )
+        try:
+            stmt = (
+                select(RoomType)
+                .where(
+                    or_(
+                        RoomType.property_id == property_id,
+                        RoomType.property_id.is_(None),
+                    )
+                )
+                # Optional: Order by defaults first, then alphabetically by name
+                .order_by(RoomType.is_default.desc(), RoomType.room_type_name.asc())
+            )
+            result = await self.db.execute(stmt)
+            room_types = result.scalars().all()
+
+            logger.info(
+                f"[RoomRepository] Found {len(room_types)} total room types for property {property_id}"
+            )
+            return room_types
+        except Exception as e:
+            logger.error(
+                f"[RoomRepository] Unexpected error getting room types: {str(e)}"
+            )
+            raise RepositoryException(f"Failed to get room types: {str(e)}")
+
+    async def get_all_bed_types(self, property_id: uuid.UUID) -> Sequence[BedType]:
+        """Get all bed types for a property."""
+        logger.info(
+            f"[RoomRepository] Getting all bed types for property {property_id}"
+        )
+        try:
+            stmt = (
+                select(BedType)
+                .where(
+                    or_(
+                        BedType.property_id == property_id,
+                        BedType.property_id.is_(None),
+                    )
+                )
+                # Optional: Order by defaults first, then alphabetically by name
+                .order_by(BedType.is_default.desc(), BedType.bed_name.asc())
+            )
+            result = await self.db.execute(stmt)
+            bed_types = result.scalars().all()
+
+            logger.info(
+                f"[RoomRepository] Found {len(bed_types)} total bed types for property {property_id}"
+            )
+            return bed_types
+        except Exception as e:
+            logger.error(
+                f"[RoomRepository] Unexpected error getting bed types: {str(e)}"
+            )
+            raise RepositoryException(f"Failed to get bed types: {str(e)}")
+
+    async def delete_room(self, room_id: uuid.UUID):
+        logger.info(f"[RoomRepository] Deleting room {room_id}")
+        try:
+            stmt = select(Rooms).where(Rooms.id == room_id)
+            result = await self.db.execute(stmt)
+            room = result.scalar_one_or_none()
+            if not room:
+                raise RoomNotFoundException("Room not found")
+            await self.db.delete(room)
+            await self.db.commit()
+            logger.info(f"[RoomRepository] Room {room_id} deleted successfully")
+            return room
+        except RoomNotFoundException:
+            raise
+        except Exception as e:
+            logger.error(f"[RoomRepository] Unexpected error deleting room: {str(e)}")
+            raise RepositoryException(f"Failed to delete room: {str(e)}")
+    
