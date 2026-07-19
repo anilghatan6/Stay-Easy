@@ -37,7 +37,7 @@ CANCELLATION_POLICY_DEFAULTS: Dict[CancellationPolicy, Dict[str, str]] = {
 class RoomPhotos(BaseModel):
     """Matches the JSONB shape: {"cover": "url", "gallery": ["url1", ...]}"""
  
-    cover:str = Field(default=None)
+    cover:Optional[str] = Field(default=None)
     gallery: List[str] = Field(default_factory=list)
  
     @field_validator("gallery")
