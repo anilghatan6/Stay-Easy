@@ -9,11 +9,11 @@ import uuid
 
 logger = LoggerFactory.get_logger(__name__)
 
-router = APIRouter(prefix="/pms", tags=["Image"])
+router = APIRouter(prefix="/properties", tags=["Image"])
 
 
 @router.post(
-    "/properties/{property_id}/images",
+    "/{property_id}/images",
     status_code=status.HTTP_201_CREATED,
     response_model=StandardResponse[List[str]],
 )
@@ -53,7 +53,7 @@ async def upload_images(
 
 
 @router.post(
-    "/properties/{property_id}/rooms/images",
+    "/{property_id}/rooms/images",
     status_code=status.HTTP_201_CREATED,
     response_model=StandardResponse[List[str]],
 )
@@ -93,7 +93,7 @@ async def upload_room_images(
     return {"success": True, "data": uploaded_image_urls}
 
 
-@router.post("/property/{property_id}/image")
+@router.post("/{property_id}/image")
 async def upload_image_property(
     user: CurrentUser,
     property_id: uuid.UUID = Path(...),
@@ -119,7 +119,7 @@ async def upload_image_property(
     return {"success": True, "data": uploaded_image_url}
 
 
-@router.post("/property/{property_id}/rooms/image")
+@router.post("/{property_id}/rooms/image")
 async def upload_image_room(
     user: CurrentUser,
     property_id: uuid.UUID = Path(...),

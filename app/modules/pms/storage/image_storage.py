@@ -213,7 +213,7 @@ class StorageFactory:
             logger.info("[StorageFactory] Using Local Storage")
             return LocalImageStorage()
         elif provider_clean == "cloudinary":
-            logger.info("[StorageFactory] Using Cloudinary Storage")
+            # logger.info("[StorageFactory] Using Cloudinary Storage")
             return CloudinaryImageStorage()
         else:
             raise ValueError(f"Unsupported storage provider: {provider}")
