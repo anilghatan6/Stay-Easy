@@ -1,33 +1,33 @@
-from app.modules.pms.schemas.room_schemas import RoomTypeCreate
-import uuid
 import asyncio
+import uuid
 
 from app.modules.pms.repositories.properties_repo import PropertyRepository
 from app.modules.pms.repositories.room_repo import RoomRepository
 from app.modules.pms.schemas.room_schemas import (
+    # RoomTypeCreate,
+    BedTypeCreate,
+    BedTypeResponse,
     RoomBulkCreateRequest,
     RoomBulkCreateResponse,
     RoomResponse,
+    RoomTypeCreate,
     RoomTypeResponse,
-    BedTypeResponse,
-    # RoomTypeCreate,
-    BedTypeCreate,
+    RoomUpdate,
 )
+from app.modules.pms.services.image_services import ImageService
 from app.utils.exceptions import (
-    PropertyNotFoundException,
-    RepositoryException,
-    RoomTypeAlreadyExistsException,
     BedTypeAlreadyExistsException,
-    RoomNameAlreadyExistsException,
-    ServiceException,
-    UnauthorizedException,
-    # RoomNotFoundException,
+    ImageStorageException,
     # AmenityNotFoundException,
     InvalidImageException,
-    ImageStorageException,
+    PropertyNotFoundException,
+    RepositoryException,
+    RoomNameAlreadyExistsException,
+    RoomNotFoundException,
+    RoomTypeAlreadyExistsException,
+    ServiceException,
+    UnauthorizedException,
 )
-
-from app.modules.pms.services.image_services import ImageService
 from app.utils.logging import LoggerFactory
 
 logger = LoggerFactory.get_logger(__name__)
@@ -114,7 +114,7 @@ class RoomService:
                 raise RoomTypeAlreadyExistsException("Room type name already exists")
 
         for bed_type in bed_types:
-            bed_type_obj = await self.room_repo.get_exisiting_bed_type_name(
+            bed_type_obj = await self.room_repo.get_existing_bed_type_name(
                 property_id, bed_type
             )
             if bed_type_obj:
@@ -171,7 +171,7 @@ class RoomService:
         try:
             property_obj = await self._validate_property(property_id, tenant_id)
             room_type_dict = payload.model_dump()
-            existing_room_type_name = await self.room_repo.get_exisitng_room_type_name(
+            existing_room_type_name = await self.room_repo.get_existing_room_type_name(
                 property_id, room_type_dict["room_type_name"]
             )
             if existing_room_type_name:
@@ -197,7 +197,7 @@ class RoomService:
         try:
             property_obj = await self._validate_property(property_id, tenant_id)
             bed_type_dict = payload.model_dump()
-            existing_bed_type_name = await self.room_repo.get_exisiting_bed_type_name(
+            existing_bed_type_name = await self.room_repo.get_existing_bed_type_name(
                 property_id, bed_type_dict["bed_name"]
             )
             if existing_bed_type_name:
@@ -288,4 +288,71 @@ class RoomService:
             raise
         except Exception as e:
             logger.error(f"[RoomService] Error executing delete room: {str(e)}")
+            raise ServiceException(str(e))
+
+    async def get_room(
+        self, property_id: uuid.UUID, tenant_id: uuid.UUID, room_id: uuid.UUID
+    ) -> RoomResponse:
+        logger.info(f"[RoomService] Getting room {room_id} for property {property_id}")
+        try:
+            await self._validate_property(property_id, tenant_id)
+            room = await self.room_repo.get_room(room_id)
+            if not room:
+                logger.info(
+                    f"[RoomService] Room {room_id} not found for property {property_id}"
+                )
+                raise RoomNotFoundException(
+                    internal_detail=f"Room {room_id} not found for property {property_id}"
+                )
+            logger.info(f"[RoomService] Room {room_id} found successfully")
+            return RoomResponse.model_validate(room)
+        except (
+            PropertyNotFoundException,
+            UnauthorizedException,
+            RepositoryException,
+            RoomNotFoundException,
+        ):
+            raise
+        except Exception as e:
+            logger.error(f"[RoomService] Error executing get room: {str(e)}")
+            raise ServiceException(str(e))
+
+    async def update_room(
+        self,
+        property_id: uuid.UUID,
+        tenant_id: uuid.UUID,
+        room_id: uuid.UUID,
+        payload: RoomUpdate,
+    ):
+
+        logger.info(f"[RoomService] Updating room {room_id} for property {property_id}")
+        try:
+            await self._validate_property(property_id, tenant_id)
+            payload_dict = payload.model_dump(exclude_unset=True)
+            if payload_dict.get("room_name"):
+                existing_room_name = await self.room_repo.get_room_by_name(
+                    property_id=property_id,
+                    room_name=payload_dict.get("room_name"),
+                    exclude_room_id=room_id,
+                )
+                if existing_room_name:
+                    logger.info(
+                        f"[RoomService] Room name {payload_dict.get('room_name')} already exists"
+                    )
+                    raise RoomNameAlreadyExistsException(
+                        f"Room name '{payload_dict.get('room_name')}' already exists"
+                    )
+            room = await self.room_repo.update_room(room_id, payload_dict)
+            logger.info(f"[RoomService] Room {room_id} updated successfully")
+            return RoomResponse.model_validate(room)
+        except (
+            PropertyNotFoundException,
+            UnauthorizedException,
+            RepositoryException,
+            RoomNotFoundException,
+            RoomNameAlreadyExistsException,
+        ):
+            raise
+        except Exception as e:
+            logger.error(f"[RoomService] Error executing update room: {str(e)}")
             raise ServiceException(str(e))

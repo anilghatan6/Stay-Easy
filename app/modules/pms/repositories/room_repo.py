@@ -16,7 +16,8 @@ from app.utils.exceptions import (
 )
 from app.utils.logging import LoggerFactory
 import psycopg.errors
-from typing import Sequence
+from typing import Sequence, Optional
+
 
 logger = LoggerFactory.get_logger(__name__)
 
@@ -121,7 +122,7 @@ class RoomRepository:
             )
             raise RepositoryException(f"Failed to batch create rooms: {str(e)}")
 
-    async def get_exisitng_room_type_name(self, property_id: uuid.UUID, name: str):
+    async def get_existing_room_type_name(self, property_id: uuid.UUID, name: str):
         """check name collision"""
         logger.info("[RoomRepository] Validating room type name collision")
         try:
@@ -143,7 +144,7 @@ class RoomRepository:
                 f"Failed to check room type name collision: {str(e)}"
             )
 
-    async def get_exisiting_bed_type_name(self, property_id: uuid.UUID, name: str):
+    async def get_existing_bed_type_name(self, property_id: uuid.UUID, name: str):
         logger.info("[RoomRepository] validating bed type name collision")
         try:
             stmt = select(BedType).where(
@@ -318,4 +319,103 @@ class RoomRepository:
         except Exception as e:
             logger.error(f"[RoomRepository] Unexpected error deleting room: {str(e)}")
             raise RepositoryException(f"Failed to delete room: {str(e)}")
-    
+
+    async def get_room(self, room_id: uuid.UUID) -> Optional[Rooms]:
+        """Get a single room by ID with eager loading."""
+        logger.info(f"[RoomRepository] Getting room with ID {room_id}")
+        try:
+            stmt = (
+                select(Rooms)
+                .where(Rooms.id == room_id)
+                .options(joinedload(Rooms.room_type), joinedload(Rooms.bed_type))
+            )
+            result = await self.db.execute(stmt)
+            room = result.scalar_one_or_none()
+
+            if room:
+                logger.info(f"[RoomRepository] Room {room_id} found successfully")
+            else:
+                logger.info(f"[RoomRepository] Room with ID {room_id} not found")
+            return room
+        except Exception as e:
+            logger.error(f"[RoomRepository] Unexpected error getting room: {str(e)}")
+            raise RepositoryException(f"Failed to get room: {str(e)}")
+
+    async def get_room_by_name(
+        self,
+        property_id: uuid.UUID,
+        room_name: str,
+        exclude_room_id: Optional[uuid.UUID] = None,
+    ) -> Optional[Rooms]:
+        """
+        Checks if a room name already exists within a specific property.
+        Allows excluding a specific room_id to prevent self-conflict on updates.
+        """
+        try:
+            # 1. Scope query strictly to the current property and target room name
+            stmt = select(Rooms).where(
+                Rooms.property_id == property_id, Rooms.room_name == room_name
+            )
+
+            # 2. If an exclusion ID is provided, append the exclusion condition
+            if exclude_room_id is not None:
+                stmt = stmt.where(Rooms.id != exclude_room_id)
+
+            result = await self.db.execute(stmt)
+            return result.scalar_one_or_none()
+
+        except Exception as e:
+            logger.error(
+                f"[RoomRepository] Error checking room name uniqueness: {str(e)}",
+                exc_info=True,
+            )
+            raise RepositoryException(
+                f"Failed to check room name availability: {str(e)}"
+            )
+
+    async def update_room(self, room_id: uuid.UUID, payload: dict):
+        logger.info(f"[RoomRepository] Updating room {room_id}")
+        try:
+            stmt = select(Rooms).where(Rooms.id == room_id)
+            result = await self.db.execute(stmt)
+            room = result.scalar_one_or_none()
+
+            if not room:
+                raise RoomNotFoundException("Room not found")
+
+            # 1. Handle nested 'photos' safely if present
+            if "photos" in payload and payload["photos"]:
+                photos_data = payload["photos"]
+                if "cover" in photos_data:
+                    room.cover = photos_data["cover"]
+                if "gallery" in photos_data:
+                    room.gallery = photos_data["gallery"]
+
+            # 2. Update all other attributes dynamically, avoiding 'photos'
+            for key, value in payload.items():
+                if key == "photos":
+                    continue  # Skip to prevent overwriting room.cover/room.gallery
+
+                if hasattr(room, key):
+                    setattr(room, key, value)
+
+            # 3. Save updates. (self.db.update does not exist; tracked changes flush automatically on commit)
+            await self.db.commit()
+            await self.db.refresh(
+                room
+            )  # Refresh ensures your returned object has fully accurate state
+
+            logger.info(f"[RoomRepository] Room {room_id} updated successfully")
+            return room
+
+        except RoomNotFoundException:
+            raise
+        except Exception as e:
+            await (
+                self.db.rollback()
+            )  # Crucial: clean up the transaction state on failure
+            logger.error(
+                f"[RoomRepository] Unexpected error updating room: {str(e)}",
+                exc_info=True,
+            )
+            raise RepositoryException(f"Failed to update room: {str(e)}")

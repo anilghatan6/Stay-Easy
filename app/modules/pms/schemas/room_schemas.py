@@ -1,10 +1,9 @@
-from pydantic import field_validator
 import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional, Dict
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator,field_validator
 
 from app.modules.pms.models.rooms_model import CancellationPolicy, RoomStatus
 
@@ -111,7 +110,58 @@ class RoomBulkCreateRequest(BaseModel):
                 f"Duplicate room name within this request: {', '.join(sorted(dupes))}"
             )
         return self
- 
+
+
+class RoomUpdate(BaseModel):
+    room_name: Optional[str] = Field(
+        None, min_length=1, max_length=100, examples=["Ocean Suite A"]
+    )
+    room_type_id: Optional[uuid.UUID] = None
+    bed_type_id: Optional[uuid.UUID] = None
+    photos: Optional[RoomPhotos] = None
+    max_adults: Optional[int] = Field(None, ge=1, le=30)
+    max_children: Optional[int] = Field(None, ge=0, le=15)
+    floor_number: Optional[int] = Field(None, ge=0, le=100)
+    base_rate: Optional[Decimal] = Field(None, ge=1, decimal_places=2)
+    status: Optional[RoomStatus] = None
+    cancellation_policy: Optional[CancellationPolicy] = None
+    cancellation_title: Optional[str] = Field(None, max_length=255)
+    cancellation_description: Optional[str] = Field(None, max_length=2000)
+    system_amenity_ids: Optional[List[uuid.UUID]] = None
+    custom_amenities: Optional[List[CustomAmenity]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def handle_cancellation_logic(cls, data: any) -> any:
+        if not isinstance(data, dict):
+            return data
+
+        policy = data.get("cancellation_policy")
+        title = data.get("cancellation_title")
+        description = data.get("cancellation_description")
+
+        if policy is not None:
+            # 1. Handle CUSTOM logic with strict text checks
+            if policy == CancellationPolicy.CUSTOM or policy == "CUSTOM":
+                if not title or not str(title).strip():
+                    raise ValueError(
+                        "cancellation title is required when cancellation policy is CUSTOM."
+                    )
+                if not description or not str(description).strip():
+                    raise ValueError(
+                        "cancellation description is required when cancellation policy is CUSTOM."
+                    )
+
+            # 2. Automatically inject defaults for standard policies
+            else:
+                defaults = CANCELLATION_POLICY_DEFAULTS.get(policy)
+                if defaults:
+                    data["cancellation_title"] = defaults["title"]
+                    data["cancellation_description"] = defaults["description"]
+
+        return data
+
+
 class RoomResponse(RoomBase):
     model_config = ConfigDict(from_attributes=True)
  
