@@ -335,3 +335,44 @@ class PropertyService:
             raise ServiceException(
                 internal_detail=f"Failed to delete property: {str(e)}"
             )
+
+    async def get_property_by_id(
+        self, property_id: uuid.UUID, tenant_id: uuid.UUID
+    ) -> PropertyResponse:
+        logger.info(f"[PropertyService] getting property {property_id}")
+        try:
+            property_obj = await self.property_repo.get_property_by_id(
+                property_id, tenant_id
+            )
+            if not property_obj:
+                raise PropertyNotFoundException("Property not found")
+
+            # Fetching system amenities
+            db_amenities = await self.property_repo.resolve_amenities_for_property(
+                property_obj.system_amenity_ids or []
+            )
+
+            # Formatting system amenities for response
+            property_system_amenities = [
+                SystemAmenityResponse.model_validate(amenity)
+                for amenity in db_amenities
+            ]
+
+            # Preparing the property data dictionary
+            prop_data = {
+                **{
+                    c.name: getattr(property_obj, c.name)
+                    for c in property_obj.__table__.columns
+                },
+                "system_amenities": property_system_amenities,
+                "custom_amenities": property_obj.custom_amenities or [],
+                "photos": property_obj.photos or {"cover": None, "gallery": []},
+            }
+
+            return PropertyResponse.model_validate(prop_data)
+
+        except (PropertyNotFoundException, RepositoryException):
+            raise
+        except Exception as e:
+            logger.error(f"[PropertyService] Error getting property: {str(e)}")
+            raise ServiceException(internal_detail=f"Failed to get property: {str(e)}")
