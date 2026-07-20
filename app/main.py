@@ -30,17 +30,29 @@ load_dotenv()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup
-    # async with engine.begin() as conn:
-    #     await conn.run_sync(Base.metadata.create_all)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     yield
     # shutdown
     await engine.dispose()
+
 
 app = FastAPI(
     lifespan=lifespan, title="StayEasy API", version="1.0.0", root_path="/api/v1"
 )
 
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS").split(",")
+# Default to an empty list instead of crashing on os.getenv(...).split(",")
+# if ALLOWED_ORIGINS is missing from the environment.
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
+]
+
+# Stashed on app.state so the catch-all exception handler (which runs
+# outside CORSMiddleware) can attach CORS headers manually.
+app.state.allowed_origins = ALLOWED_ORIGINS
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
