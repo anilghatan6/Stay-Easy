@@ -12,7 +12,15 @@ engine = create_async_engine(
     database_url,
     echo=False,
     # connect_args={"check_same_thread": False},
+    # 1. Test connections before checking them out of the pool
+    pool_pre_ping=True,
+    # 2. Recycle connections older than 5-10 minutes (prevents server-side timeout drops)
+    pool_recycle=300,
+    # 3. Keep pool size sensible for your host limits
+    pool_size=10,
+    max_overflow=20,
 )
+
 
 AsyncSessionLocal = async_sessionmaker(
     engine,
