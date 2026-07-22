@@ -179,7 +179,9 @@ class PropertyService:
                 promoted_iter = iter(promoted_urls)
                 if cover_url:
                     payload_dict["photos"]["cover"] = next(promoted_iter)
-                payload_dict["photos"]["gallery"] = [next(promoted_iter) for _ in gallery_urls]
+                payload_dict["photos"]["gallery"] = [
+                    next(promoted_iter) for _ in gallery_urls
+                ]
 
             # ── Persist to DB with permanent URLs ────────────────────────────
             property_obj = await self.property_repo.create_photos_and_amenities(
@@ -375,16 +377,13 @@ class PropertyService:
             raise
         except Exception as e:
             logger.error(f"[PropertyService] Error getting property: {str(e)}")
-            raise ServiceException(
-                internal_detail=f"Failed to get property: {str(e)}"
-            )
+            raise ServiceException(internal_detail=f"Failed to get property: {str(e)}")
 
     async def toggle_property_activation(
         self, property_id: uuid.UUID, tenant_id: uuid.UUID
     ) -> dict:
         logger.info(f"[PropertyService] Toggling activation for property {property_id}")
         try:
-            
             new_status = await self.property_repo.toggle_property_activation(
                 property_id, tenant_id
             )
@@ -395,7 +394,24 @@ class PropertyService:
         except (PropertyNotFoundException, RepositoryException):
             raise
         except Exception as e:
-            logger.error(f"[PropertyService] Error toggling property activation: {str(e)}")
+            logger.error(
+                f"[PropertyService] Error toggling property activation: {str(e)}"
+            )
             raise ServiceException(
                 internal_detail=f"Failed to toggle property activation: {str(e)}"
+            )
+
+    async def get_number_of_floors(self, property_id: uuid.UUID, tenant_id: uuid.UUID) ->dict[str, int]:
+        logger.info("[PropertyService] Getting the number of floors")
+        try:
+            no_of_floors = await self.property_repo.get_number_of_floors(
+                property_id, tenant_id
+            )
+            return {"number_of_floors": no_of_floors}
+        except (PropertyNotFoundException, RepositoryException):
+            raise
+        except Exception as e:
+            logger.error(f"[PropertyService] Error getting number of floors: {str(e)}")
+            raise ServiceException(
+                internal_detail=f"Failed to get number of floors: {str(e)}"
             )

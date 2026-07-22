@@ -197,3 +197,19 @@ async def toggle_property_activation(
     tenant_id = current_user.tenant_id
     response = await property_service.toggle_property_activation(property_id, tenant_id)
     return response
+
+
+@router.get(
+    "/{property_id}/number-of-floors",
+    status_code=status.HTTP_200_OK,
+    response_model=StandardResponse[dict[str, int]],
+)
+async def get_number_of_floors(
+    property_id: uuid.UUID,
+    current_user: CurrentUser,
+    property_service: PropertyService = Depends(get_property_service),
+):
+    verify_tenant(current_user)
+    tenant_id = current_user.tenant_id
+    response = await property_service.get_number_of_floors(property_id, tenant_id)
+    return {"success": True, "data": response}

@@ -481,3 +481,28 @@ class PropertyRepository:
                 f"[PropertyRepository] Error toggling property activation: {str(e)}"
             )
             raise RepositoryException(internal_detail=str(e))
+
+    async def get_number_of_floors(
+        self,
+        property_id: uuid.UUID,
+        tenant_id: uuid.UUID,
+    ) -> int | None:
+        logger.info("[PropertyRepository] Getting the number of floors")
+        try:
+            result = await self.db.execute(
+                select(Property).where(
+                    Property.id == property_id,
+                    Property.tenant_id == tenant_id,
+                )
+            )
+            property_obj = result.scalar_one_or_none()
+            if not property_obj:
+                raise PropertyNotFoundException("Property not found or access denied")
+            return property_obj.number_of_floors
+        except PropertyNotFoundException:
+            raise
+        except Exception as e:
+            logger.error(
+                f"[PropertyRepository] Error getting number of floors: {str(e)}"
+            )
+            raise RepositoryException(internal_detail=str(e))
