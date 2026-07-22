@@ -50,7 +50,7 @@ class SpecialOfferBase(BaseModel):
 
 # Bulk payload wrapper mapping array list
 class SpecialOffersCreate(BaseModel):
-    offers: List[SpecialOfferBase] = Field(..., min_length=1)
+    offers: List[SpecialOfferBase] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_unique_titles(self) -> "SpecialOffersCreate":

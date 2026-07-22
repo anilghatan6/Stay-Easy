@@ -14,13 +14,12 @@ from datetime import datetime
 
 
 class TenantBase(BaseModel):
-    name: str = Field(
-        ...,  
-        min_length=2,
-        max_length=255,
-        strip_whitespace=True,
-        title="Tenant Name",
-        description="Name of the tenant",
+       name: Annotated[str, StringConstraints(strip_whitespace=True)] = Field(
+        ..., 
+        min_length=2, 
+        max_length=255, 
+        title="Tenant Name", 
+        description="Name of the tenant"
     )
     
 class TenantCreateSchema(TenantBase):
@@ -34,12 +33,8 @@ class TenantResponseSchema(TenantBase):
 
 
 class TenantUpdateSchema(BaseModel):
-    name: Optional[str] = Field(
-        None,
-        min_length=2,
-        max_length=255,
-        strip_whitespace=True,
-        title="Tenant Name",
-        description="Name of the tenant",
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=255)] | None = Field(
+        None, 
+        title="Tenant Name", 
+        description="Name of the tenant"
     )
-    

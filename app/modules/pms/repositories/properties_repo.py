@@ -63,6 +63,9 @@ class PropertyRepository:
     ) -> dict:
         logger.info("[PropertyRepository] Creating general information")
         try:
+            property_data.setdefault("system_amenity_ids", [])
+            property_data.setdefault("custom_amenities", [])
+            property_data.setdefault("photos", {"cover": None, "gallery": []})
             new_property = Property(tenant_id=tenant_id, **property_data)
             self.db.add(new_property)
             await self.db.commit()

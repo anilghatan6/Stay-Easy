@@ -4,9 +4,41 @@ from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from typing import AsyncGenerator
 
-# ── Patch SQLite to accept PostgreSQL ARRAY columns (for schema creation) ──
+# ── Patch SQLite to accept PostgreSQL ARRAY columns ──
+import json
 from sqlalchemy.dialects.sqlite.base import SQLiteTypeCompiler
+from sqlalchemy.dialects.postgresql import ARRAY
+
 SQLiteTypeCompiler.visit_ARRAY = lambda self, type_, **kw: "JSON"
+SQLiteTypeCompiler.visit_JSONB = lambda self, type_, **kw: "JSON"
+
+def _array_bind_processor(self, dialect):
+    if dialect.name == "sqlite":
+        item_proc = self.item_type.bind_processor(dialect)
+        def process(value):
+            if value is None:
+                return None
+            if item_proc:
+                value = [item_proc(v) for v in value]
+            return json.dumps(value)
+        return process
+    return None
+
+def _array_result_processor(self, dialect, coltype):
+    if dialect.name == "sqlite":
+        item_proc = self.item_type.result_processor(dialect, coltype)
+        def process(value):
+            if value is None:
+                return None
+            items = json.loads(value)
+            if item_proc:
+                items = [item_proc(v) for v in items]
+            return items
+        return process
+    return None
+
+ARRAY.bind_processor = _array_bind_processor
+ARRAY.result_processor = _array_result_processor
 
 # ── App imports (after patch so models load cleanly) ──
 from app.main import app

@@ -16,9 +16,8 @@ engine = create_async_engine(
     pool_pre_ping=True,
     # 2. Recycle connections older than 5-10 minutes (prevents server-side timeout drops)
     pool_recycle=300,
-    # 3. Keep pool size sensible for your host limits
-    pool_size=10,
-    max_overflow=20,
+    # 3. Keep pool size sensible for your host limits (SQLite ignores these)
+    # **({} if "sqlite" in database_url else {"pool_size": 10, "max_overflow": 20}),
 )
 
 AsyncSessionLocal = async_sessionmaker(

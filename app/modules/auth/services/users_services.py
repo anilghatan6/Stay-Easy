@@ -205,7 +205,7 @@ class UserService:
                 "access_token": self.auth_service.create_access_token(token_data),
                 "token_type": "bearer",
             }
-        except InvalidRefreshTokenException:
+        except (InvalidRefreshTokenException, UnauthorizedException):
             raise
         except Exception as e:
             logger.error(f"[UserService] Error in refresh_token: {str(e)}")

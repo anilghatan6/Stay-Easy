@@ -285,7 +285,7 @@ class RoomService:
             await self.room_repo.delete_room(room_id)
             logger.info(f"[RoomService] Room {room_id} deleted successfully")
             return {"message": "Room deleted successfully"}
-        except (PropertyNotFoundException, UnauthorizedException, RepositoryException):
+        except (PropertyNotFoundException, UnauthorizedException, RepositoryException, RoomNotFoundException):
             raise
         except Exception as e:
             logger.error(f"[RoomService] Error executing delete room: {str(e)}")

@@ -1,238 +1,473 @@
-"""
-Tests for /pms/properties/* endpoints.
-
-All tests share `pms_client` (authenticated admin with tenant) and
-`pms_token_store` from the PMS-level conftest.py.
-
-Execution order relies on declaration order + shared pms_token_store
-to pass property_id to later tests.
-"""
-import pytest
+import uuid
+from unittest.mock import AsyncMock
 from httpx import AsyncClient
+import pytest
+from app.main import app
+from app.modules.pms.services.image_services import ImageService
 
+CLOUDINARY_BASE = "https://res.cloudinary.com/drahdqd63/image/upload/"
 
-# ─── helpers ────────────────────────────────────────────────────────────────
+GENERAL_INFO_PAYLOAD = {
+    "name": "Test Hotel",
+    "type": "HOTEL",
+    "description": "A test hotel",
+    "phone_number": "1234567890",
+    "email": "hotel@test.com",
+    "total_rooms": 10,
+    "number_of_floors": 3,
+    "year_built": 2000,
+}
+
+LOCATION_PAYLOAD = {
+    "country": "New Zealand",
+    "state": "Auckland",
+    "city": "Auckland City",
+    "zip_code": "1010",
+    "address": "123 Test St",
+    "latitude": "-36.848461",
+    "longitude": "174.763336",
+}
+
+PHOTOS_AMENITIES_PAYLOAD = {
+    "photos": {
+        "cover": f"{CLOUDINARY_BASE}cover.jpg",
+        "gallery": [f"{CLOUDINARY_BASE}gallery1.jpg"],
+    },
+    "amenities": {
+        "system_amenity_ids": [],
+        "custom_amenities": [],
+    },
+}
+
+LOCALIZATION_PAYLOAD = {
+    "currency": "USD",
+    "timezone": "UTC",
+    "language": "English",
+    "always_allow_check_in_out": True,
+}
+
+BRAND_VISUAL_PAYLOAD = {
+    "brand_logo_url": f"{CLOUDINARY_BASE}logo.jpg",
+    "brand_color": "#FF5733",
+}
+
 
 def auth_headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-VALID_PROPERTY_PAYLOAD = {
-    "name": "Ocean View Hotel",
-    "type": "HOTEL",
-    "description": "A beautiful hotel with ocean views.",
-    "country": "New Zealand",
-    "state": "Auckland",
-    "city": "Auckland City",
-    "zip_code": "1010",
-    "address": "123 Ocean Drive",
-    "latitude": "-36.848461",
-    "longitude": "174.763336",
-    "hotel_detail": {
-        "check_in_time_from": "2:00 PM",
-        "check_in_time_to": "6:00 PM",
-        "check_out_time_from": "9:00 AM",
-        "check_out_time_to": "11:00 AM",
-        "total_rooms": 20,
-        "year_built": 2010,
-        "number_of_floors": 5,
-    },
-    "amenities": [
-        {"name": "Free WiFi", "is_default": False},
-        {"name": "Swimming Pool", "is_default": False},
-    ],
-    "photo_urls": [
-        "https://example.com/photo1.jpg",
-        "https://example.com/photo2.jpg",
-    ],
-}
+async def _create_property(client: AsyncClient, store: dict) -> str:
+    headers = auth_headers(store["access_token"])
+    resp = await client.post(
+        "/properties/general-information", json=GENERAL_INFO_PAYLOAD, headers=headers
+    )
+    assert resp.status_code == 201, resp.text
+    return resp.json()["data"]["id"]
 
 
 # ────────────────────────────────────────────────────────────────────────────
-# POST /pms/properties/ — unauthenticated
+# Unauthenticated — all endpoints without token → 401/403
 # ────────────────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_create_property_unauthenticated(pms_client: AsyncClient):
-    """Without token, should get 401/403."""
-    resp = await pms_client.post("/pms/properties/", json=VALID_PROPERTY_PAYLOAD)
+async def test_create_general_info_unauthenticated(pms_client: AsyncClient):
+    resp = await pms_client.post(
+        "/properties/general-information", json=GENERAL_INFO_PAYLOAD
+    )
+    assert resp.status_code in (401, 403), resp.text
+
+
+@pytest.mark.asyncio
+async def test_get_properties_unauthenticated(pms_client: AsyncClient):
+    resp = await pms_client.get("/properties/")
+    assert resp.status_code in (401, 403), resp.text
+
+
+@pytest.mark.asyncio
+async def test_get_property_by_id_unauthenticated(pms_client: AsyncClient):
+    resp = await pms_client.get("/properties/00000000-0000-0000-0000-000000000000")
+    assert resp.status_code in (401, 403), resp.text
+
+
+@pytest.mark.asyncio
+async def test_get_amenities_unauthenticated(pms_client: AsyncClient):
+    resp = await pms_client.get("/properties/amenities")
+    assert resp.status_code in (401, 403), resp.text
+
+
+@pytest.mark.asyncio
+async def test_delete_property_unauthenticated(pms_client: AsyncClient):
+    resp = await pms_client.delete("/properties/00000000-0000-0000-0000-000000000000")
     assert resp.status_code in (401, 403), resp.text
 
 
 # ────────────────────────────────────────────────────────────────────────────
-# POST /pms/properties/ — success
+# POST /properties/general-information — validation → 422
 # ────────────────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_create_property(pms_client: AsyncClient, pms_token_store: dict):
-    resp = await pms_client.post(
-        "/pms/properties/",
-        json=VALID_PROPERTY_PAYLOAD,
-        headers=auth_headers(pms_token_store["access_token"]),
-    )
-    assert resp.status_code == 201, resp.text
-    data = resp.json()
-    assert data["success"] is True
-
-    prop = data["data"]
-    assert prop["name"] == "Ocean View Hotel"
-    assert prop["type"] == "HOTEL"
-    assert prop["country"] == "New Zealand"
-    assert "id" in prop
-    assert "hotel_detail" in prop
-    assert len(prop["amenities"]) == 2
-    assert len(prop["photos"]) == 2
-
-    # persist for subsequent tests
-    pms_token_store["property_id"] = prop["id"]
-
-
-# ────────────────────────────────────────────────────────────────────────────
-# POST /pms/properties/ — duplicate amenities → 422
-# ────────────────────────────────────────────────────────────────────────────
-
-@pytest.mark.asyncio
-async def test_create_property_duplicate_amenities(
+async def test_create_general_info_name_too_short(
     pms_client: AsyncClient, pms_token_store: dict
 ):
-    bad_payload = {**VALID_PROPERTY_PAYLOAD, "name": "Another Hotel"}
-    bad_payload["amenities"] = [
-        {"name": "Free WiFi", "is_default": False},
-        {"name": "free wifi", "is_default": False},   # case-insensitive duplicate
-    ]
+    payload = {**GENERAL_INFO_PAYLOAD, "name": "A"}
     resp = await pms_client.post(
-        "/pms/properties/",
-        json=bad_payload,
+        "/properties/general-information",
+        json=payload,
+        headers=auth_headers(pms_token_store["access_token"]),
+    )
+    assert resp.status_code == 422, resp.text
+
+
+@pytest.mark.asyncio
+async def test_create_general_info_name_too_long(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    payload = {**GENERAL_INFO_PAYLOAD, "name": "A" * 256}
+    resp = await pms_client.post(
+        "/properties/general-information",
+        json=payload,
+        headers=auth_headers(pms_token_store["access_token"]),
+    )
+    assert resp.status_code == 422, resp.text
+
+
+@pytest.mark.asyncio
+async def test_create_general_info_invalid_phone(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    payload = {**GENERAL_INFO_PAYLOAD, "phone_number": "invalid"}
+    resp = await pms_client.post(
+        "/properties/general-information",
+        json=payload,
+        headers=auth_headers(pms_token_store["access_token"]),
+    )
+    assert resp.status_code == 422, resp.text
+
+
+@pytest.mark.asyncio
+async def test_create_general_info_invalid_email(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    payload = {**GENERAL_INFO_PAYLOAD, "email": "not-an-email"}
+    resp = await pms_client.post(
+        "/properties/general-information",
+        json=payload,
+        headers=auth_headers(pms_token_store["access_token"]),
+    )
+    assert resp.status_code == 422, resp.text
+
+
+@pytest.mark.asyncio
+async def test_create_general_info_missing_required(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    resp = await pms_client.post(
+        "/properties/general-information",
+        json={},
         headers=auth_headers(pms_token_store["access_token"]),
     )
     assert resp.status_code == 422, resp.text
 
 
 # ────────────────────────────────────────────────────────────────────────────
-# POST /pms/properties/ — invalid check-in time order → 422
+# POST /properties/general-information — success + duplicate
 # ────────────────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_create_property_invalid_checkin_times(
+async def test_create_general_info_success(
     pms_client: AsyncClient, pms_token_store: dict
 ):
-    bad_payload = {
-        **VALID_PROPERTY_PAYLOAD,
-        "name": "Bad Time Hotel",
-        "hotel_detail": {
-            **VALID_PROPERTY_PAYLOAD["hotel_detail"],
-            "check_in_time_from": "6:00 PM",   # from AFTER to — invalid
-            "check_in_time_to": "2:00 PM",
+    prop_id = await _create_property(pms_client, pms_token_store)
+    uuid.UUID(prop_id)
+    pms_token_store["test_property_id"] = prop_id
+
+
+@pytest.mark.asyncio
+async def test_create_general_info_duplicate_name(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    resp = await pms_client.post(
+        "/properties/general-information",
+        json=GENERAL_INFO_PAYLOAD,
+        headers=auth_headers(pms_token_store["access_token"]),
+    )
+    assert resp.status_code in (400, 409), resp.text
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# POST /properties/{id}/create-location
+# ────────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_create_location_success(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    prop_id = pms_token_store["test_property_id"]
+    resp = await pms_client.post(
+        f"/properties/{prop_id}/create-location",
+        json=LOCATION_PAYLOAD,
+        headers=auth_headers(pms_token_store["access_token"]),
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["success"] is True
+    assert data["data"]["country"] == "New Zealand"
+
+
+@pytest.mark.asyncio
+async def test_create_location_property_not_found(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    fake_id = "00000000-0000-0000-0000-000000000000"
+    resp = await pms_client.post(
+        f"/properties/{fake_id}/create-location",
+        json=LOCATION_PAYLOAD,
+        headers=auth_headers(pms_token_store["access_token"]),
+    )
+    assert resp.status_code == 404, resp.text
+
+
+@pytest.mark.asyncio
+async def test_create_location_invalid_country(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    prop_id = pms_token_store["test_property_id"]
+    payload = {**LOCATION_PAYLOAD, "country": "X"}
+    resp = await pms_client.post(
+        f"/properties/{prop_id}/create-location",
+        json=payload,
+        headers=auth_headers(pms_token_store["access_token"]),
+    )
+    assert resp.status_code == 422, resp.text
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# POST /properties/{id}/create-photos-and-amenities
+# ────────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_create_photos_and_amenities_success(
+    pms_client: AsyncClient, pms_token_store: dict, mocker
+):
+    mocker.patch.object(ImageService, "promote_temp_images", return_value=[
+        f"{CLOUDINARY_BASE}cover.jpg",
+        f"{CLOUDINARY_BASE}gallery1.jpg",
+    ])
+    prop_id = pms_token_store["test_property_id"]
+    resp = await pms_client.post(
+        f"/properties/{prop_id}/create-photos-and-amenities",
+        json=PHOTOS_AMENITIES_PAYLOAD,
+        headers=auth_headers(pms_token_store["access_token"]),
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["success"] is True
+    assert data["data"]["photos"]["cover"] == f"{CLOUDINARY_BASE}cover.jpg"
+
+
+@pytest.mark.asyncio
+async def test_create_photos_and_amenities_property_not_found(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    fake_id = "00000000-0000-0000-0000-000000000000"
+    resp = await pms_client.post(
+        f"/properties/{fake_id}/create-photos-and-amenities",
+        json=PHOTOS_AMENITIES_PAYLOAD,
+        headers=auth_headers(pms_token_store["access_token"]),
+    )
+    assert resp.status_code == 404, resp.text
+
+
+@pytest.mark.asyncio
+async def test_create_photos_and_amenities_duplicate_custom_amenity(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    prop_id = pms_token_store["test_property_id"]
+    payload = {
+        "photos": {
+            "cover": f"{CLOUDINARY_BASE}cover.jpg",
+            "gallery": [],
+        },
+        "amenities": {
+            "system_amenity_ids": [],
+            "custom_amenities": [
+                {"name": "Pool", "icon": "fa-pool"},
+                {"name": "pool", "icon": "fa-pool"},
+            ],
         },
     }
     resp = await pms_client.post(
-        "/pms/properties/",
-        json=bad_payload,
+        f"/properties/{prop_id}/create-photos-and-amenities",
+        json=payload,
+        headers=auth_headers(pms_token_store["access_token"]),
+    )
+    assert resp.status_code in (400, 409), resp.text
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# POST /properties/{id}/create-localization
+# ────────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_create_localization_success(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    prop_id = pms_token_store["test_property_id"]
+    resp = await pms_client.post(
+        f"/properties/{prop_id}/create-localization",
+        json=LOCALIZATION_PAYLOAD,
+        headers=auth_headers(pms_token_store["access_token"]),
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["success"] is True
+    assert data["data"]["currency"] == "USD"
+
+
+@pytest.mark.asyncio
+async def test_create_localization_property_not_found(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    fake_id = "00000000-0000-0000-0000-000000000000"
+    resp = await pms_client.post(
+        f"/properties/{fake_id}/create-localization",
+        json=LOCALIZATION_PAYLOAD,
+        headers=auth_headers(pms_token_store["access_token"]),
+    )
+    assert resp.status_code == 404, resp.text
+
+
+@pytest.mark.asyncio
+async def test_create_localization_invalid_check_in_out(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    prop_id = pms_token_store["test_property_id"]
+    payload = {
+        "always_allow_check_in_out": True,
+        "check_in_time": "2:00 PM",
+        "check_out_time": "11:00 AM",
+    }
+    resp = await pms_client.post(
+        f"/properties/{prop_id}/create-localization",
+        json=payload,
         headers=auth_headers(pms_token_store["access_token"]),
     )
     assert resp.status_code == 422, resp.text
 
 
 # ────────────────────────────────────────────────────────────────────────────
-# GET /pms/properties/ — list all
+# POST /properties/{id}/create-brand-visual
 # ────────────────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_get_all_properties(pms_client: AsyncClient, pms_token_store: dict):
-    resp = await pms_client.get(
-        "/pms/properties/",
+async def test_create_brand_visual_success(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    prop_id = pms_token_store["test_property_id"]
+    resp = await pms_client.post(
+        f"/properties/{prop_id}/create-brand-visual",
+        json=BRAND_VISUAL_PAYLOAD,
         headers=auth_headers(pms_token_store["access_token"]),
     )
     assert resp.status_code == 200, resp.text
     data = resp.json()
     assert data["success"] is True
-    assert isinstance(data["data"], list)
-    assert len(data["data"]) >= 1
 
-
-# ────────────────────────────────────────────────────────────────────────────
-# GET /pms/properties/amenities — default amenities
-# ────────────────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_get_all_amenities(pms_client: AsyncClient, pms_token_store: dict):
-    resp = await pms_client.get(
-        "/pms/properties/amenities",
-        headers=auth_headers(pms_token_store["access_token"]),
-    )
-    assert resp.status_code == 200, resp.text
-    data = resp.json()
-    assert data["success"] is True
-    assert isinstance(data["data"], list)
-
-
-# ────────────────────────────────────────────────────────────────────────────
-# GET /pms/properties/{property_id} — by ID
-# ────────────────────────────────────────────────────────────────────────────
-
-@pytest.mark.asyncio
-async def test_get_property_by_id(pms_client: AsyncClient, pms_token_store: dict):
-    prop_id = pms_token_store["property_id"]
-    resp = await pms_client.get(
-        f"/pms/properties/{prop_id}",
-        headers=auth_headers(pms_token_store["access_token"]),
-    )
-    assert resp.status_code == 200, resp.text
-    data = resp.json()
-    assert data["success"] is True
-    assert data["data"]["id"] == prop_id
-    assert data["data"]["name"] == "Ocean View Hotel"
-
-
-# ────────────────────────────────────────────────────────────────────────────
-# GET /pms/properties/{property_id} — wrong UUID → 404
-# ────────────────────────────────────────────────────────────────────────────
-
-@pytest.mark.asyncio
-async def test_get_property_not_found(pms_client: AsyncClient, pms_token_store: dict):
+async def test_create_brand_visual_property_not_found(
+    pms_client: AsyncClient, pms_token_store: dict
+):
     fake_id = "00000000-0000-0000-0000-000000000000"
-    resp = await pms_client.get(
-        f"/pms/properties/{fake_id}",
+    resp = await pms_client.post(
+        f"/properties/{fake_id}/create-brand-visual",
+        json=BRAND_VISUAL_PAYLOAD,
         headers=auth_headers(pms_token_store["access_token"]),
     )
     assert resp.status_code == 404, resp.text
 
 
 # ────────────────────────────────────────────────────────────────────────────
-# PATCH /pms/properties/{property_id} — success
+# GET /properties/ — list
 # ────────────────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_update_property(pms_client: AsyncClient, pms_token_store: dict):
-    prop_id = pms_token_store["property_id"]
-    updated_payload = {
-        **VALID_PROPERTY_PAYLOAD,
-        "name": "Ocean View Hotel Updated",
-        "description": "Updated description.",
-    }
-    resp = await pms_client.patch(
-        f"/pms/properties/{prop_id}",
-        json=updated_payload,
+async def test_get_properties_list(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    resp = await pms_client.get(
+        "/properties/",
         headers=auth_headers(pms_token_store["access_token"]),
     )
     assert resp.status_code == 200, resp.text
     data = resp.json()
     assert data["success"] is True
-    assert data["data"]["name"] == "Ocean View Hotel Updated"
-    assert data["data"]["description"] == "Updated description."
+    assert data["data"]["total_count"] >= 1
+    assert len(data["data"]["properties"]) >= 1
 
 
 # ────────────────────────────────────────────────────────────────────────────
-# POST /pms/properties/{property_id}/activation — toggle active
+# GET /properties/amenities
+# ────────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_get_amenities(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    resp = await pms_client.get(
+        "/properties/amenities",
+        headers=auth_headers(pms_token_store["access_token"]),
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["success"] is True
+    assert isinstance(data["data"]["amenities"], list)
+    assert data["data"]["total_count"] >= 0
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# GET /properties/{property_id} — by ID
+# ────────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_get_property_by_id(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    prop_id = pms_token_store["test_property_id"]
+    resp = await pms_client.get(
+        f"/properties/{prop_id}",
+        headers=auth_headers(pms_token_store["access_token"]),
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["success"] is True
+    assert data["data"]["id"] == prop_id
+    assert data["data"]["name"] == GENERAL_INFO_PAYLOAD["name"]
+
+
+@pytest.mark.asyncio
+async def test_get_property_by_id_not_found(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    fake_id = "00000000-0000-0000-0000-000000000000"
+    resp = await pms_client.get(
+        f"/properties/{fake_id}",
+        headers=auth_headers(pms_token_store["access_token"]),
+    )
+    assert resp.status_code == 404, resp.text
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# POST /properties/{id}/toggle-property-activation
 # ────────────────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
 async def test_toggle_property_activation(
     pms_client: AsyncClient, pms_token_store: dict
 ):
-    prop_id = pms_token_store["property_id"]
+    prop_id = pms_token_store["test_property_id"]
     resp = await pms_client.post(
-        f"/pms/properties/{prop_id}/activation",
+        f"/properties/{prop_id}/toggle-property-activation",
         headers=auth_headers(pms_token_store["access_token"]),
     )
     assert resp.status_code == 200, resp.text
@@ -240,32 +475,35 @@ async def test_toggle_property_activation(
     assert data["success"] is True
 
 
+@pytest.mark.asyncio
+async def test_toggle_property_activation_not_found(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    fake_id = "00000000-0000-0000-0000-000000000000"
+    resp = await pms_client.post(
+        f"/properties/{fake_id}/toggle-property-activation",
+        headers=auth_headers(pms_token_store["access_token"]),
+    )
+    assert resp.status_code == 404, resp.text
+
+
 # ────────────────────────────────────────────────────────────────────────────
-# DELETE /pms/properties/{property_id}
+# DELETE /properties/{property_id}
 # ────────────────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_delete_property(pms_client: AsyncClient, pms_token_store: dict):
-    # First create a disposable property so we don't destroy the one used by room tests
-    resp = await pms_client.post(
-        "/pms/properties/",
-        json={**VALID_PROPERTY_PAYLOAD, "name": "Disposable Hotel"},
-        headers=auth_headers(pms_token_store["access_token"]),
-    )
-    assert resp.status_code == 201, resp.text
-    delete_id = resp.json()["data"]["id"]
-
+async def test_delete_property(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    prop_id = pms_token_store["test_property_id"]
     resp = await pms_client.delete(
-        f"/pms/properties/{delete_id}",
+        f"/properties/{prop_id}",
         headers=auth_headers(pms_token_store["access_token"]),
     )
     assert resp.status_code == 200, resp.text
-    assert resp.json()["success"] is True
+    data = resp.json()
+    assert data["success"] is True
 
-
-# ────────────────────────────────────────────────────────────────────────────
-# DELETE /pms/properties/{property_id} — wrong UUID → 404
-# ────────────────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
 async def test_delete_property_not_found(
@@ -273,7 +511,7 @@ async def test_delete_property_not_found(
 ):
     fake_id = "00000000-0000-0000-0000-000000000001"
     resp = await pms_client.delete(
-        f"/pms/properties/{fake_id}",
+        f"/properties/{fake_id}",
         headers=auth_headers(pms_token_store["access_token"]),
     )
     assert resp.status_code == 404, resp.text

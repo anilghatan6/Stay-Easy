@@ -39,12 +39,15 @@ class SpecialOfferService:
             # Convert Pydantic array to a flat list of dictionaries for the repository
             offers_raw_list = [offer.model_dump() for offer in payload.offers]
 
+            if not offers_raw_list:
+                return []
+
             # Delegate handling directly to your atomic repository transaction method
             return await self.offer_repo.create_special_offers_bulk(
                 property_id=property_id, offers_data=offers_raw_list
             )
 
-        except (RepositoryException, InvalidDateException):
+        except (RepositoryException, InvalidDateException, OfferNameAlreadyExistsException):
             # Pass known database errors straight up to the global handler
             raise
         except Exception as e:

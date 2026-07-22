@@ -1,13 +1,13 @@
 # router/search_router.py
 
 from fastapi import APIRouter, Depends, Query, status, HTTPException
-from datetime import date
 from app.modules.pms.services.search_service import SearchService
 from app.modules.pms.dependencies import get_search_service
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from uuid import UUID
 from typing import List
 from app.utils.schemas import StandardResponse
+from datetime import date, datetime, timezone
 
 
 class PropertySearchItem(BaseModel):
@@ -21,8 +21,7 @@ class PropertySearchItem(BaseModel):
     total_price: float
     nights: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SearchResponse(BaseModel):
@@ -64,6 +63,15 @@ async def search_properties(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Check-in date must be strictly before check-out date.",
+        )
+
+    today = datetime.now(timezone.utc).date()
+
+
+    if check_in < today:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Check-in date cannot be in the past.",
         )
     service_result = await search_service.search(
         destination, check_in, check_out, adults, children, rooms, skip, limit

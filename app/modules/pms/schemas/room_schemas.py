@@ -88,7 +88,7 @@ class RoomBase(BaseModel):
     base_rate: Decimal = Field(
         ..., ge=1, decimal_places=2, description="Minimum rate per night (USD)"
     )
-    status: RoomStatus = Field(RoomStatus.AVAILABLE, nullable=False)
+    status: RoomStatus = Field(RoomStatus.AVAILABLE, json_schema_extra={"nullable": False})
     cancellation_policy: CancellationPolicy = CancellationPolicy.FLEXIBLE
     cancellation_title: Optional[str] = Field(None, max_length=255)
     cancellation_description: Optional[str] = Field(None, max_length=2000)

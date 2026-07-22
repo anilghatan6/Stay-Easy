@@ -97,26 +97,15 @@ async def pms_property_id(pms_client: AsyncClient, pms_token_store: dict) -> str
             "name": "Fixture Hotel",
             "type": "HOTEL",
             "description": "Hotel created by fixture.",
-            "country": "New Zealand",
-            "state": "Auckland",
-            "city": "Auckland City",
-            "zip_code": "1010",
-            "address": "123 Ocean Drive",
-            "latitude": "-36.848461",
-            "longitude": "174.763336",
-            "hotel_detail": {
-                "check_in_time_from": "2:00 PM",
-                "check_in_time_to": "6:00 PM",
-                "check_out_time_from": "9:00 AM",
-                "check_out_time_to": "11:00 AM",
-                "total_rooms": 20,
-                "year_built": 2010,
-                "number_of_floors": 5,
-            },
-            "amenities": [],
-            "photo_urls": [],
+            "phone_number": "1234567890",
+            "email": "fixture@hotel.com",
+            "total_rooms": 20,
+            "year_built": 2010,
+            "number_of_floors": 5,
         }
-        resp = await pms_client.post("/pms/properties/", json=payload, headers=headers)
+        resp = await pms_client.post(
+            "/properties/general-information", json=payload, headers=headers
+        )
         assert resp.status_code == 201, f"Fixture property creation failed: {resp.text}"
         pms_token_store["property_id"] = resp.json()["data"]["id"]
     return pms_token_store["property_id"]

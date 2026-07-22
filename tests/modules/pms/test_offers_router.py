@@ -1,15 +1,14 @@
 """
-Tests for /pms/{property_id}/special-offers/* endpoints.
+Tests for /properties/{property_id}/special-offers/* endpoints.
 
 Depends on `pms_client` + `pms_token_store` (from pms/conftest.py),
 which already holds an access_token and property_id.
 """
 from datetime import date, timedelta
+import uuid
 import pytest
 from httpx import AsyncClient
 
-
-# ─── helpers ────────────────────────────────────────────────────────────────
 
 def auth_headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
@@ -18,53 +17,210 @@ def auth_headers(token: str) -> dict:
 def _future_date(days: int) -> str:
     return (date.today() + timedelta(days=days)).isoformat()
 
-@pytest.fixture(autouse=True)
-async def setup_property(pms_property_id):
-    pass
+
+VALID_OFFER = {
+    "title": "Early Bird 10%",
+    "description": "Book in advance and save.",
+    "discount_percentage": 10.0,
+    "start_date": _future_date(5),
+    "end_date": _future_date(20),
+    "is_active": True,
+    "is_custom": False,
+}
+
 
 # ────────────────────────────────────────────────────────────────────────────
-# POST /pms/{property_id}/special-offers — unauthenticated
+# Unauthenticated — all endpoints without token → 401/403
 # ────────────────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_create_offers_unauthenticated(
-    pms_client: AsyncClient, pms_token_store: dict
-):
-    prop_id = pms_token_store["property_id"]
-    payload = {
-        "offers": [
-            {
-                "title": "Early Bird 15%",
-                "discount_percentage": 15.0,
-                "start_date": _future_date(5),
-                "end_date": _future_date(15),
-                "is_active": True,
-                "is_custom": False,
-            }
-        ]
-    }
-    resp = await pms_client.post(f"/pms/{prop_id}/special-offers", json=payload)
+async def test_create_offers_unauthenticated(pms_client: AsyncClient):
+    resp = await pms_client.post(
+        "/properties/00000000-0000-0000-0000-000000000000/special-offers/",
+        json={"offers": [VALID_OFFER]},
+    )
+    assert resp.status_code in (401, 403), resp.text
+
+
+@pytest.mark.asyncio
+async def test_get_offers_unauthenticated(pms_client: AsyncClient):
+    resp = await pms_client.get(
+        "/properties/00000000-0000-0000-0000-000000000000/special-offers/",
+    )
+    assert resp.status_code in (401, 403), resp.text
+
+
+@pytest.mark.asyncio
+async def test_get_offer_unauthenticated(pms_client: AsyncClient):
+    resp = await pms_client.get(
+        "/properties/00000000-0000-0000-0000-000000000000/special-offers/00000000-0000-0000-0000-000000000000",
+    )
+    assert resp.status_code in (401, 403), resp.text
+
+
+@pytest.mark.asyncio
+async def test_update_offer_unauthenticated(pms_client: AsyncClient):
+    resp = await pms_client.patch(
+        "/properties/00000000-0000-0000-0000-000000000000/special-offers/00000000-0000-0000-0000-000000000000",
+        json={"title": "Hacked"},
+    )
+    assert resp.status_code in (401, 403), resp.text
+
+
+@pytest.mark.asyncio
+async def test_delete_offer_unauthenticated(pms_client: AsyncClient):
+    resp = await pms_client.delete(
+        "/properties/00000000-0000-0000-0000-000000000000/special-offers/00000000-0000-0000-0000-000000000000",
+    )
     assert resp.status_code in (401, 403), resp.text
 
 
 # ────────────────────────────────────────────────────────────────────────────
-# POST /pms/{property_id}/special-offers — success (bulk)
+# Validation — bad payloads rejected before reaching the DB
 # ────────────────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_create_special_offers(pms_client: AsyncClient, pms_token_store: dict):
-    prop_id = pms_token_store["property_id"]
+async def test_create_offers_empty_list(
+    pms_client: AsyncClient, pms_token_store: dict, pms_property_id: str
+):
+    headers = auth_headers(pms_token_store["access_token"])
+    resp = await pms_client.post(
+        f"/properties/{pms_property_id}/special-offers/",
+        json={"offers": []},
+        headers=headers,
+    )
+    assert resp.status_code == 201, resp.text
+    data = resp.json()
+    assert data["success"] is True
+    assert data["data"] == []
+
+
+@pytest.mark.asyncio
+async def test_create_offer_past_start_date(
+    pms_client: AsyncClient, pms_token_store: dict, pms_property_id: str
+):
+    headers = auth_headers(pms_token_store["access_token"])
     payload = {
         "offers": [
             {
-                "title": "Early Bird 10%",
-                "description": "Book 10 days in advance.",
-                "discount_percentage": 10.0,
-                "start_date": _future_date(5),
-                "end_date": _future_date(20),
-                "is_active": True,
-                "is_custom": False,
+                **VALID_OFFER,
+                "title": "Past Deal",
+                "start_date": _future_date(-10),
+                "end_date": _future_date(5),
+            }
+        ]
+    }
+    resp = await pms_client.post(
+        f"/properties/{pms_property_id}/special-offers/",
+        json=payload,
+        headers=headers,
+    )
+    assert resp.status_code == 422, resp.text
+
+
+@pytest.mark.asyncio
+async def test_create_offer_start_after_end(
+    pms_client: AsyncClient, pms_token_store: dict, pms_property_id: str
+):
+    headers = auth_headers(pms_token_store["access_token"])
+    payload = {
+        "offers": [
+            {
+                **VALID_OFFER,
+                "title": "Bad Chronology",
+                "start_date": _future_date(10),
+                "end_date": _future_date(5),
+            }
+        ]
+    }
+    resp = await pms_client.post(
+        f"/properties/{pms_property_id}/special-offers/",
+        json=payload,
+        headers=headers,
+    )
+    assert resp.status_code == 422, resp.text
+
+
+@pytest.mark.asyncio
+async def test_create_offer_duplicate_titles_in_batch(
+    pms_client: AsyncClient, pms_token_store: dict, pms_property_id: str
+):
+    headers = auth_headers(pms_token_store["access_token"])
+    payload = {
+        "offers": [
+            {
+                **VALID_OFFER,
+                "title": "Same Title",
             },
+            {
+                **VALID_OFFER,
+                "title": "same title",
+            },
+        ]
+    }
+    resp = await pms_client.post(
+        f"/properties/{pms_property_id}/special-offers/",
+        json=payload,
+        headers=headers,
+    )
+    assert resp.status_code == 422, resp.text
+
+
+@pytest.mark.asyncio
+async def test_create_offer_invalid_discount(
+    pms_client: AsyncClient, pms_token_store: dict, pms_property_id: str
+):
+    headers = auth_headers(pms_token_store["access_token"])
+    payload = {
+        "offers": [
+            {
+                **VALID_OFFER,
+                "title": "Too Good",
+                "discount_percentage": 150.0,
+            }
+        ]
+    }
+    resp = await pms_client.post(
+        f"/properties/{pms_property_id}/special-offers/",
+        json=payload,
+        headers=headers,
+    )
+    assert resp.status_code == 422, resp.text
+
+
+@pytest.mark.asyncio
+async def test_create_offer_title_too_short(
+    pms_client: AsyncClient, pms_token_store: dict, pms_property_id: str
+):
+    headers = auth_headers(pms_token_store["access_token"])
+    payload = {
+        "offers": [
+            {
+                **VALID_OFFER,
+                "title": "A",
+            }
+        ]
+    }
+    resp = await pms_client.post(
+        f"/properties/{pms_property_id}/special-offers/",
+        json=payload,
+        headers=headers,
+    )
+    assert resp.status_code == 422, resp.text
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Create success
+# ────────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_create_offers_success(
+    pms_client: AsyncClient, pms_token_store: dict, pms_property_id: str
+):
+    headers = auth_headers(pms_token_store["access_token"])
+    payload = {
+        "offers": [
+            VALID_OFFER,
             {
                 "title": "Weekend Special 5%",
                 "discount_percentage": 5.0,
@@ -76,9 +232,9 @@ async def test_create_special_offers(pms_client: AsyncClient, pms_token_store: d
         ]
     }
     resp = await pms_client.post(
-        f"/pms/{prop_id}/special-offers",
+        f"/properties/{pms_property_id}/special-offers/",
         json=payload,
-        headers=auth_headers(pms_token_store["access_token"]),
+        headers=headers,
     )
     assert resp.status_code == 201, resp.text
     data = resp.json()
@@ -87,7 +243,6 @@ async def test_create_special_offers(pms_client: AsyncClient, pms_token_store: d
     assert isinstance(offers, list)
     assert len(offers) == 2
 
-    # Validate response shape
     for offer in offers:
         for field in (
             "id", "property_id", "title", "discount_percentage",
@@ -95,146 +250,44 @@ async def test_create_special_offers(pms_client: AsyncClient, pms_token_store: d
             "created_at", "updated_at",
         ):
             assert field in offer, f"Missing field: {field}"
-        assert offer["property_id"] == prop_id
+        assert offer["property_id"] == pms_property_id
 
-    # Persist first offer id for update tests
     pms_token_store["offer_id"] = offers[0]["id"]
 
 
-# ────────────────────────────────────────────────────────────────────────────
-# POST /pms/{property_id}/special-offers — past start_date → 422
-# ────────────────────────────────────────────────────────────────────────────
-
 @pytest.mark.asyncio
-async def test_create_offer_past_start_date(
-    pms_client: AsyncClient, pms_token_store: dict
+async def test_create_offers_duplicate_title_db(
+    pms_client: AsyncClient, pms_token_store: dict, pms_property_id: str
 ):
-    prop_id = pms_token_store["property_id"]
+    headers = auth_headers(pms_token_store["access_token"])
     payload = {
         "offers": [
             {
-                "title": "Past Deal",
-                "discount_percentage": 20.0,
-                "start_date": _future_date(-10),   # past date
-                "end_date": _future_date(5),
-                "is_active": False,
-                "is_custom": False,
+                **VALID_OFFER,
+                "title": "Early Bird 10%",
             }
         ]
     }
     resp = await pms_client.post(
-        f"/pms/{prop_id}/special-offers",
+        f"/properties/{pms_property_id}/special-offers/",
         json=payload,
-        headers=auth_headers(pms_token_store["access_token"]),
+        headers=headers,
     )
-    assert resp.status_code == 422, resp.text
+    assert resp.status_code in (400, 409), resp.text
 
 
 # ────────────────────────────────────────────────────────────────────────────
-# POST /pms/{property_id}/special-offers — start >= end → 422
+# Read
 # ────────────────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_create_offer_start_after_end(
-    pms_client: AsyncClient, pms_token_store: dict
+async def test_get_offers(
+    pms_client: AsyncClient, pms_token_store: dict, pms_property_id: str
 ):
-    prop_id = pms_token_store["property_id"]
-    payload = {
-        "offers": [
-            {
-                "title": "Bad Chronology",
-                "discount_percentage": 10.0,
-                "start_date": _future_date(10),
-                "end_date": _future_date(5),   # end BEFORE start
-                "is_active": False,
-                "is_custom": False,
-            }
-        ]
-    }
-    resp = await pms_client.post(
-        f"/pms/{prop_id}/special-offers",
-        json=payload,
-        headers=auth_headers(pms_token_store["access_token"]),
-    )
-    assert resp.status_code == 422, resp.text
-
-
-# ────────────────────────────────────────────────────────────────────────────
-# POST /pms/{property_id}/special-offers — duplicate titles → 422
-# ────────────────────────────────────────────────────────────────────────────
-
-@pytest.mark.asyncio
-async def test_create_offer_duplicate_titles(
-    pms_client: AsyncClient, pms_token_store: dict
-):
-    prop_id = pms_token_store["property_id"]
-    payload = {
-        "offers": [
-            {
-                "title": "Same Title",
-                "discount_percentage": 5.0,
-                "start_date": _future_date(3),
-                "end_date": _future_date(8),
-                "is_active": False,
-                "is_custom": False,
-            },
-            {
-                "title": "same title",   # case-insensitive duplicate
-                "discount_percentage": 10.0,
-                "start_date": _future_date(3),
-                "end_date": _future_date(8),
-                "is_active": False,
-                "is_custom": False,
-            },
-        ]
-    }
-    resp = await pms_client.post(
-        f"/pms/{prop_id}/special-offers",
-        json=payload,
-        headers=auth_headers(pms_token_store["access_token"]),
-    )
-    assert resp.status_code == 422, resp.text
-
-
-# ────────────────────────────────────────────────────────────────────────────
-# POST /pms/{property_id}/special-offers — discount > 100 → 422
-# ────────────────────────────────────────────────────────────────────────────
-
-@pytest.mark.asyncio
-async def test_create_offer_invalid_discount(
-    pms_client: AsyncClient, pms_token_store: dict
-):
-    prop_id = pms_token_store["property_id"]
-    payload = {
-        "offers": [
-            {
-                "title": "Too Good To Be True",
-                "discount_percentage": 150.0,   # invalid — max is 100
-                "start_date": _future_date(3),
-                "end_date": _future_date(8),
-                "is_active": False,
-                "is_custom": False,
-            }
-        ]
-    }
-    resp = await pms_client.post(
-        f"/pms/{prop_id}/special-offers",
-        json=payload,
-        headers=auth_headers(pms_token_store["access_token"]),
-    )
-    assert resp.status_code == 422, resp.text
-
-
-# ────────────────────────────────────────────────────────────────────────────
-# GET /pms/{property_id}/special-offers — list
-# ────────────────────────────────────────────────────────────────────────────
-
-@pytest.mark.asyncio
-async def test_get_special_offers(pms_client: AsyncClient, pms_token_store: dict):
-    prop_id = pms_token_store["property_id"]
+    headers = auth_headers(pms_token_store["access_token"])
     resp = await pms_client.get(
-        f"/pms/{prop_id}/special-offers",
-        headers=auth_headers(pms_token_store["access_token"]),
+        f"/properties/{pms_property_id}/special-offers/",
+        headers=headers,
     )
     assert resp.status_code == 200, resp.text
     data = resp.json()
@@ -243,26 +296,46 @@ async def test_get_special_offers(pms_client: AsyncClient, pms_token_store: dict
     assert len(data["data"]) >= 2
 
 
-# ────────────────────────────────────────────────────────────────────────────
-# GET /pms/{property_id}/special-offers — unauthenticated
-# ────────────────────────────────────────────────────────────────────────────
-
 @pytest.mark.asyncio
-async def test_get_special_offers_unauthenticated(
-    pms_client: AsyncClient, pms_token_store: dict
+async def test_get_offer_by_id(
+    pms_client: AsyncClient, pms_token_store: dict, pms_property_id: str
 ):
-    prop_id = pms_token_store["property_id"]
-    resp = await pms_client.get(f"/pms/{prop_id}/special-offers")
-    assert resp.status_code in (401, 403), resp.text
+    headers = auth_headers(pms_token_store["access_token"])
+    offer_id = pms_token_store["offer_id"]
+    resp = await pms_client.get(
+        f"/properties/{pms_property_id}/special-offers/{offer_id}",
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["success"] is True
+    offer = data["data"]
+    assert offer["id"] == offer_id
+    assert offer["title"] == VALID_OFFER["title"]
+
+
+@pytest.mark.asyncio
+async def test_get_offer_by_id_not_found(
+    pms_client: AsyncClient, pms_token_store: dict, pms_property_id: str
+):
+    headers = auth_headers(pms_token_store["access_token"])
+    fake_id = "00000000-0000-0000-0000-000000000055"
+    resp = await pms_client.get(
+        f"/properties/{pms_property_id}/special-offers/{fake_id}",
+        headers=headers,
+    )
+    assert resp.status_code == 404, resp.text
 
 
 # ────────────────────────────────────────────────────────────────────────────
-# PATCH /pms/{property_id}/special-offers/{offer_id} — success
+# Update
 # ────────────────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_update_special_offer(pms_client: AsyncClient, pms_token_store: dict):
-    prop_id = pms_token_store["property_id"]
+async def test_update_offer_success(
+    pms_client: AsyncClient, pms_token_store: dict, pms_property_id: str
+):
+    headers = auth_headers(pms_token_store["access_token"])
     offer_id = pms_token_store["offer_id"]
     update_payload = {
         "title": "Early Bird 10% Updated",
@@ -271,12 +344,11 @@ async def test_update_special_offer(pms_client: AsyncClient, pms_token_store: di
         "start_date": _future_date(6),
         "end_date": _future_date(22),
         "is_active": True,
-        "is_custom": False,
     }
     resp = await pms_client.patch(
-        f"/pms/{prop_id}/special-offers/{offer_id}",
+        f"/properties/{pms_property_id}/special-offers/{offer_id}",
         json=update_payload,
-        headers=auth_headers(pms_token_store["access_token"]),
+        headers=headers,
     )
     assert resp.status_code == 200, resp.text
     data = resp.json()
@@ -286,53 +358,90 @@ async def test_update_special_offer(pms_client: AsyncClient, pms_token_store: di
     assert updated["discount_percentage"] == 12.0
 
 
-# ────────────────────────────────────────────────────────────────────────────
-# PATCH /pms/{property_id}/special-offers/{offer_id} — invalid payload → 422
-# ────────────────────────────────────────────────────────────────────────────
-
 @pytest.mark.asyncio
-async def test_update_special_offer_invalid_dates(
-    pms_client: AsyncClient, pms_token_store: dict
+async def test_update_offer_invalid_dates(
+    pms_client: AsyncClient, pms_token_store: dict, pms_property_id: str
 ):
-    prop_id = pms_token_store["property_id"]
+    headers = auth_headers(pms_token_store["access_token"])
     offer_id = pms_token_store["offer_id"]
     bad_payload = {
         "title": "Still Bad",
         "discount_percentage": 10.0,
         "start_date": _future_date(10),
-        "end_date": _future_date(3),   # end before start
+        "end_date": _future_date(3),
         "is_active": False,
-        "is_custom": False,
     }
     resp = await pms_client.patch(
-        f"/pms/{prop_id}/special-offers/{offer_id}",
+        f"/properties/{pms_property_id}/special-offers/{offer_id}",
         json=bad_payload,
-        headers=auth_headers(pms_token_store["access_token"]),
+        headers=headers,
     )
     assert resp.status_code == 422, resp.text
 
 
-# ────────────────────────────────────────────────────────────────────────────
-# PATCH /pms/{property_id}/special-offers/{offer_id} — unknown offer → 404
-# ────────────────────────────────────────────────────────────────────────────
-
 @pytest.mark.asyncio
-async def test_update_special_offer_not_found(
-    pms_client: AsyncClient, pms_token_store: dict
+async def test_update_offer_not_found(
+    pms_client: AsyncClient, pms_token_store: dict, pms_property_id: str
 ):
-    prop_id = pms_token_store["property_id"]
-    fake_offer_id = "00000000-0000-0000-0000-000000000055"
+    headers = auth_headers(pms_token_store["access_token"])
+    fake_id = "00000000-0000-0000-0000-000000000066"
     update_payload = {
         "title": "Ghost Offer",
         "discount_percentage": 5.0,
         "start_date": _future_date(5),
         "end_date": _future_date(10),
         "is_active": False,
-        "is_custom": False,
     }
     resp = await pms_client.patch(
-        f"/pms/{prop_id}/special-offers/{fake_offer_id}",
+        f"/properties/{pms_property_id}/special-offers/{fake_id}",
         json=update_payload,
-        headers=auth_headers(pms_token_store["access_token"]),
+        headers=headers,
+    )
+    assert resp.status_code == 404, resp.text
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Delete
+# ────────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_delete_offer(
+    pms_client: AsyncClient, pms_token_store: dict, pms_property_id: str
+):
+    headers = auth_headers(pms_token_store["access_token"])
+    payload = {
+        "offers": [
+            {
+                **VALID_OFFER,
+                "title": "To Delete",
+            }
+        ]
+    }
+    create_resp = await pms_client.post(
+        f"/properties/{pms_property_id}/special-offers/",
+        json=payload,
+        headers=headers,
+    )
+    assert create_resp.status_code == 201, create_resp.text
+    offer_id = create_resp.json()["data"][0]["id"]
+
+    resp = await pms_client.delete(
+        f"/properties/{pms_property_id}/special-offers/{offer_id}",
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_delete_offer_not_found(
+    pms_client: AsyncClient, pms_token_store: dict, pms_property_id: str
+):
+    headers = auth_headers(pms_token_store["access_token"])
+    fake_id = "00000000-0000-0000-0000-000000000077"
+    resp = await pms_client.delete(
+        f"/properties/{pms_property_id}/special-offers/{fake_id}",
+        headers=headers,
     )
     assert resp.status_code == 404, resp.text

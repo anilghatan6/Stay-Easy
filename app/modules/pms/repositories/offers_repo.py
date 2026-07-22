@@ -31,6 +31,12 @@ class SpecialOfferRepository:
         )
         saved_offers: list[SpecialOffer] = []
 
+        if not offers_data:
+            logger.info(
+                f"[OfferRepository] No offers to create for property {property_id}, returning empty list."
+            )
+            return saved_offers
+
         try:
             for offer_dict in offers_data:
                 clean_title = offer_dict["title"].strip()
