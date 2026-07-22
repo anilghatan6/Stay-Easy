@@ -181,3 +181,19 @@ async def create_brand_visual(
         property_id, payload, tenant_id
     )
     return {"success": True, "data": response}
+
+
+@router.post(
+    "/{property_id}/toggle-property-activation",
+    status_code=status.HTTP_200_OK,
+    response_model=StandardResponse[str],
+)
+async def toggle_property_activation(
+    property_id: uuid.UUID,
+    current_user: CurrentUser,
+    property_service: PropertyService = Depends(get_property_service),
+):
+    verify_tenant(current_user)
+    tenant_id = current_user.tenant_id
+    response = await property_service.toggle_property_activation(property_id, tenant_id)
+    return response

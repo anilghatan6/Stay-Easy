@@ -21,7 +21,6 @@ engine = create_async_engine(
     max_overflow=20,
 )
 
-
 AsyncSessionLocal = async_sessionmaker(
     engine,
     class_=AsyncSession,

@@ -375,4 +375,27 @@ class PropertyService:
             raise
         except Exception as e:
             logger.error(f"[PropertyService] Error getting property: {str(e)}")
-            raise ServiceException(internal_detail=f"Failed to get property: {str(e)}")
+            raise ServiceException(
+                internal_detail=f"Failed to get property: {str(e)}"
+            )
+
+    async def toggle_property_activation(
+        self, property_id: uuid.UUID, tenant_id: uuid.UUID
+    ) -> dict:
+        logger.info(f"[PropertyService] Toggling activation for property {property_id}")
+        try:
+            
+            new_status = await self.property_repo.toggle_property_activation(
+                property_id, tenant_id
+            )
+            if new_status:
+                return {"success": True, "data": "property is activated "}
+            else:
+                return {"success": True, "data": "property is deactivated"}
+        except (PropertyNotFoundException, RepositoryException):
+            raise
+        except Exception as e:
+            logger.error(f"[PropertyService] Error toggling property activation: {str(e)}")
+            raise ServiceException(
+                internal_detail=f"Failed to toggle property activation: {str(e)}"
+            )

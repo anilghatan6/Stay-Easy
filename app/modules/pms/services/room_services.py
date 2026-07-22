@@ -1,33 +1,34 @@
-import asyncio
+from app.modules.pms.schemas.room_schemas import RoomTypeCreate
 import uuid
+import asyncio
 
 from app.modules.pms.repositories.properties_repo import PropertyRepository
 from app.modules.pms.repositories.room_repo import RoomRepository
 from app.modules.pms.schemas.room_schemas import (
-    # RoomTypeCreate,
-    BedTypeCreate,
-    BedTypeResponse,
     RoomBulkCreateRequest,
     RoomBulkCreateResponse,
     RoomResponse,
-    RoomTypeCreate,
     RoomTypeResponse,
-    RoomUpdate,
+    BedTypeResponse,
+    # RoomTypeCreate,
+    BedTypeCreate,
+    RoomUpdate
 )
-from app.modules.pms.services.image_services import ImageService
 from app.utils.exceptions import (
-    BedTypeAlreadyExistsException,
-    ImageStorageException,
-    # AmenityNotFoundException,
-    InvalidImageException,
     PropertyNotFoundException,
     RepositoryException,
-    RoomNameAlreadyExistsException,
-    RoomNotFoundException,
     RoomTypeAlreadyExistsException,
+    BedTypeAlreadyExistsException,
+    RoomNameAlreadyExistsException,
     ServiceException,
     UnauthorizedException,
+    RoomNotFoundException,
+    # AmenityNotFoundException,
+    InvalidImageException,
+    ImageStorageException,
 )
+
+from app.modules.pms.services.image_services import ImageService
 from app.utils.logging import LoggerFactory
 
 logger = LoggerFactory.get_logger(__name__)
@@ -114,7 +115,7 @@ class RoomService:
                 raise RoomTypeAlreadyExistsException("Room type name already exists")
 
         for bed_type in bed_types:
-            bed_type_obj = await self.room_repo.get_existing_bed_type_name(
+            bed_type_obj = await self.room_repo.get_exisiting_bed_type_name(
                 property_id, bed_type
             )
             if bed_type_obj:
@@ -290,6 +291,7 @@ class RoomService:
             logger.error(f"[RoomService] Error executing delete room: {str(e)}")
             raise ServiceException(str(e))
 
+
     async def get_room(
         self, property_id: uuid.UUID, tenant_id: uuid.UUID, room_id: uuid.UUID
     ) -> RoomResponse:
@@ -319,12 +321,12 @@ class RoomService:
 
     async def update_room(
         self,
-        property_id: uuid.UUID,
-        tenant_id: uuid.UUID,
-        room_id: uuid.UUID,
-        payload: RoomUpdate,
+        property_id:uuid.UUID,
+        tenant_id:uuid.UUID,
+        room_id:uuid.UUID,
+        payload:RoomUpdate
     ):
-
+                        
         logger.info(f"[RoomService] Updating room {room_id} for property {property_id}")
         try:
             await self._validate_property(property_id, tenant_id)
@@ -333,7 +335,7 @@ class RoomService:
                 existing_room_name = await self.room_repo.get_room_by_name(
                     property_id=property_id,
                     room_name=payload_dict.get("room_name"),
-                    exclude_room_id=room_id,
+                    exclude_room_id=room_id
                 )
                 if existing_room_name:
                     logger.info(

@@ -6,17 +6,19 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.pms.models.rooms_model import (
-    BedType,
-    Rooms,
-    RoomType,
-)
+from app.modules.pms.models.rooms_model import BedType, Rooms, RoomType, RoomStatus
 from app.utils.exceptions import (
     RepositoryException,
 )
 from app.utils.logging import LoggerFactory
 import psycopg.errors
+from datetime import date
 from typing import Sequence, Optional
+from app.modules.booking.models.booking_model import (
+    Booking,
+    BookingRoom,
+    MasterBookingStatus,
+)
 
 
 logger = LoggerFactory.get_logger(__name__)
@@ -419,3 +421,69 @@ class RoomRepository:
                 exc_info=True,
             )
             raise RepositoryException(f"Failed to update room: {str(e)}")
+
+    async def get_available_rooms(
+        self,
+        property_ids: list[uuid.UUID],
+        check_in: date,
+        check_out: date,
+    ) -> list[Rooms]:
+        """
+        Returns rooms belonging to the given properties that are:
+        - not permanently blocked (MAINTENANCE / OUT_OF_SERVICE)
+        - not already booked for any overlapping date range
+        """
+        logger.info("[RoomRepository] Getting available rooms for properties")
+        if not property_ids:
+            logger.info("[RoomRepository] No properties provided, returning empty list")
+            return []
+
+        try:
+            # Rooms with an overlapping active booking for the requested dates
+            overlapping_room_ids_subq = (
+                select(BookingRoom.room_unit_id)
+                .join(Booking, Booking.id == BookingRoom.booking_id)
+                .where(
+                    Booking.status.in_(
+                        [
+                            MasterBookingStatus.PENDING,
+                            MasterBookingStatus.CONFIRMED,
+                            MasterBookingStatus.CHECKED_IN,
+                        ]
+                    ),
+                    Booking.checkin_date < check_out,  # overlap formula
+                    Booking.checkout_date > check_in,  # overlap formula
+                )
+            )
+
+            stmt = select(Rooms).where(
+                Rooms.property_id.in_(property_ids),
+                Rooms.status.notin_(
+                    [RoomStatus.MAINTENANCE, RoomStatus.OUT_OF_SERVICE]
+                ),
+                Rooms.id.notin_(overlapping_room_ids_subq),
+            )
+
+            result = await self.db.execute(stmt)
+            rooms = result.scalars().all()
+            logger.info("returning list of available rooms")
+            return rooms
+        except Exception as e:
+            logger.error("[RoomRepository] Error getting available rooms")
+            raise RepositoryException(f"Failed to get available rooms: {str(e)}")
+
+    async def get_by_ids(self, room_ids: list[uuid.UUID]) -> list[Rooms]:
+        logger.info("[RoomRepository] Getting rooms by IDs")
+        if not room_ids:
+            logger.info("[RoomRepository] No room IDs provided, returning empty list")
+            return []
+        try:
+            stmt = select(Rooms).where(Rooms.id.in_(room_ids))
+            result = await self.db.execute(stmt)
+            rooms = result.scalars().all()
+            logger.info("returning list of rooms")
+            return rooms
+        except Exception as e:
+            logger.error("[RoomRepository] Error getting rooms by IDs")
+            raise RepositoryException(f"Failed to get rooms by IDs: {str(e)}")
+

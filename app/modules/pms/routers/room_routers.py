@@ -12,7 +12,7 @@ from app.modules.pms.schemas.room_schemas import (
     RoomTypeResponse,
     BedTypeResponse,
     RoomResponse,
-    RoomUpdate,
+    RoomUpdate
 )
 
 from app.modules.pms.services.room_services import RoomService
@@ -178,12 +178,7 @@ async def delete_room(
     return {"success": True, "data": response}
 
 
-@router.patch(
-    "/{room_id}",
-    response_model=StandardResponse[RoomResponse],
-    status_code=status.HTTP_200_OK,
-    summary="Update a room",
-)
+@router.patch("/{room_id}", response_model=StandardResponse[RoomResponse], status_code=status.HTTP_200_OK, summary="Update a room")
 async def update_room(
     property_id: uuid.UUID,
     room_id: uuid.UUID,

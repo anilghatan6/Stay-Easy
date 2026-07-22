@@ -18,9 +18,11 @@ from pydantic import (
 )
 
 from app.modules.pms.models.properties_model import PropertyType
+import os
+from dotenv import load_dotenv
 
-MAX_IMAGES_PER_PROPERTY = 20
-
+load_dotenv()
+CLOUDINARY_BASE = os.getenv("CLOUDINARY_BASE")
 
 class TimestampSchema(BaseModel):
     created_at: datetime
@@ -177,7 +179,6 @@ class CustomAmenityItem(BaseModel):
         None, max_length=50, description="Icon code (e.g. 'fa-wifi')"
     )
 
-
 class PhotoCollection(BaseModel):
     cover: Optional[str] = Field(
         None, description="The primary cover image URL. If None, no cover is set."
@@ -186,11 +187,31 @@ class PhotoCollection(BaseModel):
         default_factory=list, description="List of secondary image URLs."
     )
 
+    @field_validator("cover", mode="before")
+    @classmethod
+    def validate_cover_url(cls, v: Optional[str]) -> Optional[str]:
+        if v and not v.startswith(CLOUDINARY_BASE):
+            raise ValueError(f"Invalid Image Format.")
+        return v
+
+    @field_validator("gallery", mode="before")
+    @classmethod
+    def validate_gallery_urls(cls, v: List[str]) -> List[str]:
+        if isinstance(v, list):
+            for url in v:
+                if not url.startswith(CLOUDINARY_BASE):
+                    raise ValueError(f"Invalid Image Format.")
+        return v
+
+
     @model_validator(mode="after")
     def validate_gallery_limit(self):
         # Optional: Prevent users from uploading 500 images and crashing your UI
-        if len(self.gallery) > 20:
-            raise ValueError("Gallery cannot contain more than 20 images.")
+        if len(self.gallery) > 5:
+            raise ValueError("You can't upload more than 5 images.")
+        
+        if not self.cover:
+            raise ValueError("There must be exactly one cover photo.")
         return self
 
 
@@ -341,6 +362,13 @@ class BrandVisual(BaseModel):
         title="Brand Color",
         description="Color of the brand",
     )
+
+    @field_validator("brand_logo_url", mode="before")
+    @classmethod
+    def validate_brand_logo_url(cls, v: str) -> str:
+        if v and not v.startswith(CLOUDINARY_BASE):
+            raise ValueError(f"Invalid Image Format.")
+        return v
 
 
 class BrandVisualResponse(BrandVisual):

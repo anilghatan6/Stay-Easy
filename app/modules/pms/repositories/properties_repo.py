@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import func, select
+from sqlalchemy import func, select, or_, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -364,4 +364,117 @@ class PropertyRepository:
         except Exception as e:
             await self.db.rollback()
             logger.error(f"[PropertyRepository] Error deleting property: {str(e)}")
+            raise RepositoryException(internal_detail=str(e))
+
+    async def search_by_destination(
+        self, query: str, threshold: float = 0.2
+    ) -> list[tuple[Property, float]]:
+        """
+        Fuzzy destination search using pg_trgm similarity.
+        Returns list of (Property, score) tuples, ordered by best match first.
+        """
+        logger.info(f"[PropertyRepository] Searching by destination: {query}")
+        await self.db.execute(
+            text("SELECT set_config('pg_trgm.similarity_threshold', :t, false)"),
+            {"t": "0.2"},  # Note: PostgreSQL set_config expects the value as a string
+        )
+        try:
+            score = func.greatest(
+                func.similarity(Property.name, query),
+                func.similarity(Property.country, query),
+                func.similarity(Property.state, query),
+                func.similarity(Property.city, query),
+                func.similarity(Property.address, query),
+            ).label("score")
+
+            stmt = (
+                select(Property, score)
+                .where(
+                    or_(
+                        Property.name.op("%")(query),
+                        Property.country.op("%")(query),
+                        Property.state.op("%")(query),
+                        Property.city.op("%")(query),
+                        Property.address.op("%")(query),
+                    ),
+                    Property.is_active,
+                )
+                .order_by(score.desc())
+            )
+            result = await self.db.execute(stmt)
+            rows = result.all()
+
+            logger.info("returning tuple of property and score")
+            return [(row[0], row[1]) for row in rows]
+
+        except Exception as e:
+            logger.error(
+                f"[PropertyRepository] Error searching by destination: {str(e)}"
+            )
+            raise RepositoryException(
+                internal_detail=f"Failed to search by destination: {str(e)}"
+            )
+
+    async def get_by_ids(self, property_ids: list[uuid.UUID]) -> list[Property]:
+        logger.info(f"[PropertyRepository] Getting properties by ids: {property_ids}")
+        try:
+            if not property_ids:
+                return []
+            stmt = select(Property).where(Property.id.in_(property_ids))
+            result = await self.db.execute(stmt)
+            logger.info("returning the list of properties")
+            return result.scalars().all()
+        except Exception as e:
+            logger.error(
+                f"[PropertyRepository] Error getting properties by ids: {str(e)}"
+            )
+            raise RepositoryException(
+                internal_detail=f"Failed to get properties: {str(e)}"
+            )
+
+    async def get_amenities_by_ids(self, amenity_ids: list[uuid.UUID]) -> list[Amenity]:
+        logger.info("[PropertyRepository] getting amenities by ids")
+        if not amenity_ids:
+            return []
+        try:
+            stmt = select(Amenity).where(Amenity.id.in_(amenity_ids))
+            result = await self.db.execute(stmt)
+            return result.scalars().all()
+        except Exception as e:
+            logger.error(
+                f"[PropertyRepository] Error getting amenities by ids: {str(e)}"
+            )
+            raise RepositoryException(
+                internal_detail=f"Failed to get amenities: {str(e)}"
+            )
+
+    async def toggle_property_activation(
+        self, property_id: uuid.UUID, tenant_id: uuid.UUID
+    ) -> bool:
+        logger.info(
+            f"[PropertyRepository] Toggling activation for property: {property_id}"
+        )
+        try:
+            result = await self.db.execute(
+                select(Property).where(
+                    Property.id == property_id, Property.tenant_id == tenant_id
+                )
+            )
+            property_obj = result.scalar_one_or_none()
+            if not property_obj:
+                raise PropertyNotFoundException("Property not found or access denied")
+
+            property_obj.is_active = not property_obj.is_active
+            new_status = property_obj.is_active
+
+            await self.db.commit()
+            await self.db.refresh(property_obj)
+            return new_status
+        except PropertyNotFoundException:
+            raise
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(
+                f"[PropertyRepository] Error toggling property activation: {str(e)}"
+            )
             raise RepositoryException(internal_detail=str(e))
