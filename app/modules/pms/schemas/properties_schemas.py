@@ -64,8 +64,8 @@ class GeneralPropertyInfo(BaseModel):
         description="Year when the property was built",
     )
     number_of_floors: int = Field(
-        default=1,
-        ge=1,
+        default=0,
+        ge=0,
         le=1000,
         title="Number of Floors",
         description="Number of floors in the property",
@@ -417,7 +417,7 @@ class PropertyResponse(BaseModel):
     check_in_grace_period: int = Field(default=0, ge=0)
     check_out_grace_period: int = Field(default=0, ge=0)
     always_allow_check_in_out: bool = False
-    number_of_floors: int = Field(default=1, ge=1)
+    number_of_floors: int = Field(default=0, ge=0)
     total_rooms: int = Field(default=1, ge=1)
     year_built: Optional[int] = Field(None, ge=1800, le=2100)
 

@@ -30,7 +30,6 @@ class RoomStatus(StrEnum):
     MAINTENANCE = "MAINTENANCE"
     OUT_OF_SERVICE = "OUT_OF_SERVICE"
 
-
 class CancellationPolicy(StrEnum):
     FLEXIBLE = "FLEXIBLE"
     MODERATE = "MODERATE"
