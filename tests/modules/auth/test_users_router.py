@@ -118,7 +118,7 @@ async def test_verify_otp(async_client: AsyncClient, token_store: dict):
 @pytest.mark.asyncio
 async def test_login_user_success(async_client: AsyncClient, token_store: dict):
     resp = await async_client.post(
-        "/auth/users/login",
+        "/auth/login",
         data={"username": "admin@example.com", "password": "SecurePassword123!"},
     )
     assert resp.status_code == 200, resp.text
@@ -132,7 +132,7 @@ async def test_login_user_success(async_client: AsyncClient, token_store: dict):
 @pytest.mark.asyncio
 async def test_login_user_wrong_password(async_client: AsyncClient):
     resp = await async_client.post(
-        "/auth/users/login",
+        "/auth/login",
         data={"username": "admin@example.com", "password": "WrongPassword1!"},
     )
     assert resp.status_code == 400, resp.text

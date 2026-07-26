@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import and_, select, func, delete
+from datetime import  datetime, UTC
+from sqlalchemy import and_, select, func, delete, update
 from app.modules.pms.models.discount_code_model import DiscountCode
 from app.utils.logging import LoggerFactory
 from app.utils.exceptions import RepositoryException,DiscountCodeDuplicateException
@@ -102,6 +103,61 @@ class DiscountCodeRepository:
         except Exception as e:
             logger.error(f"[DiscountCodeRepository] Unexpected update failure: {str(e)}")
             raise RepositoryException("Failed to update database discount code record", str(e))
+
+    async def get_valid_code(self, property_id: uuid.UUID, code: str) -> DiscountCode | None:
+        logger.info(f"[DiscountCodeRepository] Validating code '{code}' for property {property_id}")
+        try:
+            clean_code = code.strip().upper()
+            today = datetime.now(UTC).date()
+            stmt = select(DiscountCode).where(
+                and_(
+                    DiscountCode.property_id == property_id,
+                    func.upper(DiscountCode.code) == clean_code,
+                    DiscountCode.valid_from <= today,
+                    DiscountCode.valid_to >= today,
+                    DiscountCode.used_count < DiscountCode.max_uses,
+                )
+            )
+            result = await self.db.execute(stmt)
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"[DiscountCodeRepository] Error validating code: {str(e)}")
+            raise RepositoryException(
+                "Failed to validate discount code",
+                f"Error validating discount code: {str(e)}",
+            )
+
+    async def increment_used_count(self, code_id: uuid.UUID) -> None:
+        logger.info(f"[DiscountCodeRepository] Incrementing used_count for code {code_id}")
+        try:
+            stmt = (
+                update(DiscountCode)
+                .where(DiscountCode.id == code_id)
+                .values(used_count=DiscountCode.used_count + 1)
+            )
+            await self.db.execute(stmt)
+        except Exception as e:
+            logger.error(f"[DiscountCodeRepository] Error incrementing used_count: {str(e)}")
+            raise RepositoryException(
+                "Failed to update discount code usage",
+                f"Error incrementing used_count: {str(e)}",
+            )
+
+    async def decrement_used_count(self, code_id: uuid.UUID) -> None:
+        logger.info(f"[DiscountCodeRepository] Decrementing used_count for code {code_id}")
+        try:
+            stmt = (
+                update(DiscountCode)
+                .where(DiscountCode.id == code_id, DiscountCode.used_count > 0)
+                .values(used_count=DiscountCode.used_count - 1)
+            )
+            await self.db.execute(stmt)
+        except Exception as e:
+            logger.error(f"[DiscountCodeRepository] Error decrementing used_count: {str(e)}")
+            raise RepositoryException(
+                "Failed to update discount code usage",
+                f"Error decrementing used_count: {str(e)}",
+            )
 
     async def delete_discount_code(self, property_id: uuid.UUID, discount_id: uuid.UUID) -> bool:
         """

@@ -81,7 +81,7 @@ async def test_register_and_login_for_tenant_tests(
     assert resp.status_code == 200, resp.text
 
     resp = await async_client.post(
-        "/auth/users/login",
+        "/auth/login",
         data={"username": "tenant_admin@example.com", "password": "SecurePassword123!"},
     )
     assert resp.status_code == 200, resp.text

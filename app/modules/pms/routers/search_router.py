@@ -81,3 +81,5 @@ async def search_properties(
         data=service_result["data"],
         meta=service_result["meta"],
     )
+
+

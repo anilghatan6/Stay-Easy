@@ -135,21 +135,15 @@ async def handle_integrity_error(request: Request, exc: IntegrityError):
         content={"success": False, "error": error_msg},
     )
 
-
-# ── 6. Catch-all safety net ───────────────────────────────────────
-# NOTE: Starlette runs Exception handlers in ServerErrorMiddleware, which
-# sits OUTSIDE CORSMiddleware. That means responses from this handler skip
-# your normal CORS middleware entirely, so we attach the CORS headers here
-# by hand — otherwise browsers will silently swallow every 500 as a CORS
-# error instead of showing the real JSON error body.
-async def handle_unexpected_exception(request: Request, exc: Exception):
+# ── 6. Catch-all safety net handler ───────────────────────────────────────────
+async def handle_unhandled_exception(request: Request, exc: Exception):
     logger.critical(
         "[UnhandledException] %s | path=%s\n%s",
         str(exc),
         request.url.path,
         traceback.format_exc(),
     )
-    response = JSONResponse(
+    return JSONResponse(
         status_code=500,
         content={
             "success": False,
@@ -157,13 +151,6 @@ async def handle_unexpected_exception(request: Request, exc: Exception):
         },
     )
 
-    origin = request.headers.get("origin")
-    allowed_origins = getattr(request.app.state, "allowed_origins", [])
-    if origin and (origin in allowed_origins or "*" in allowed_origins):
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-
-    return response
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -172,4 +159,4 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(ValidationError, handle_pydantic_validation_error)
     app.add_exception_handler(StarletteHTTPException, handle_http_exception)
     app.add_exception_handler(IntegrityError, handle_integrity_error)
-    app.add_exception_handler(Exception, handle_unexpected_exception)
+    app.add_exception_handler(Exception, handle_unhandled_exception)

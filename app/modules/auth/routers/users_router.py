@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, status
 from app.modules.auth.schemas.users_schema import UserCreate, UserResponse
 from app.modules.auth.schemas.token_schema import (
-    Token,
+    # Token,
     VerifyOTP,
     ResendOTP,
     RefreshTokenRequest,
@@ -10,8 +10,8 @@ from app.modules.auth.schemas.token_schema import (
 from app.modules.auth.services.users_services import UserService
 from app.modules.auth.dependencies import get_user_service
 from app.modules.auth.auth_middlewares import CurrentUser
-from fastapi.security import OAuth2PasswordRequestForm
-from typing import Annotated
+# from fastapi.security import OAuth2PasswordRequestForm
+# from typing import Annotated
 
 router = APIRouter(prefix="/auth/users", tags=["Users"])
 
@@ -48,16 +48,16 @@ async def resend_otp(
     return {"message": "Verification code resent successfully."}
 
 
-@router.post("/login", response_model=Token, status_code=status.HTTP_200_OK)
-async def login_user(
-    user_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-    user_service: UserService = Depends(get_user_service),
-):
-    user_info = {
-        "email": user_data.username ,
-        "password": user_data.password,
-    }
-    return await user_service.login_user(user_info)
+# @router.post("/login", response_model=Token, status_code=status.HTTP_200_OK)
+# async def login_user(
+#     user_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+#     user_service: UserService = Depends(get_user_service),
+# ):
+#     user_info = {
+#         "email": user_data.username ,
+#         "password": user_data.password,
+#     }
+#     return await user_service.login_user(user_info)
 
 
 @router.post("/refresh", response_model=AccessTokenResponse, status_code=status.HTTP_200_OK)

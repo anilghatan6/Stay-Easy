@@ -472,6 +472,70 @@ class RoomRepository:
             logger.error("[RoomRepository] Error getting available rooms")
             raise RepositoryException(f"Failed to get available rooms: {str(e)}")
 
+    
+    async def get_available_rooms_for_property(
+        self, property_id: uuid.UUID, check_in: date, check_out: date
+    ) -> list[Rooms]:
+        logger.info("[RoomRepository] Getting available rooms for property: %s", property_id)
+    
+        if not property_id:
+            logger.info("[RoomRepository] No property ID provided, returning empty list")
+            return []
+        
+        try:
+            # 1. Define the subquery for overlapping bookings
+            overlapping_room_ids_subq = (
+                select(BookingRoom.room_unit_id)
+                .join(Booking, Booking.id == BookingRoom.booking_id)
+                .where(
+                    Booking.status.in_(
+                        [
+                            MasterBookingStatus.PENDING,
+                            MasterBookingStatus.CONFIRMED,
+                            MasterBookingStatus.CHECKED_IN,
+                        ]
+                    ),
+                    Booking.checkin_date < check_out,
+                    Booking.checkout_date > check_in,
+                )
+                .scalar_subquery()  # Crucial for clean subquery compilation
+            )
+            
+            # 2. Query available rooms that are not in the overlapping subquery
+            stmt = select(Rooms).where(
+                Rooms.property_id == property_id,
+                Rooms.status == RoomStatus.AVAILABLE,  # Simplified single-item match
+                Rooms.id.not_in(overlapping_room_ids_subq),  # Fixed operator typo
+            )
+            
+            # 3. Execute async query
+            result = await self.db.execute(stmt)
+            rooms = list(result.scalars().all())  # Explicit cast to list for return type hint
+            
+            logger.info("[RoomRepository] Found %d available rooms", len(rooms))
+            return rooms
+            
+        except Exception as e:
+            logger.error("[RoomRepository] Error getting available rooms for property %s: %s", property_id, str(e))
+            raise RepositoryException(f"Failed to get available rooms: {str(e)}") from e
+            
+
+    async def get_by_ids_with_details(self, room_ids: list[uuid.UUID]) -> list[Rooms]:
+        logger.info("[RoomRepository] Getting rooms by IDs with details")
+        if not room_ids:
+            return []
+        try:
+            stmt = (
+                select(Rooms)
+                .where(Rooms.id.in_(room_ids))
+                .options(joinedload(Rooms.room_type), joinedload(Rooms.bed_type))
+            )
+            result = await self.db.execute(stmt)
+            return list(result.scalars().all())
+        except Exception as e:
+            logger.error("[RoomRepository] Error getting rooms by IDs with details")
+            raise RepositoryException(f"Failed to get rooms: {str(e)}")
+
     async def get_by_ids(self, room_ids: list[uuid.UUID]) -> list[Rooms]:
         logger.info("[RoomRepository] Getting rooms by IDs")
         if not room_ids:
@@ -487,3 +551,44 @@ class RoomRepository:
             logger.error("[RoomRepository] Error getting rooms by IDs")
             raise RepositoryException(f"Failed to get rooms by IDs: {str(e)}")
 
+
+    async def lock_and_check_rooms(
+        self,
+        room_ids: list[uuid.UUID],
+        check_in: date,
+        check_out: date,
+    ) -> list[uuid.UUID]:
+        logger.info("[RoomRepository] Locking and checking rooms")
+        if not room_ids:
+            logger.info("[RoomRepository] No room IDs provided, returning empty list")
+            return []
+
+        try:
+            result = await self.db.execute(
+                select(Rooms.id).where(Rooms.id.in_(room_ids)).with_for_update()
+            )
+            locked_room_ids = result.scalars().all()
+
+            overlapping_subq = (
+                select(BookingRoom.room_unit_id)
+                .join(Booking, Booking.id == BookingRoom.booking_id)
+                .where(
+                    Booking.status.in_([
+                        MasterBookingStatus.PENDING,
+                        MasterBookingStatus.CONFIRMED,
+                        MasterBookingStatus.CHECKED_IN,
+                    ]),
+                    Booking.checkin_date < check_out,
+                    Booking.checkout_date > check_in,
+                    BookingRoom.room_unit_id.in_(locked_room_ids),
+                )
+            )
+            result = await self.db.execute(overlapping_subq)
+            already_booked = set(result.scalars().all())
+
+            logger.info("returning list of available rooms")
+            return [rid for rid in locked_room_ids if rid not in already_booked]
+
+        except Exception as e:
+            logger.error("[RoomRepository] Error locking and checking rooms")
+            raise RepositoryException(f"Failed to lock and check rooms: {str(e)}")

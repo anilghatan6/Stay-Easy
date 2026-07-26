@@ -30,7 +30,7 @@ from app.utils.exceptions import (
 
 from app.modules.pms.services.image_services import ImageService
 from app.utils.logging import LoggerFactory
-
+from datetime import date
 logger = LoggerFactory.get_logger(__name__)
 
 
@@ -357,4 +357,25 @@ class RoomService:
             raise
         except Exception as e:
             logger.error(f"[RoomService] Error executing update room: {str(e)}")
+            raise ServiceException(str(e))
+
+    
+    async def get_available_rooms(
+        self,
+        property_id: uuid.UUID,
+        checkin_date: date,
+        checkout_date: date,
+    ) -> list[RoomResponse]:
+        logger.info(f"[RoomService] Getting available rooms for property {property_id}")
+        try:
+            rooms = await self.room_repo.get_available_rooms_for_property(
+                property_id, checkin_date, checkout_date
+            )
+            if not rooms:
+                return []
+            return [RoomResponse.model_validate(room) for room in rooms]
+        except (PropertyNotFoundException, UnauthorizedException, RepositoryException, RoomNotFoundException):
+            raise
+        except Exception as e:
+            logger.error(f"[RoomService] Error executing get available rooms: {str(e)}")
             raise ServiceException(str(e))

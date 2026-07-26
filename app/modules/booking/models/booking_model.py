@@ -2,7 +2,7 @@ from enum import StrEnum
 import uuid
 from datetime import date
 from decimal import Decimal
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy import (
     ForeignKey,
@@ -24,7 +24,12 @@ class MasterBookingStatus(StrEnum):
     CHECKED_IN = "CHECKED_IN"
     CHECKED_OUT = "CHECKED_OUT"
     CANCELLED = "CANCELLED"
+    EXPIRED = "EXPIRED"
 
+class PaymentGateway(StrEnum):
+    STRIPE = "STRIPE"
+    RAZORPAY = "RAZORPAY"
+    DUMMY = "DUMMY"
 
 class Booking(Base, TimestampMixin):
     """The parent record enforcing that a checkout belongs to exactly one property."""
@@ -49,7 +54,6 @@ class Booking(Base, TimestampMixin):
         nullable=False,
     )
 
-    # Assuming your user table is named "users"
     guest_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("guests.id", ondelete="RESTRICT"),
@@ -64,12 +68,22 @@ class Booking(Base, TimestampMixin):
         index=True,
     )
 
+    payment_gateway: Mapped[PaymentGateway] = mapped_column(
+        SqlEnum(PaymentGateway, native_enum=False, length=20),
+        nullable=False,
+        default=PaymentGateway.DUMMY,
+    )
+
     # Overall reservation timeline
     checkin_date: Mapped[date] = mapped_column(Date, index=True, nullable=False)
     checkout_date: Mapped[date] = mapped_column(Date, index=True, nullable=False)
 
     # Financial snapshot across all rooms booked in this transaction
     total_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    subtotal: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
+    special_offer_discount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
+    coupon_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, default=None)
+    coupon_discount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
     ref_number: Mapped[str] = mapped_column(
         String(50), unique=True, index=True, nullable=False
     )

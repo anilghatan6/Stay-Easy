@@ -29,7 +29,7 @@ class DiscountCode(Base, TimestampMixin):
     property_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("properties.id", ondelete="CASCADE"), nullable=False
     )
-
+    
     # Financial Configuration
     code: Mapped[str] = mapped_column(String(50), nullable=False)
     type: Mapped[DiscountType] = mapped_column(SqlEnum(DiscountType), nullable=False)

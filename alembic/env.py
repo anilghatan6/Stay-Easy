@@ -9,6 +9,7 @@ from alembic import context
 
 from app.modules.auth.models import *
 from app.modules.pms.models import *
+from app.modules.booking.models import *
 from app.config.database_config import Base
 import os
 from dotenv import load_dotenv

@@ -39,6 +39,17 @@ class PropertyRepository:
             logger.error(f"[PropertyRepository] Error getting property by id: {str(e)}")
             raise RepositoryException(internal_detail=str(e))
 
+    async def get_by_id(self, property_id: uuid.UUID) -> Property | None:
+        logger.info(f"[PropertyRepository] Getting property by id: {property_id}")
+        try:
+            result = await self.db.execute(
+                select(Property).where(Property.id == property_id)
+            )
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"[PropertyRepository] Error getting property by id: {str(e)}")
+            raise RepositoryException(internal_detail=str(e))
+
     async def get_property_by_name(
         self, property_name: str, tenant_id: uuid.UUID
     ) -> Property | None:

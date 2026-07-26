@@ -235,6 +235,7 @@ class RoomNotFoundException(AppBaseException):
             status_code=404,
         )
 
+
 class RoomTypeAlreadyExistsException(AppBaseException):
     def __init__(self, user_message, status_code=400):
         super().__init__(
@@ -243,6 +244,7 @@ class RoomTypeAlreadyExistsException(AppBaseException):
             status_code=status_code,
         )
 
+
 class BedTypeAlreadyExistsException(AppBaseException):
     def __init__(self, user_message, status_code=400):
         super().__init__(
@@ -250,6 +252,7 @@ class BedTypeAlreadyExistsException(AppBaseException):
             internal_detail=user_message,
             status_code=status_code,
         )
+
 
 class InvalidDateException(AppBaseException):
     def __init__(self, user_message, status_code=400):
@@ -286,34 +289,74 @@ class OfferNameAlreadyExistsException(AppBaseException):
 
 
 class DiscountCodeAlreadyExistException(AppBaseException):
-    def __init__(self, user_message:str):
+    def __init__(self, user_message: str):
         super().__init__(
-            user_message=user_message,
-            internal_detail=user_message,
-            status_code=409
+            user_message=user_message, internal_detail=user_message, status_code=409
         )
 
 
 class DiscountCodeNotFoundException(AppBaseException):
     def __init__(self, user_message: str):
         super().__init__(
-            user_message=user_message,
-            internal_detail=user_message,
-            status_code=404
+            user_message=user_message, internal_detail=user_message, status_code=404
         )
+
 
 class DiscountCodeValidationError(AppBaseException):
     def __init__(self, user_message: str):
         super().__init__(
-            user_message=user_message,
-            internal_detail=user_message,
-            status_code=400
+            user_message=user_message, internal_detail=user_message, status_code=400
         )
 
+
 class DiscountCodeDuplicateException(AppBaseException):
-    def __init__(self, user_message:str):
+    def __init__(self, user_message: str):
         super().__init__(
-            user_message=user_message,
-            internal_detail=user_message,
-            status_code=409
+            user_message=user_message, internal_detail=user_message, status_code=409
+        )
+
+
+class RedisException(AppBaseException):
+    def __init__(self, user_message: str, internal_detail: str = None):
+        super().__init__(
+            user_message=user_message, internal_detail=internal_detail, status_code=500
+        )
+
+
+class RoomsUnavailableError(AppBaseException):
+    def __init__(self, user_message: str):
+        super().__init__(
+            user_message=user_message, internal_detail=user_message, status_code=400
+        )
+
+
+class BookingException(AppBaseException):
+    def __init__(self, user_message: str):
+        super().__init__(
+            user_message=user_message, internal_detail=user_message, status_code=400
+        )
+
+
+class PaymentGatewayError(AppBaseException):
+    def __init__(self, internal_detail: str = None, status_code: int = 500):
+        super().__init__(
+            user_message="Payment failed while processing. Please try again or use another method.",
+            internal_detail=internal_detail,
+            status_code=status_code,
+        )
+
+
+class UnsupportedGatewayError(AppBaseException):
+    def __init__(self, internal_detail: str):
+        super().__init__(
+            user_message="Unsupported payment gateway. Select a valid payment gateway",
+            internal_detail=internal_detail,
+            status_code=400,
+        )
+
+
+class ServiceBusyError(AppBaseException):
+    def __init__(self, user_message: str):
+        super().__init__(
+            user_message=user_message, internal_detail=user_message, status_code=409
         )

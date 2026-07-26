@@ -8,22 +8,22 @@ from app.modules.auth.services.users_services import UserService
 from typing import Annotated
 from fastapi.security import OAuth2PasswordBearer
 
-oauth2_scheme_guest = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/guests/login")
-oauth2_scheme_user = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/users/login")
+oauth2_scheme_guest = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+oauth2_scheme_user = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
-async def get_current_user(
+async def get_current_guest(
     token: str = Depends(oauth2_scheme_guest),
-    user_service: GuestService = Depends(get_guest_service),
+    guest_service: GuestService = Depends(get_guest_service),
 ) -> Guest:
-    guest = user_service.auth_service.verify_access_token(token)
+    guest = guest_service.auth_service.verify_access_token(token)
     if not guest or guest.get("role") != "guest":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not authorized to access this resource",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    guest = await user_service.get_guest_by_id(guest["user_id"])
+    guest = await guest_service.get_guest_by_id(guest["user_id"])
     if not guest:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -33,7 +33,7 @@ async def get_current_user(
     return guest
 
 
-CurrentGuest = Annotated[Guest, Depends(get_current_user)]
+CurrentGuest = Annotated[Guest, Depends(get_current_guest)]
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme_user), user_service: UserService = Depends(get_user_service)) -> User:

@@ -1,6 +1,6 @@
 import uuid
-
-from fastapi import APIRouter, Depends, status
+from datetime import date, datetime, timezone
+from fastapi import APIRouter, Depends, status, HTTPException
 
 from app.modules.auth.auth_middlewares import CurrentUser
 from app.modules.pms.dependencies import get_room_service
@@ -141,6 +141,33 @@ async def get_all_bed_types(
     )
     return {"success": True, "data": response}
 
+@router.get("/available-rooms", response_model=StandardResponse[list[RoomResponse]], status_code=status.HTTP_200_OK, summary="Get available rooms")
+async def get_available_rooms(
+    property_id: uuid.UUID,
+    checkin_date: date,
+    checkout_date: date,
+    room_service: RoomService = Depends(get_room_service),
+) -> StandardResponse[list[RoomResponse]]:
+    
+    if checkin_date >= checkout_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Check-in date must be strictly before check-out date.",
+        )
+
+    today = datetime.now(timezone.utc).date()
+
+    if checkin_date < today:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Check-in date cannot be in the past.",
+        )
+    response = await room_service.get_available_rooms(
+        property_id=property_id,
+        checkin_date=checkin_date,
+        checkout_date=checkout_date,
+    )
+    return {"success": True, "data": response}
 
 @router.get("/{room_id}", response_model=StandardResponse[RoomResponse], status_code=status.HTTP_200_OK, summary="Get a room")
 async def get_room(

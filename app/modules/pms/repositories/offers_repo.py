@@ -1,5 +1,6 @@
 import uuid
 
+from datetime import date
 from sqlalchemy import and_, func, delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -92,15 +93,13 @@ class SpecialOfferRepository:
                     "One of your offer dates fails the chronology constraint: start_date < end_date."
                 )
             raise RepositoryException(
-                "Failed to process bulk special offers",
-                f"Database consistency error happened while executing bulk offer save: {str(e)}",
+                f"Failed to process bulk special offers: {str(e)}",
             )
 
         except Exception as e:
             await self.db.rollback()
             logger.error(f"[OfferRepository] Unexpected rollback execution: {str(e)}")
             raise RepositoryException(
-                "Failed to process bulk special offers",
                 f"Failed to process bulk special offers: {str(e)}",
             )
 
@@ -113,9 +112,30 @@ class SpecialOfferRepository:
             return offers
         except Exception as e:
             logger.error(f"[OfferRepository] Error getting all offers: {str(e)}")
-            raise RepositoryException(
-                "Failed to get all offers", f"Failed to get all offers: {str(e)}"
+            raise RepositoryException(f"Failed to get all offers: {str(e)}")
+
+    async def get_active_offers(
+        self, property_id: uuid.UUID, check_in: date, check_out: date
+    ) -> list[SpecialOffer]:
+        logger.info(
+            f"[OfferRepository] Fetching active offers for property {property_id} overlapping {check_in} - {check_out}"
+        )
+        try:
+            stmt = (
+                select(SpecialOffer)
+                .where(
+                    SpecialOffer.property_id == property_id,
+                    SpecialOffer.is_active.is_(True),
+                    SpecialOffer.start_date < check_out,
+                    SpecialOffer.end_date > check_in,
+                )
+                .order_by(SpecialOffer.discount_percentage.desc())
             )
+            result = await self.db.execute(stmt)
+            return list(result.scalars().all())
+        except Exception as e:
+            logger.error(f"[OfferRepository] Error fetching active offers: {str(e)}")
+            raise RepositoryException(f"Failed to get active offers: {str(e)}")
 
     async def get_offer_by_id(self, offer_id: uuid.UUID, property_id: uuid.UUID):
         logger.info(
@@ -130,9 +150,7 @@ class SpecialOfferRepository:
             return offer
         except Exception as e:
             logger.error(f"[OfferRepository] Error getting offer by id: {str(e)}")
-            raise RepositoryException(
-                "Failed to get offer", f"Failed to get offer by id: {str(e)}"
-            )
+            raise RepositoryException(f"Failed to get offer by id: {str(e)}")
 
     async def update_offer(
         self, offer_id: uuid.UUID, property_id: uuid.UUID, offer_data: dict
@@ -207,7 +225,6 @@ class SpecialOfferRepository:
 
             # Generic fallback for any unhandled database integrity error
             raise RepositoryException(
-                "Database consistency constraint violated.",
                 f"Failed to update offer constraints: {error_msg}",
             )
 
@@ -217,7 +234,6 @@ class SpecialOfferRepository:
                 f"[OfferRepository] Unexpected update pipeline exception collapse: {str(e)}"
             )
             raise RepositoryException(
-                "Failed to complete offer data updates.",
                 f"Failed to update offer runtime states: {str(e)}",
             )
 
@@ -249,6 +265,4 @@ class SpecialOfferRepository:
         except Exception as e:
             await self.db.rollback()
             logger.error(f"[OfferRepository] Unexpected rollback execution: {str(e)}")
-            raise RepositoryException(
-                "Failed to delete  offer.", f"Failed to delete offer: {str(e)}"
-            )
+            raise RepositoryException(f"Failed to delete offer: {str(e)}")
