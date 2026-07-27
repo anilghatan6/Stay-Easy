@@ -2,6 +2,7 @@ from pydantic import field_validator
 import uuid
 from datetime import date, datetime
 from typing import Optional, List
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -20,7 +21,12 @@ class SpecialOfferBase(BaseModel):
         max_length=100,
         examples=["Early Bird 15%"],
     )
-    description: Optional[str] = Field(None, max_length=1000, title="Offer Description", description="Description of the special offer deal")
+    description: Optional[str] = Field(
+        None,
+        max_length=1000,
+        title="Offer Description",
+        description="Description of the special offer deal",
+    )
     discount_percentage: float = Field(
         float("0.00"),
         ge=0.00,
@@ -29,10 +35,18 @@ class SpecialOfferBase(BaseModel):
         description="Discount percentage of the special offer deal",
         examples=[15.00],
     )
-    start_date: date = Field(..., title="Start Date", description="Active starting date window")
-    end_date: date = Field(..., title="End Date", description="Active termination date window")
-    is_active: bool = Field(default=False, title="Is Active", description="Is the special offer active")
-    is_custom: bool = Field(default=False, title="Is Custom", description="Is the special offer custom")
+    start_date: date = Field(
+        ..., title="Start Date", description="Active starting date window"
+    )
+    end_date: date = Field(
+        ..., title="End Date", description="Active termination date window"
+    )
+    is_active: bool = Field(
+        default=False, title="Is Active", description="Is the special offer active"
+    )
+    is_custom: bool = Field(
+        default=False, title="Is Custom", description="Is the special offer custom"
+    )
 
     @model_validator(mode="after")
     def validate_offer_chronology(self) -> "SpecialOfferBase":
@@ -42,7 +56,9 @@ class SpecialOfferBase(BaseModel):
                 "The offer start date must be strictly earlier than the end date."
             )
 
-        if self.start_date < date.today():
+        user_timezone = ZoneInfo("Asia/Kathmandu")
+        current_user_date = datetime.now(user_timezone).date()
+        if self.start_date < current_user_date:
             raise ValueError("The offer start date cannot be set in the past.")
 
         return self
@@ -75,7 +91,12 @@ class SpecialOfferUpdate(BaseModel):
         max_length=100,
         examples=["Early Bird 15%"],
     )
-    description: Optional[str] = Field(None, max_length=1000, title="Offer Description", description="Description of the special offer deal")
+    description: Optional[str] = Field(
+        None,
+        max_length=1000,
+        title="Offer Description",
+        description="Description of the special offer deal",
+    )
     discount_percentage: Optional[float] = Field(
         None,
         ge=0.00,
@@ -84,9 +105,15 @@ class SpecialOfferUpdate(BaseModel):
         description="Discount percentage of the special offer deal",
         examples=[15.00],
     )
-    start_date: Optional[date] = Field(None, title="Start Date", description="Active starting date window")
-    end_date: Optional[date] = Field(None, title="End Date", description="Active termination date window")
-    is_active: Optional[bool] = Field(None, title="Is Active", description="Is the special offer active")
+    start_date: Optional[date] = Field(
+        None, title="Start Date", description="Active starting date window"
+    )
+    end_date: Optional[date] = Field(
+        None, title="End Date", description="Active termination date window"
+    )
+    is_active: Optional[bool] = Field(
+        None, title="Is Active", description="Is the special offer active"
+    )
 
     @model_validator(mode="after")
     def validate_offer_chronology(self) -> "SpecialOfferUpdate":
@@ -105,27 +132,25 @@ class SpecialOfferUpdate(BaseModel):
 
         return self
 
-    @field_validator("title",mode="after")
-    @classmethod  
-    def validate_title(cls,v:Optional[str])->Optional[str]:
+    @field_validator("title", mode="after")
+    @classmethod
+    def validate_title(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
             return None
-        v=v.strip()
-        if len(v)<2:
+        v = v.strip()
+        if len(v) < 2:
             raise ValueError("Title must be at least 2 characters long")
         return v
-    
-    @field_validator("description",mode="after")
-    @classmethod  
-    def validate_description(cls,v:Optional[str])->Optional[str]:
+
+    @field_validator("description", mode="after")
+    @classmethod
+    def validate_description(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
             return None
-        v=v.strip()
-        if len(v)>1000:
+        v = v.strip()
+        if len(v) > 1000:
             raise ValueError("Description must be at most 1000 characters long")
         return v
-
-
 
 
 class SpecialOfferResponse(TimestampSchema):
@@ -133,7 +158,7 @@ class SpecialOfferResponse(TimestampSchema):
     property_id: uuid.UUID
     title: str
     description: Optional[str]
-    discount_percentage: float 
+    discount_percentage: float
     start_date: date
     end_date: date
     is_active: bool
