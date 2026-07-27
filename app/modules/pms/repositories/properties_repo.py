@@ -1,12 +1,14 @@
 import uuid
 from sqlalchemy import func, select, or_, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.pms.models.properties_model import (
     Amenity,
     Property,
 )
+
+# from app.modules.pms.models.rooms_model import Rooms, RoomStatus
 from app.utils.exceptions import (
     RepositoryException,
     PropertyNotFoundException,
@@ -16,6 +18,9 @@ from app.utils.logging import LoggerFactory
 from typing import Sequence
 
 logger = LoggerFactory.get_logger(__name__)
+
+RADIUS_TIERS_METERS = [5000, 15000, 50000]  # 5km, 15km, 50km
+MIN_RESULTS_THRESHOLD = 1
 
 
 class PropertyRepository:
@@ -40,7 +45,7 @@ class PropertyRepository:
             raise RepositoryException(internal_detail=str(e))
 
     async def get_by_id(self, property_id: uuid.UUID) -> Property | None:
-        logger.info(f"[PropertyRepository] Getting property by id: {property_id}")
+        logger.info(f"[PropertyRepository] Getting specific property by id: {property_id}")
         try:
             result = await self.db.execute(
                 select(Property).where(Property.id == property_id)
@@ -517,3 +522,65 @@ class PropertyRepository:
                 f"[PropertyRepository] Error getting number of floors: {str(e)}"
             )
             raise RepositoryException(internal_detail=str(e))
+
+    async def get_nearby_properties(
+        self, lat: float, lon: float, limit: int = 20
+    ) -> list[tuple[list, int]]:
+        """
+        Progressively expands search radius (5km -> 15km -> 50km) until
+        enough results are found. Returns (rows, radius_used_in_meters).
+        """
+        logger.info(
+            f"[PropertyRepository] Getting nearby properties for lat: {lat}, lon: {lon}"
+        )
+        rows = []
+        radius_used = RADIUS_TIERS_METERS[-1]
+
+        try:
+            for radius_m in RADIUS_TIERS_METERS:
+                logger.info(f"[PropertyRepository] Trying radius {radius_m}m")
+                stmt = text(
+                    """
+                    SELECT 
+                        id, name, type, country, state,city, address, currency, photos ->> 'cover' as cover_photo,
+                        ST_Distance(
+                            geo_location,
+                            ST_SetSRID(ST_MakePoint(:lng, :lat), 4326):: geography
+                        ) AS distance_m
+                    FROM properties
+                    WHERE is_active = true
+                        AND geo_location IS NOT NULL
+                        AND ST_DWithin(
+                            geo_location,
+                            ST_SetSRID(ST_MakePoint(:lng, :lat), 4326):: geography,
+                            :radius_m
+                        )
+                        ORDER BY distance_m
+                        LIMIT :limit
+                    """
+                )
+                result = await self.db.execute(
+                    stmt,
+                    {
+                        "lng": lon,
+                        "lat": lat,
+                        "radius_m": radius_m,
+                        "limit": limit,
+                    },
+                )
+                rows = result.fetchall()
+                radius_used = radius_m
+
+                if len(rows) >= MIN_RESULTS_THRESHOLD:
+                    break
+
+            logger.info(
+                f"[PropertyRepository] Found {len(rows)} properties within {radius_used}m"
+            )
+            return rows, radius_used
+
+        except SQLAlchemyError as e:
+            logger.error(f"[PropertyRepository] Failed to find nearby properties: {e}")
+            raise RepositoryException(
+                internal_detail="Could not search for nearby properties. Please try again."
+            )

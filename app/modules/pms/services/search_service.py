@@ -167,7 +167,11 @@ class SearchService:
                         "state": prop.state,
                         "city": prop.city,
                         "address": prop.address,
+                        "cover_photo": str(prop.photos.get("cover"))
+                        if prop.photos
+                        else None,
                         "amenities": [a.name for a in amenities],
+                        "currency": prop.currency,
                         "total_price": float(r["total_price"]),
                         "nights": r["nights"],
                     }
@@ -180,4 +184,43 @@ class SearchService:
             logger.error("[SearchService] Error attaching property details")
             raise ServiceException(
                 internal_detail=f"Failed to attach property details: {str(e)}"
+            )
+
+    async def get_nearby_properties(self, lat: float, lon: float, limit: int = 20):
+        logger.info(
+            f"[SearchService] Getting nearby properties for lat: {lat}, lon: {lon}"
+        )
+        try:
+            rows, radius_used_m = await self.property_repo.get_nearby_properties(
+                lat, lon, limit
+            )
+
+            results = [
+                {
+                    "property_id": row.id,
+                    "name": row.name,
+                    "type": row.type,
+                    "country": row.country,
+                    "state": row.state,
+                    "city": row.city,
+                    "address": row.address,
+                    "currency": row.currency,
+                    "cover_photo": row.cover_photo,
+                    "distance_km": round(row.distance_m / 1000, 2),
+                }
+                for row in rows
+            ]
+            return {
+                "search_radius_km": round(radius_used_m / 1000),
+                "count": len(results),
+                "results": results,
+            }
+        except RepositoryException:
+            raise
+        except Exception as e:
+            logger.error(
+                f"[PropertyService] Unexpected error fetching nearby properties: {e}"
+            )
+            raise ServiceException(
+                "Could not fetch nearby properties. Please try again."
             )

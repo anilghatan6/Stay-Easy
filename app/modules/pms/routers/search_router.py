@@ -17,7 +17,9 @@ class PropertySearchItem(BaseModel):
     state: str
     city: str
     address: str
+    cover_photo: str
     amenities: List[str]
+    currency: str
     total_price: float
     nights: int
 
@@ -67,7 +69,6 @@ async def search_properties(
 
     today = datetime.now(timezone.utc).date()
 
-
     if check_in < today:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -83,3 +84,28 @@ async def search_properties(
     )
 
 
+# fetch the max 20 properties which are near the guest location along with the distance from the guest location
+@router.get(
+    "/nearby",
+    response_model=StandardResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_nearby_properties(
+    lat: float = Query(
+        ..., description="Latitude of the guest location", ge=-90, le=90
+    ),
+    lon: float = Query(
+        ..., description="Longitude of the guest location", ge=-180, le=180
+    ),
+    limit: int = Query(20, description="Max properties to return", ge=1, le=50),
+    search_service: SearchService = Depends(get_search_service),
+):
+    service_result = await search_service.get_nearby_properties(lat, lon, limit)
+    return StandardResponse(
+        success=True,
+        data=service_result["results"],
+        meta={
+            "search_radius_km": service_result["search_radius_km"],
+            "count": service_result["count"],
+        },
+    )

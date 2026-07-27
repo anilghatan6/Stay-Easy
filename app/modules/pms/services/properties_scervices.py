@@ -401,7 +401,9 @@ class PropertyService:
                 internal_detail=f"Failed to toggle property activation: {str(e)}"
             )
 
-    async def get_number_of_floors(self, property_id: uuid.UUID, tenant_id: uuid.UUID) ->dict[str, int]:
+    async def get_number_of_floors(
+        self, property_id: uuid.UUID, tenant_id: uuid.UUID
+    ) -> dict[str, int]:
         logger.info("[PropertyService] Getting the number of floors")
         try:
             no_of_floors = await self.property_repo.get_number_of_floors(
@@ -414,4 +416,23 @@ class PropertyService:
             logger.error(f"[PropertyService] Error getting number of floors: {str(e)}")
             raise ServiceException(
                 internal_detail=f"Failed to get number of floors: {str(e)}"
+            )
+
+    async def get_specific_property(self, property_id: uuid.UUID) -> PropertyResponse:
+        logger.info("[PropertyService] Getting the specific property")
+        try:
+            property = await self.property_repo.get_by_id(property_id)
+            if not property:
+                raise PropertyNotFoundException("Property not found")
+
+            if not property.is_active:
+                raise PropertyNotFoundException("Property Not Found ")
+
+            return PropertyResponse.model_validate(property)
+        except (PropertyNotFoundException, RepositoryException):
+            raise
+        except Exception as e:
+            logger.error(f"[PropertyService] Error getting specific property: {str(e)}")
+            raise ServiceException(
+                internal_detail=f"Failed to get specific property: {str(e)}"
             )

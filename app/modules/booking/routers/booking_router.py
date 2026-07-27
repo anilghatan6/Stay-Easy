@@ -79,7 +79,9 @@ async def confirm_payment(
         ref_number=ref_number,
         gateway_payload=body.gateway_payload,
     )
-    return StandardResponse(data=ConfirmPaymentResponse(**result))
+    payment_data = ConfirmPaymentResponse(**result)
+    filtered_data = payment_data.model_dump(exclude_none=True)
+    return StandardResponse(data=filtered_data)
 
 
 @router.post("/{ref_number}/apply-discount")
