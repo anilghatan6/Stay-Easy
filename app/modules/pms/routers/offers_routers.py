@@ -1,7 +1,7 @@
 from app.modules.pms.services.room_services import RoomService
 import uuid
 from typing import List
-from fastapi import APIRouter, Depends, status, HTTPException
+from fastapi import APIRouter, Depends, status, HTTPException, Query
 from app.modules.auth.auth_middlewares import CurrentUser
 from app.modules.pms.dependencies import get_special_offer_service, get_room_service
 from app.modules.pms.schemas.offers_schema import (
@@ -53,6 +53,8 @@ async def bulk_create_special_offers(
 async def get_property_special_offers(
     property_id: uuid.UUID,
     user: CurrentUser,
+    skip:int = Query(default=0, ge=0, description="Number of offers to skip"),
+    limit:int = Query(default=10, ge=1, le=50, description="Maximum number of offers to return"),
     offer_service: SpecialOfferService = Depends(get_special_offer_service),
 ):
     if user.tenant_id is None:
@@ -61,13 +63,23 @@ async def get_property_special_offers(
             detail="You are not authorized to get special offers. You must belong to a tenant.",
         )
 
-    saved_models = await offer_service.get_all_offers(property_id=property_id)
+    saved_models, total = await offer_service.get_all_offers(property_id=property_id, skip=skip, limit=limit)
 
+    has_more = skip + len(saved_models) < total
     formatted_offers = [
         SpecialOfferResponse.model_validate(model_row) for model_row in saved_models
     ]
 
-    return {"success": True, "data": formatted_offers}
+    return {
+        "success": True,
+        "data": formatted_offers,
+        "meta":{
+            "total": total,
+            "skip":skip,
+            "limit":limit,
+            "has_more":has_more
+            }
+        }
 
 
 @router.get(

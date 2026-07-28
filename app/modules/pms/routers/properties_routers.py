@@ -35,13 +35,14 @@ router = APIRouter(prefix="/properties", tags=["Property Management System"])
 async def get_tenant_properties(
     current_user: CurrentUser,
     skip: int = Query(default=0, ge=0, description="Number of properties to skip"),
-    limit: int = Query(default=20, ge=1, le=50, description="Max properties to return"),
+    limit: int = Query(default=10, ge=1, le=50, description="Max properties to return"),
     property_service: PropertyService = Depends(get_property_service),
 ):
     verify_tenant(current_user)
     tenant_id = current_user.tenant_id
-    response = await property_service.get_tenant_properties_list(tenant_id, skip, limit)
-    return {"success": True, "data": response}
+    properties_list, total_count = await property_service.get_tenant_properties_list(tenant_id, skip, limit)
+    has_more = skip + len(properties_list.properties) < total_count
+    return {"success": True, "data": properties_list, "meta": {"total": total_count, "skip": skip, "limit": limit, "has_more": has_more}}
 
 
 @router.get(

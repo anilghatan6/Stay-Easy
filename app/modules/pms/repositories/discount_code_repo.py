@@ -72,15 +72,25 @@ class DiscountCodeRepository:
                 f"Error creating discount code: {str(e)}"
             )
     
-    async def get_all_discount_codes(self,property_id:uuid.UUID)->list[DiscountCode]:
+    async def get_all_discount_codes(self,property_id:uuid.UUID,skip:int, limit:int)->list[DiscountCode]:
         logger.info(f"[DiscountCodeRepository] Fetching all discount codes for property {property_id}")
         try:
             stmt = select(DiscountCode).where(
                 DiscountCode.property_id == property_id
-            )
+            ).order_by(DiscountCode.created_at.desc()).offset(skip).limit(limit)
             result = await self.db.execute(stmt)
             db_discount_codes = result.scalars().all()
-            return db_discount_codes
+
+            total_stmt = (
+                select(func.count())
+                .select_from(DiscountCode)
+                .where(
+                    DiscountCode.property_id == property_id
+                )
+            )
+            total_result = await self.db.execute(total_stmt)
+            total = total_result.scalar() or 0
+            return db_discount_codes,total
         except Exception as e:
             logger.error(f"[DiscountCodeRepository] Error fetching discount codes: {str(e)}")
             raise RepositoryException(

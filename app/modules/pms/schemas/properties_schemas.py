@@ -445,7 +445,6 @@ class TenantPropertiesListResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     tenant_id: uuid.UUID
-    total_count: int
     properties: List[PropertyResponse]
 
 

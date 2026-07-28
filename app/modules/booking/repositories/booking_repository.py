@@ -173,11 +173,10 @@ class BookingRepository:
             ) from e
 
     async def get_bookings_by_guest(
-        self, guest_id: uuid.UUID, page: int = 1, limit: int = 20
-    ) -> list[Booking]:
+        self, guest_id: uuid.UUID, skip: int, limit: int
+    ) -> tuple[list[Booking], int]:
         logger.info("[BookingRepository] Fetching bookings by guest")
         try:
-            offset = (page - 1) * limit
             excluded_statuses = [
                 MasterBookingStatus.CANCELLED,
                 MasterBookingStatus.EXPIRED,
@@ -186,14 +185,29 @@ class BookingRepository:
             stmt = (
                 select(Booking)
                 .where(
-                    Booking.guest_id == guest_id, ~Booking.status.in_(excluded_statuses)
+                    Booking.guest_id == guest_id, 
+                    ~Booking.status.in_(excluded_statuses)
                 )
                 .order_by(Booking.created_at.desc())
-                .offset(offset)
+                .offset(skip)
                 .limit(limit)
             )
             result = await self.db.execute(stmt)
-            return result.scalars().all()
+
+            total_stmt = (
+                select(func.count())
+                .select_from(Booking)
+                .where(
+                    Booking.guest_id == guest_id,
+                    ~Booking.status.in_(excluded_statuses)
+                )
+            )
+
+            total_result = await self.db.execute(total_stmt)
+
+            total = total_result.scalar() or 0
+            bookings = result.scalars().all()
+            return bookings, total
         except SQLAlchemyError as e:
             logger.error(
                 f"[BookingRepository] Failed to fetch bookings for guest {guest_id}: {e}"

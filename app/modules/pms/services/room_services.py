@@ -218,16 +218,21 @@ class RoomService:
             raise ServiceException(str(e))
 
     async def get_all_rooms(
-        self, property_id: uuid.UUID, tenant_id: uuid.UUID
-    ) -> list[RoomResponse]:
+        self, property_id: uuid.UUID, tenant_id: uuid.UUID, skip: int, limit: int
+    ) -> tuple[list[RoomResponse], int]:
         logger.info(f"[RoomService] Getting all rooms for property {property_id}")
         try:
             await self._validate_property(property_id, tenant_id)
-            rooms = await self.room_repo.get_all_rooms(property_id)
+            rooms, total_count = await self.room_repo.get_all_rooms(
+                property_id, skip, limit
+            )
             logger.info(
                 f"[RoomService] Found {len(rooms)} rooms for property {property_id}"
             )
-            return [RoomResponse.model_validate(room) for room in rooms]
+            return (
+                [RoomResponse.model_validate(room) for room in rooms],
+                total_count,
+            )
 
         except (PropertyNotFoundException, UnauthorizedException, RepositoryException):
             raise

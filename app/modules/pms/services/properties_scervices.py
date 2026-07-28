@@ -250,7 +250,7 @@ class PropertyService:
 
     async def get_tenant_properties_list(
         self, tenant_id: uuid.UUID, skip: int = 0, limit: int = 100
-    ) -> TenantPropertiesListResponse:
+    ) -> tuple[TenantPropertiesListResponse, int]:
         """
         Retrieves properties and structures them into the TenantPropertiesListResponse Pydantic schema.
         """
@@ -283,11 +283,11 @@ class PropertyService:
 
                 formatted_properties.append(PropertyResponse.model_validate(prop_data))
 
+            has_more = skip + len(formatted_properties) < total_count
             return TenantPropertiesListResponse(
                 tenant_id=tenant_id,
-                total_count=total_count,
                 properties=formatted_properties,
-            )
+            ) , total_count
         except RepositoryException:
             raise
 

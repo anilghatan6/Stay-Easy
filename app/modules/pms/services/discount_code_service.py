@@ -88,18 +88,20 @@ class DiscountCodeService:
             )
             raise ServiceException(f"An unexpected internal error occurred: {str(e)}")
 
-    async def get_all_discount_codes(self, property_id: uuid.UUID):
+    async def get_all_discount_codes(self, property_id: uuid.UUID,skip:int, limit:int):
         logger.info(
             f"[DiscountCodeService] Fetching all discount codes for property: {property_id}"
         )
         try:
-            all_discount_codes = await self.discount_code_repo.get_all_discount_codes(
-                property_id
+            all_discount_codes,total = await self.discount_code_repo.get_all_discount_codes(
+                property_id,
+                skip,
+                limit
             )
             return [
                 DiscountCodeResponse.model_validate(discount_code)
                 for discount_code in all_discount_codes
-            ]
+            ],total
         except RepositoryException:
             raise
         except Exception as e:

@@ -504,21 +504,16 @@ class BookingService:
             raise ServiceException("Could not get booking details. Please try again.")
 
     async def get_guest_bookings(
-        self, guest_id: uuid.UUID, page: int = 1, limit: int = 20
+        self, guest_id: uuid.UUID, skip: int, limit: int, page: int = 1
     ) -> dict:
         logger.info("getting guest bookings")
         try:
-            bookings = await self.booking_repo.get_bookings_by_guest(
-                guest_id, page, limit
+            bookings, total = await self.booking_repo.get_bookings_by_guest(
+                guest_id, skip, limit
             )
-            total = await self.booking_repo.count_by_guest(guest_id)
-            total_pages = max(1, (total + limit - 1) // limit)
             return {
-                "items": bookings,
+                "bookings": bookings,
                 "total": total,
-                "page": page,
-                "limit": limit,
-                "total_pages": total_pages,
             }
         except RepositoryException:
             raise

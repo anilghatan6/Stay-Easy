@@ -1,3 +1,4 @@
+from sqlalchemy import desc
 from fastapi import APIRouter, Depends, Query, status, HTTPException
 from app.modules.pms.services.search_service import SearchService
 from app.modules.pms.dependencies import get_search_service
@@ -95,7 +96,7 @@ async def get_nearby_properties(
     lon: float = Query(
         ..., description="Longitude of the guest location", ge=-180, le=180
     ),
-    limit: int = Query(20, description="Max properties to return", ge=1, le=50),
+    limit: int = Query(10, description="Max properties to return", ge=1, le=50),
     search_service: SearchService = Depends(get_search_service),
 ):
     service_result = await search_service.get_nearby_properties(lat, lon, limit)

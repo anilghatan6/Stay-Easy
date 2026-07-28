@@ -112,7 +112,5 @@ class BookingListItemResponse(BaseModel):
 
 class PaginatedBookingsResponse(BaseModel):
     items: list[BookingListItemResponse]
-    total: int
-    page: int
-    limit: int
-    total_pages: int
+ 
+   

@@ -116,11 +116,21 @@ async def apply_discount(
 async def get_my_bookings(
     guest: CurrentGuest,
     booking_service: Annotated[BookingService, Depends(get_booking_service)],
-    page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=100),
+    skip: int = Query(0, ge=0,description="Number of bookings to skip"),
+    limit: int = Query(10, ge=1, le=50, description="Max number of bookings to return"),
 ):
-    result = await booking_service.get_guest_bookings(guest.id, page, limit)
-    return StandardResponse(data=PaginatedBookingsResponse(**result))
+    result = await booking_service.get_guest_bookings(guest.id, skip, limit)
+    has_more = skip + len(result["bookings"]) < result["total"]
+
+    return StandardResponse(
+        data=PaginatedBookingsResponse(items=result["bookings"]),
+        meta={
+            "total":result["total"],
+            "skip":skip,
+            "limit":limit,
+            "has_more":has_more
+        }
+    )
 
 
 @router.get("/{ref_number}")

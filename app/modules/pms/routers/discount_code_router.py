@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
 import uuid
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from app.modules.pms.schemas.discount_code_schema import DiscountCodeCreate, DiscountCodeResponse,DiscountCodeUpdate
 from app.modules.pms.services.discount_code_service import DiscountCodeService
 from app.modules.auth.auth_middlewares import CurrentUser
@@ -29,18 +29,29 @@ async def create_discount_code(
     }
 
 @router.get("/",response_model=StandardResponse[list[DiscountCodeResponse]],status_code=status.HTTP_200_OK)
-async def get_all_discount_codes(user:CurrentUser,property_id:uuid.UUID,discount_code_service:DiscountCodeService = Depends(get_discount_code_service)):
+async def get_all_discount_codes(
+    user:CurrentUser,
+    property_id:uuid.UUID,
+    skip:int = Query(default=0, ge=0, description="Number of discount codes to skip"),
+    limit:int = Query(default=10, ge=1, le=50,description="Number of discount codes to return"),
+    discount_code_service:DiscountCodeService = Depends(get_discount_code_service)):
     if user.tenant_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You are not authorized to get discount codes. You must belong to an active tenant.",
         )
     
-    all_discount_codes = await discount_code_service.get_all_discount_codes(property_id=property_id)
-    
+    all_discount_codes, total = await discount_code_service.get_all_discount_codes(property_id=property_id, skip=skip, limit=limit)
+    has_more = skip + len(all_discount_codes) < total
     return {
         "success":True,
-        "data":all_discount_codes
+        "data":all_discount_codes,
+       "meta":{
+        "total":total,
+        "skip":skip,
+        "limit":limit,
+        "has_more":has_more
+       }
     }
 
 @router.get("/{discount_id}",response_model=StandardResponse[DiscountCodeResponse], status_code=status.HTTP_200_OK)

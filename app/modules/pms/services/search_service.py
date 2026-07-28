@@ -186,13 +186,13 @@ class SearchService:
                 internal_detail=f"Failed to attach property details: {str(e)}"
             )
 
-    async def get_nearby_properties(self, lat: float, lon: float, limit: int = 20):
+    async def get_nearby_properties(self, lat: float, lon: float,limit: int ):
         logger.info(
             f"[SearchService] Getting nearby properties for lat: {lat}, lon: {lon}"
         )
         try:
             rows, radius_used_m = await self.property_repo.get_nearby_properties(
-                lat, lon, limit
+                lat, lon,  limit
             )
 
             results = [

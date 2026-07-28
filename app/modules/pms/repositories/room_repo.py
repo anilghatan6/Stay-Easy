@@ -223,7 +223,7 @@ class RoomRepository:
             )
             raise RepositoryException(f"Failed to get room names: {str(e)}")
 
-    async def get_all_rooms(self, property_id: uuid.UUID) -> Sequence[Rooms]:
+    async def get_all_rooms(self, property_id: uuid.UUID, skip: int, limit: int) -> tuple[Sequence[Rooms], int]:
         """Get all rooms for a property, including room types and bed types."""
         logger.info(f"[RoomRepository] Getting all rooms for property {property_id}")
         try:
@@ -231,15 +231,27 @@ class RoomRepository:
                 select(Rooms)
                 .where(Rooms.property_id == property_id)
                 .options(joinedload(Rooms.room_type), joinedload(Rooms.bed_type))
+                .order_by(Rooms.created_at.desc())
+                .offset(skip)
+                .limit(limit)
             )
 
             result = await self.db.execute(stmt)
             rooms = result.scalars().all()
 
+            total_count_stmt = (
+                select(func.count())
+                .select_from(Rooms)
+                .where(Rooms.property_id == property_id)
+            )
+
+            total_result = await self.db.execute(total_count_stmt)
+            total_count = total_result.scalar() or 0
+
             logger.info(
                 f"[RoomRepository] Found {len(rooms)} rooms for property {property_id}"
             )
-            return rooms
+            return (rooms, total_count)
         except Exception as e:
             logger.error(f"[RoomRepository] Unexpected error getting rooms: {str(e)}")
             raise RepositoryException(f"Failed to get rooms: {str(e)}")

@@ -56,12 +56,13 @@ class SpecialOfferService:
             )
             raise ServiceException(f"Failed to create special offers: {str(e)}")
 
-    async def get_all_offers(self, property_id: uuid.UUID):
+    async def get_all_offers(self, property_id: uuid.UUID, skip:int, limit:int):
         logger.info(f"[OfferService] Fetching all offers for property: {property_id}")
 
         try:
             # Delegate handling directly to your atomic repository transaction method
-            return await self.offer_repo.get_all_offers(property_id=property_id)
+            offers, total = await self.offer_repo.get_all_offers(property_id=property_id, skip=skip, limit=limit)
+            return offers, total
 
         except RepositoryException:
             # Pass known database errors straight up to the global handler

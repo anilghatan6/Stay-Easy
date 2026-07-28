@@ -1,6 +1,6 @@
 import uuid
 from datetime import date, datetime, timezone
-from fastapi import APIRouter, Depends, status, HTTPException
+from fastapi import APIRouter, Depends, status, HTTPException, Query
 
 from app.modules.auth.auth_middlewares import CurrentUser
 from app.modules.pms.dependencies import get_room_service
@@ -31,14 +31,28 @@ router = APIRouter(prefix="/properties/{property_id}/rooms", tags=["Rooms"])
 async def get_rooms(
     property_id: uuid.UUID,
     user: CurrentUser,
+    skip: int = Query(default=0, ge=0, description="Number of rooms to skip"),
+    limit: int = Query(default=10, ge=1, le=50, description="Max rooms to return"),
     room_service: RoomService = Depends(get_room_service),
 ) -> StandardResponse[list[RoomResponse]]:
     verify_tenant(user)
-    response = await room_service.get_all_rooms(
+    rooms, total_count = await room_service.get_all_rooms(
         property_id=property_id,
         tenant_id=user.tenant_id,
+        skip=skip,
+        limit=limit,
     )
-    return {"success": True, "data": response}
+    has_more = (skip + len(rooms)) < total_count
+    return {
+        "success": True, 
+        "data": rooms, 
+        "meta": {
+            "total": total_count, 
+            "skip": skip, 
+            "limit": limit, 
+            "has_more": has_more
+            }
+        }
 
 
 @router.post(

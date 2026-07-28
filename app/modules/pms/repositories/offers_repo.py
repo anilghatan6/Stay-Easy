@@ -103,13 +103,25 @@ class SpecialOfferRepository:
                 f"Failed to process bulk special offers: {str(e)}",
             )
 
-    async def get_all_offers(self, property_id: uuid.UUID):
+    async def get_all_offers(self, property_id: uuid.UUID, skip:int, limit:int):
         logger.info(f"[OfferRepository] Getting all offers for property: {property_id}")
         try:
-            stmt = select(SpecialOffer).where(SpecialOffer.property_id == property_id)
+            stmt = (
+                select(SpecialOffer)
+                .where(SpecialOffer.property_id == property_id)
+                .order_by(SpecialOffer.created_at.desc())
+                .offset(skip)
+                .limit(limit)
+            )
             result = await self.db.execute(stmt)
             offers = result.scalars().all()
-            return offers
+            
+            total_count_result = await self.db.execute(
+                select(func.count()).where(SpecialOffer.property_id == property_id)
+            )
+            total_count = total_count_result.scalar() or 0
+            
+            return offers, total_count
         except Exception as e:
             logger.error(f"[OfferRepository] Error getting all offers: {str(e)}")
             raise RepositoryException(f"Failed to get all offers: {str(e)}")

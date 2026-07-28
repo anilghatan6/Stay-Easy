@@ -296,6 +296,7 @@ class PropertyRepository:
             query = (
                 select(Property)
                 .where(Property.tenant_id == tenant_id)
+                .order_by(Property.created_at.desc())
                 .offset(skip)
                 .limit(limit)
             )
@@ -524,7 +525,7 @@ class PropertyRepository:
             raise RepositoryException(internal_detail=str(e))
 
     async def get_nearby_properties(
-        self, lat: float, lon: float, limit: int = 20
+        self, lat: float, lon: float, limit: int 
     ) -> list[tuple[list, int]]:
         """
         Progressively expands search radius (5km -> 15km -> 50km) until
