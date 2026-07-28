@@ -539,32 +539,46 @@ class PropertyRepository:
         try:
             for radius_m in RADIUS_TIERS_METERS:
                 logger.info(f"[PropertyRepository] Trying radius {radius_m}m")
-                stmt = text(
-                    """
-                    SELECT 
-                        id, name, type, country, state,city, address, currency, photos ->> 'cover' as cover_photo,
+                stmt = text("""
+                    SELECT
+                        p.id, p.name, p.type, p.country, p.state, p.city, p.address, p.currency,
+                        p.photos ->> 'cover' AS cover_photo,
                         ST_Distance(
-                            geo_location,
-                            ST_SetSRID(ST_MakePoint(:lng, :lat), 4326):: geography
-                        ) AS distance_m
-                    FROM properties
-                    WHERE is_active = true
-                        AND geo_location IS NOT NULL
-                        AND ST_DWithin(
-                            geo_location,
-                            ST_SetSRID(ST_MakePoint(:lng, :lat), 4326):: geography,
-                            :radius_m
-                        )
-                        ORDER BY distance_m
-                        LIMIT :limit
-                    """
-                )
+                            p.geo_location,
+                            ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography
+                        ) AS distance_m,
+                        lowest_rate.min_base_rate
+                    FROM properties p
+                    LEFT JOIN LATERAL (
+                        SELECT MIN(r.base_rate) AS min_base_rate
+                        FROM rooms r
+                        WHERE r.property_id = p.id
+                          AND r.status NOT IN ('MAINTENANCE', 'OUT_OF_SERVICE')
+                          AND r.id NOT IN (
+                              SELECT br.room_unit_id
+                              FROM booking_rooms br
+                              JOIN bookings b ON b.id = br.booking_id
+                              WHERE b.status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN')
+                                AND b.checkin_date < (CURRENT_DATE + INTERVAL '1 day')
+                                AND b.checkout_date > CURRENT_DATE
+                          )
+                    ) lowest_rate ON true
+                    WHERE p.is_active = true
+                      AND p.geo_location IS NOT NULL
+                      AND ST_DWithin(
+                          p.geo_location,
+                          ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography,
+                          :radius
+                      )
+                    ORDER BY distance_m ASC
+                    LIMIT :limit
+                """)
                 result = await self.db.execute(
                     stmt,
                     {
                         "lng": lon,
                         "lat": lat,
-                        "radius_m": radius_m,
+                        "radius": radius_m,
                         "limit": limit,
                     },
                 )

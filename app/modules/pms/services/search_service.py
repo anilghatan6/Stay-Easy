@@ -207,6 +207,11 @@ class SearchService:
                     "currency": row.currency,
                     "cover_photo": row.cover_photo,
                     "distance_km": round(row.distance_m / 1000, 2),
+                    "lowest_rate": (
+                        float(row.min_base_rate)
+                        if row.min_base_rate is not None
+                        else None
+                    ),
                 }
                 for row in rows
             ]

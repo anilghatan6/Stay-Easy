@@ -1,4 +1,3 @@
-import uuid
 
 from fastapi import HTTPException, status
 from app.modules.auth.auth_middlewares import CurrentUser

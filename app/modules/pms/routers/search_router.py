@@ -1,5 +1,3 @@
-# router/search_router.py
-
 from fastapi import APIRouter, Depends, Query, status, HTTPException
 from app.modules.pms.services.search_service import SearchService
 from app.modules.pms.dependencies import get_search_service
