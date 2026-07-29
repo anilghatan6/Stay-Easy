@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from sqlalchemy import func, select
+from sqlalchemy import func, select, delete
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -68,7 +68,7 @@ class BookingRepository:
             raise RepositoryException(
                 "Could not create booking. Please try again."
             ) from e
-
+ 
     async def get_by_ref(self, ref_number: str) -> Booking | None:
         logger.info("[BookingRepository] Fetching booking by ref")
         try:
@@ -113,36 +113,41 @@ class BookingRepository:
                 "Could not confirm booking. Please try again."
             ) from e
 
-    async def try_expire_booking(self, booking_id: uuid.UUID) -> bool:
+    async def try_delete_pending_booking(self, booking_id: uuid.UUID) -> bool:
         """
-        Attempts to mark a PENDING booking EXPIRED. Returns False if it's
-        no longer PENDING (already confirmed) — the guard on the other
-        side of the same race condition.
+        Attempts to hard delete a PENDING booking. Returns False if it's
+        no longer PENDING (already confirmed or processed by a parallel task).
         """
-        logger.info("[BookingRepository] expiring booking")
+        logger.info(f"[BookingRepository] Attempting clean deletion of booking {booking_id}")
         try:
+            # 1. Fetch with row-level locking to prevent a race condition 
+            # (e.g., user pays at the exact millisecond the deletion task wakes up)
             result = await self.db.execute(
                 select(Booking).where(Booking.id == booking_id).with_for_update()
             )
             booking = result.scalar_one_or_none()
 
-            if booking is None or booking.status != MasterBookingStatus.PENDING:
+            # Guard clause: Allow deletion if it's PENDING or EXPIRED
+            valid_statuses_for_deletion = (MasterBookingStatus.PENDING, MasterBookingStatus.EXPIRED)
+            if booking is None or booking.status not in valid_statuses_for_deletion:
                 return False
 
-            booking.status = MasterBookingStatus.EXPIRED
+            # 2. Execute the clear deletion
+            await self.db.execute(
+                delete(Booking).where(Booking.id == booking_id)
+            )
             return True
 
         except SQLAlchemyError as e:
-            logger.error(
-                f"[BookingRepository] Failed to expire booking {booking_id}: {e}"
-            )
-            raise RepositoryException("Could not expire booking.") from e
+            logger.error(f"[BookingRepository] Failed to delete booking {booking_id}: {e}")
+            raise RepositoryException("Could not delete booking.") from e
 
     async def get_pending_older_than(self, cutoff: datetime) -> list[Booking]:
         logger.info("[BookingRepository] getting pending older bookings")
         try:
             stmt = select(Booking).where(
-                Booking.status == MasterBookingStatus.PENDING,
+                # Booking.status == MasterBookingStatus.PENDING,
+                Booking.status.in_([MasterBookingStatus.PENDING, MasterBookingStatus.EXPIRED]),
                 Booking.created_at < cutoff,
             )
             result = await self.db.execute(stmt)

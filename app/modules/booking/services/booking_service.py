@@ -738,7 +738,7 @@ class BookingService:
             )
             raise ServiceException("Could not remove discount code.")
 
-    async def expire_stale_bookings(self) -> int:
+    async def delete_stale_bookings(self) -> int:
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=SOFT_LOCK_TTL_SECONDS)
 
         try:
@@ -746,16 +746,16 @@ class BookingService:
 
             count = 0
             for booking in stale_bookings:
-                expired = await self.booking_repo.try_expire_booking(booking.id)
+                expired = await self.booking_repo.try_delete_pending_booking(booking.id)
                 if expired:
                     count += 1
                     await self.redis.delete(f"booking:softlock:{booking.id}")
 
             await self.db.commit()
-            logger.info(f"[BookingService] Expired {count} stale bookings")
+            logger.info(f"[BookingService] deleted {count} stale bookings")
             return count
 
         except Exception as e:
             await self.db.rollback()
-            logger.error(f"[BookingService] Failed to expire stale bookings: {e}")
+            logger.error(f"[BookingService] Failed to delete stale bookings: {e}")
             raise ServiceException("Could not process booking expiry.")

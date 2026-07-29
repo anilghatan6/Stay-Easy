@@ -1,5 +1,6 @@
 import uuid
 from sqlalchemy import func, select, or_, text
+from sqlalchemy.orm import joinedload,selectinload
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,6 +9,11 @@ from app.modules.pms.models.properties_model import (
     Property,
 )
 
+from app.modules.booking.models import (
+    MasterBookingStatus,
+    Booking,
+    BookingRoom
+)
 # from app.modules.pms.models.rooms_model import Rooms, RoomStatus
 from app.utils.exceptions import (
     RepositoryException,
@@ -599,3 +605,47 @@ class PropertyRepository:
             raise RepositoryException(
                 internal_detail="Could not search for nearby properties. Please try again."
             )
+
+    async def get_property_bookings(self, property_id, tenant_id, skip:int, limit:int):
+        logger.info(f"[PropertyRepository] getting property bookings")
+        try:
+            excludes_booking_status = {
+                MasterBookingStatus.EXPIRED,
+                MasterBookingStatus.PENDING,
+
+            }
+
+            count_stmt = (
+            select(func.count())
+            .select_from(Booking)
+            .where(Booking.property_id == property_id, Booking.status.notin_(excludes_booking_status))
+            )
+            count_result = await self.db.execute(count_stmt)
+            total = count_result.scalar() or 0
+
+         
+            stmt = (
+                select(Booking)
+                .where(Booking.property_id == property_id, Booking.status.notin_(excludes_booking_status))
+                .options(
+                    joinedload(Booking.guest), # Eagerly joins the single Guest row
+                    selectinload(Booking.booking_rooms)  # Slices mapping row collections efficiently
+                .joinedload(BookingRoom.room_unit) # Joins exact Rooms table
+                )
+                .order_by(Booking.created_at.desc())
+                .offset(skip)
+                .limit(limit)
+            )
+
+            result = await self.db.execute(stmt)
+            bookings = result.scalars().all()
+            logger.info("[PropertyRepository] Successfully getting the booking information")
+            return bookings, total
+        
+        except Exception as e:
+            logger.error(f"[PropertyRepository] Error getting property bookings: {str(e)}")
+            raise RepositoryException(internal_detail=str(e))
+
+
+        
+        

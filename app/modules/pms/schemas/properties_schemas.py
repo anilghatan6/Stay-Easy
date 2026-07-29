@@ -451,3 +451,23 @@ class TenantPropertiesListResponse(BaseModel):
 class SystemAmenitiesListResponse(BaseModel):
     total_count: int
     amenities: List[SystemAmenityResponse]
+
+
+class PropertyBookingsResponse(BaseModel):
+    id:uuid.UUID
+    guest_name:str
+    guest_email:str
+    booking_number: str
+    room_names: List[str]
+    checkin_date: date
+    checkout_date: date
+    status: str
+    payment_gateway: str
+    subtotal: Decimal
+    special_offer_discount: Decimal | None
+    coupon_code: str | None
+    coupon_discount: Decimal | None
+    total_amount: Decimal
+
+    model_config = ConfigDict(from_attributes=True)
+    

@@ -18,6 +18,7 @@ from app.modules.pms.schemas.properties_schemas import (
     TenantPropertiesListResponse,
     SystemAmenitiesListResponse,
     PropertyResponse,
+    PropertyBookingsResponse
 )
 from app.modules.pms.services.properties_scervices import PropertyService
 from app.utils.schemas import StandardResponse
@@ -227,3 +228,30 @@ async def get_number_of_floors(
     tenant_id = current_user.tenant_id
     response = await property_service.get_number_of_floors(property_id, tenant_id)
     return {"success": True, "data": response}
+
+
+@router.get(
+    "/{property_id}/bookings",
+    response_model=StandardResponse[list[PropertyBookingsResponse]],
+    status_code=status.HTTP_200_OK,
+)
+async def get_property_bookings(
+    property_id: uuid.UUID,
+    current_user: CurrentUser,
+    skip: int = Query(default=0, ge=0, description="Number of bookings to skip"),
+    limit: int = Query(default=10, ge=1, le=50, description="Max bookings to return"),
+    property_service: PropertyService = Depends(get_property_service),
+):
+    verify_tenant(current_user)
+    tenant_id = current_user.tenant_id
+    response, total_count = await property_service.get_property_bookings(
+        property_id, tenant_id, skip, limit
+    )
+    has_more = skip + len(response) < total_count
+    return {
+        "success": True,
+        "data": response,
+        "meta": {
+            "total": total_count, "skip": skip, "limit": limit, "has_more": has_more
+        },
+    }

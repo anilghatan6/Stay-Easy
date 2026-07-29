@@ -89,6 +89,7 @@ class Booking(Base, TimestampMixin):
     )
 
     # Relationships
+    guest: Mapped["Guest"] = relationship("Guest")
     property: Mapped["Property"] = relationship("Property")
     booking_rooms: Mapped[List["BookingRoom"]] = relationship(
         "BookingRoom", back_populates="booking", cascade="all, delete-orphan"

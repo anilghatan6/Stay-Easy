@@ -38,13 +38,13 @@ async def _expire_stale_bookings_loop(stop_event: asyncio.Event):
                         idempotency_repo, payment_service, redis_client,
                         offer_repo, discount_code_repo,
                     )
-                    expired = await service.expire_stale_bookings()
-                    if expired > 0:
-                        logger.info(f"[ExpiryLoop] Expired {expired} stale booking(s)")
+                    deleted = await service.delete_stale_bookings()
+                    if deleted > 0:
+                        logger.info(f"[ExpiryLoop] Deleted {deleted} stale booking(s)")
                 finally:
                     await redis_client.close()
         except Exception as e:
-            logger.error(f"[ExpiryLoop] Error expiring stale bookings: {e}")
+            logger.error(f"[ExpiryLoop] Error deleting stale bookings: {e}")
 
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=60)
