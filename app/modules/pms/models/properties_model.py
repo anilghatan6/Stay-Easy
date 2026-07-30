@@ -23,7 +23,6 @@ class PropertyType(StrEnum):
     RESTURANT = "RESTURANT"
     OTHER = "OTHER"
 
-
 class Property(Base, TimestampMixin):
     __tablename__ = "properties"
     __table_args__ = (
@@ -38,7 +37,7 @@ class Property(Base, TimestampMixin):
             name="chk_check_out_grace_period_non_negative",
         ),
         CheckConstraint(
-            "number_of_floors >= 0",
+            "number_of_floors >= 1",
             name="chk_min_floors",
         ),
         CheckConstraint(
@@ -88,7 +87,7 @@ class Property(Base, TimestampMixin):
         Integer, default=0, nullable=True
     )
     always_allow_check_in_out :Mapped[bool] = mapped_column(Boolean, default=False)
-    number_of_floors: Mapped[int] = mapped_column(Integer, default=0, nullable=True)
+    number_of_floors: Mapped[int] = mapped_column(Integer, default=1, nullable=True)
     total_rooms: Mapped[int] = mapped_column(Integer, default=1, nullable=True)
     year_built: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     phone_number: Mapped[Optional[str]] = mapped_column(String(15), nullable=True)

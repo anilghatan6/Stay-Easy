@@ -411,6 +411,7 @@ class PropertyRepository:
                 func.similarity(Property.state, query),
                 func.similarity(Property.city, query),
                 func.similarity(Property.address, query),
+                func.similarity(Property.type, query),
             ).label("score")
 
             stmt = (
@@ -422,6 +423,7 @@ class PropertyRepository:
                         Property.state.op("%")(query),
                         Property.city.op("%")(query),
                         Property.address.op("%")(query),
+                        Property.type.op("%")(query),
                     ),
                     Property.is_active,
                 )

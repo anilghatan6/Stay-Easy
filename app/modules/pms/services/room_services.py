@@ -1,7 +1,8 @@
+from app.modules.pms.schemas.room_schemas import AvailableRoomResponse
 from app.modules.pms.schemas.room_schemas import RoomTypeCreate
 import uuid
 import asyncio
-
+from typing import Optional
 from app.modules.pms.repositories.properties_repo import PropertyRepository
 from app.modules.pms.repositories.room_repo import RoomRepository
 from app.modules.pms.schemas.room_schemas import (
@@ -12,7 +13,8 @@ from app.modules.pms.schemas.room_schemas import (
     BedTypeResponse,
     # RoomTypeCreate,
     BedTypeCreate,
-    RoomUpdate
+    RoomUpdate,
+    AvailableRoomResponse
 )
 from app.utils.exceptions import (
     PropertyNotFoundException,
@@ -218,13 +220,13 @@ class RoomService:
             raise ServiceException(str(e))
 
     async def get_all_rooms(
-        self, property_id: uuid.UUID, tenant_id: uuid.UUID, skip: int, limit: int
+        self, property_id: uuid.UUID, tenant_id: uuid.UUID,status:Optional[str] = None, floor_number: Optional[int] = None, skip: int=0, limit: int=10
     ) -> tuple[list[RoomResponse], int]:
         logger.info(f"[RoomService] Getting all rooms for property {property_id}")
         try:
             await self._validate_property(property_id, tenant_id)
             rooms, total_count = await self.room_repo.get_all_rooms(
-                property_id, skip, limit
+                property_id,status,floor_number,skip,limit
             )
             logger.info(
                 f"[RoomService] Found {len(rooms)} rooms for property {property_id}"
@@ -370,7 +372,7 @@ class RoomService:
         property_id: uuid.UUID,
         checkin_date: date,
         checkout_date: date,
-    ) -> list[RoomResponse]:
+    ) -> list[AvailableRoomResponse]:
         logger.info(f"[RoomService] Getting available rooms for property {property_id}")
         try:
             rooms = await self.room_repo.get_available_rooms_for_property(
@@ -378,7 +380,7 @@ class RoomService:
             )
             if not rooms:
                 return []
-            return [RoomResponse.model_validate(room) for room in rooms]
+            return [AvailableRoomResponse.model_validate(room) for room in rooms]
         except (PropertyNotFoundException, UnauthorizedException, RepositoryException, RoomNotFoundException):
             raise
         except Exception as e:

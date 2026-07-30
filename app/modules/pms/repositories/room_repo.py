@@ -2,7 +2,7 @@ from app.utils.exceptions import RoomNotFoundException
 import uuid
 
 from sqlalchemy import func, select, or_
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload,selectinload
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -223,7 +223,7 @@ class RoomRepository:
             )
             raise RepositoryException(f"Failed to get room names: {str(e)}")
 
-    async def get_all_rooms(self, property_id: uuid.UUID, skip: int, limit: int) -> tuple[Sequence[Rooms], int]:
+    async def get_all_rooms(self, property_id: uuid.UUID,status:Optional[str] =None,floor_number:Optional[int] = None, skip: int = 0, limit: int = 20) -> tuple[Sequence[Rooms], int]:
         """Get all rooms for a property, including room types and bed types."""
         logger.info(f"[RoomRepository] Getting all rooms for property {property_id}")
         try:
@@ -232,18 +232,26 @@ class RoomRepository:
                 .where(Rooms.property_id == property_id)
                 .options(joinedload(Rooms.room_type), joinedload(Rooms.bed_type))
                 .order_by(Rooms.created_at.desc())
-                .offset(skip)
-                .limit(limit)
             )
-
-            result = await self.db.execute(stmt)
-            rooms = result.scalars().all()
-
+            
             total_count_stmt = (
                 select(func.count())
                 .select_from(Rooms)
                 .where(Rooms.property_id == property_id)
             )
+
+            if status is not None:
+                stmt = stmt.where(Rooms.status == status)
+                total_count_stmt = total_count_stmt.where(Rooms.status == status)
+            
+            if floor_number is not None:
+                stmt = stmt.where(Rooms.floor_number == floor_number)
+                total_count_stmt = total_count_stmt.where(Rooms.floor_number == floor_number)
+
+            stmt = stmt.offset(skip).limit(limit)
+
+            result = await self.db.execute(stmt)
+            rooms = result.scalars().all()
 
             total_result = await self.db.execute(total_count_stmt)
             total_count = total_result.scalar() or 0
@@ -516,13 +524,17 @@ class RoomRepository:
             # 2. Query available rooms that are not in the overlapping subquery
             stmt = select(Rooms).where(
                 Rooms.property_id == property_id,
-                Rooms.status == RoomStatus.AVAILABLE,  # Simplified single-item match
-                Rooms.id.not_in(overlapping_room_ids_subq),  # Fixed operator typo
+                Rooms.status == RoomStatus.AVAILABLE,  
+                Rooms.id.not_in(overlapping_room_ids_subq),  
+               ).options(
+                selectinload(Rooms.room_type),
+                selectinload(Rooms.bed_type),
+                selectinload(Rooms.system_amenities)
             )
             
             # 3. Execute async query
             result = await self.db.execute(stmt)
-            rooms = list(result.scalars().all())  # Explicit cast to list for return type hint
+            rooms = list(result.scalars().all())
             
             logger.info("[RoomRepository] Found %d available rooms", len(rooms))
             return rooms

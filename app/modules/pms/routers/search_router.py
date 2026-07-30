@@ -1,4 +1,3 @@
-from sqlalchemy import desc
 from fastapi import APIRouter, Depends, Query, status, HTTPException
 from app.modules.pms.services.search_service import SearchService
 from app.modules.pms.dependencies import get_search_service
@@ -6,7 +5,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from uuid import UUID
 from typing import List
 from app.utils.schemas import StandardResponse
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone,timedelta
 
 
 class PropertySearchItem(BaseModel):
@@ -16,6 +15,7 @@ class PropertySearchItem(BaseModel):
     state: str
     city: str
     address: str
+    type: str
     cover_photo: str
     amenities: List[str]
     currency: str
@@ -48,12 +48,15 @@ async def search_properties(
         min_length=2,
     ),
     check_in: date = Query(
-        ...,
+        datetime.now(timezone.utc).date(),
         description="Check in date",
-        examples=["2024-01-01"],
+        examples=["2026-01-01"],
     ),
-    check_out: date = Query(..., description="Check out date", examples=["2024-01-01"]),
-    adults: int = Query(1, description="Number of adults", ge=1, le=30),
+    check_out: date = Query(
+        datetime.now(timezone.utc).date() + timedelta(days=1),
+        description="Check out date",
+        examples=["2026-01-01"]),
+    adults: int = Query(2, description="Number of adults", ge=1, le=30),
     children: int = Query(0, description="Number of children", ge=0, le=15),
     rooms: int = Query(1, description="Number of rooms", ge=1, le=30),
     skip: int = Query(0, description="Number of records to skip", ge=0),

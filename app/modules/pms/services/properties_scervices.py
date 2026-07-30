@@ -481,3 +481,24 @@ class PropertyService:
             raise ServiceException(
                 internal_detail=f"Failed to get property bookings: {str(e)}"
             )
+
+    async def get_property_floors_meta(self,tenant_id:uuid.UUID,property_id:uuid.UUID) -> dict:
+        logger.info("[PropertyService] Getting the property floors meta")
+        try:
+            property_obj = await self.property_repo.get_property_by_id(property_id, tenant_id)
+            if not property_obj:
+                raise PropertyNotFoundException("Property not found or access denied")
+            max_floors = property_obj.number_of_floors
+
+            return {
+                "property_id":property_obj.id,
+                "max_floor":max_floors,
+                "floor_options":list(range(1, max_floors+1))
+            }
+        except (PropertyNotFoundException, RepositoryException):
+            raise
+        except Exception as e:
+            logger.error(f"[PropertyService] Error getting property floors meta: {str(e)}")
+            raise ServiceException(
+                internal_detail=f"Failed to get property floors meta: {str(e)}"
+            )

@@ -180,6 +180,11 @@ class RoomResponse(RoomBase):
     id: uuid.UUID
     property_id: uuid.UUID
 
+class AmenityResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    name:str
+    icon:Optional[str]
+
 class RoomBulkCreateResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     rooms: List[RoomResponse]
@@ -209,5 +214,24 @@ class BedTypeResponse(BaseModel):
     is_default: bool
 
 
+
+class AvailableRoomResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    room_name: str
+    room_type: RoomTypeResponse
+    bed_type: BedTypeResponse
+    base_rate: Decimal
+    photos: RoomPhotos
+    max_adults: int
+    max_children: int
+    status: RoomStatus
+    floor_number:int
+    cancellation_policy: CancellationPolicy
+    cancellation_title: Optional[str]
+    cancellation_description: Optional[str]
+    system_amenities:List[AmenityResponse]
+    custom_amenities: List[CustomAmenity]
+    
 
 

@@ -24,9 +24,12 @@ from app.modules.pms.models.nested_mutable import NestedMutable
 
 class RoomStatus(StrEnum):
     AVAILABLE = "AVAILABLE"
+    BLOCKED = "BLOCKED"
     BOOKED="BOOKED"
+    CLEANING = "CLEANING"
     DIRTY = "DIRTY"
     OCCUPIED = "OCCUPIED"
+    INSPECTED = "INSPECTED"
     MAINTENANCE = "MAINTENANCE"
     OUT_OF_SERVICE = "OUT_OF_SERVICE"
 
@@ -131,7 +134,12 @@ class Rooms(Base, TimestampMixin):
     property: Mapped["Property"] = relationship("Property", back_populates="rooms")
     bed_type: Mapped["BedType"] = relationship("BedType", back_populates="rooms")
     room_type: Mapped["RoomType"] = relationship("RoomType", back_populates="rooms")
-
+    system_amenities: Mapped[List["Amenity"]] = relationship(
+        "Amenity",
+        primaryjoin="Amenity.id == any_(foreign(Rooms.system_amenity_ids))",
+        uselist=True,
+        viewonly=True,
+    )
 
 # --- RoomType Catalog Model ---
 class RoomType(Base, TimestampMixin):

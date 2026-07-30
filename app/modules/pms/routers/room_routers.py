@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime, timezone
+from typing import Optional
 from fastapi import APIRouter, Depends, status, HTTPException, Query
 
 from app.modules.auth.auth_middlewares import CurrentUser
@@ -12,15 +13,16 @@ from app.modules.pms.schemas.room_schemas import (
     RoomTypeResponse,
     BedTypeResponse,
     RoomResponse,
-    RoomUpdate
+    RoomUpdate,
+    AvailableRoomResponse
 )
 
 from app.modules.pms.services.room_services import RoomService
+from app.modules.pms.models.rooms_model import RoomStatus
 from app.utils.schemas import StandardResponse
 from app.utils.validation import verify_tenant
 
 router = APIRouter(prefix="/properties/{property_id}/rooms", tags=["Rooms"])
-
 
 @router.get(
     "",
@@ -31,14 +33,23 @@ router = APIRouter(prefix="/properties/{property_id}/rooms", tags=["Rooms"])
 async def get_rooms(
     property_id: uuid.UUID,
     user: CurrentUser,
+    status: Optional[RoomStatus] = Query(None, description="Room status"),
+    floor_number: Optional[int] = Query(None, ge=0, le=1000, description="Filter rooms by a specific floor number"),
     skip: int = Query(default=0, ge=0, description="Number of rooms to skip"),
     limit: int = Query(default=10, ge=1, le=50, description="Max rooms to return"),
     room_service: RoomService = Depends(get_room_service),
 ) -> StandardResponse[list[RoomResponse]]:
     verify_tenant(user)
+    if status is not None and status not in RoomStatus:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid status value. Allowed values: {', '.join(RoomStatus)}",
+        )
     rooms, total_count = await room_service.get_all_rooms(
         property_id=property_id,
         tenant_id=user.tenant_id,
+        status=status,
+        floor_number=floor_number,
         skip=skip,
         limit=limit,
     )
@@ -155,13 +166,13 @@ async def get_all_bed_types(
     )
     return {"success": True, "data": response}
 
-@router.get("/available-rooms", response_model=StandardResponse[list[RoomResponse]], status_code=status.HTTP_200_OK, summary="Get available rooms")
+@router.get("/available-rooms", response_model=StandardResponse[list[AvailableRoomResponse]], status_code=status.HTTP_200_OK, summary="Get available rooms")
 async def get_available_rooms(
     property_id: uuid.UUID,
     checkin_date: date,
     checkout_date: date,
     room_service: RoomService = Depends(get_room_service),
-) -> StandardResponse[list[RoomResponse]]:
+) -> StandardResponse[list[AvailableRoomResponse]]:
     
     if checkin_date >= checkout_date:
         raise HTTPException(

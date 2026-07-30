@@ -140,7 +140,7 @@ class BookingRepository:
 
         except SQLAlchemyError as e:
             logger.error(f"[BookingRepository] Failed to delete booking {booking_id}: {e}")
-            raise RepositoryException("Could not delete booking.") from e
+            raise RepositoryException("Could not delete booking.")
 
     async def get_pending_older_than(self, cutoff: datetime) -> list[Booking]:
         logger.info("[BookingRepository] getting pending older bookings")
@@ -157,7 +157,7 @@ class BookingRepository:
             logger.error(
                 f"[BookingRepository] Failed to fetch stale pending bookings: {e}"
             )
-            raise RepositoryException("Could not fetch pending bookings.") from e
+            raise RepositoryException("Could not fetch pending bookings.")
 
     async def get_by_ref_with_rooms(self, ref_number: str) -> Booking | None:
         logger.info("[BookingRepository] Fetching booking with rooms by ref")
@@ -175,7 +175,7 @@ class BookingRepository:
             )
             raise RepositoryException(
                 "Could not fetch booking details. Please try again."
-            ) from e
+            ) 
 
     async def get_bookings_by_guest(
         self, guest_id: uuid.UUID, skip: int, limit: int
@@ -219,7 +219,7 @@ class BookingRepository:
             )
             raise RepositoryException(
                 "Could not fetch bookings. Please try again."
-            ) from e
+            ) 
 
     async def count_by_guest(self, guest_id: uuid.UUID) -> int:
         logger.info("[BookingRepository] Counting bookings by guest")
@@ -243,7 +243,7 @@ class BookingRepository:
             )
             raise RepositoryException(
                 "Could not count bookings. Please try again."
-            ) from e
+            ) 
 
     async def set_payment_gateway(self, ref_number: str, payment_gateway: str):
         try:
@@ -271,7 +271,7 @@ class BookingRepository:
             logger.error(
                 f"[BookingRepository] Failed to set payment gateway for {ref_number}: {e}"
             )
-            raise RepositoryException("Could not update booking payment method.") from e
+            raise RepositoryException("Could not update booking payment method.") 
 
     async def apply_coupon(
         self, ref_number: str, coupon_code: str, coupon_discount: Decimal
@@ -298,7 +298,7 @@ class BookingRepository:
             logger.error(
                 f"[BookingRepository] Failed to apply coupon to {ref_number}: {e}"
             )
-            raise RepositoryException("Could not apply discount code.") from e
+            raise RepositoryException("Could not apply discount code.") 
 
     async def remove_coupon(self, ref_number: str) -> Booking | None:
         logger.info(f"[BookingRepository] Removing coupon from {ref_number}")
@@ -319,4 +319,4 @@ class BookingRepository:
             logger.error(
                 f"[BookingRepository] Failed to remove coupon from {ref_number}: {e}"
             )
-            raise RepositoryException("Could not remove discount code.") from e
+            raise RepositoryException("Could not remove discount code.") 

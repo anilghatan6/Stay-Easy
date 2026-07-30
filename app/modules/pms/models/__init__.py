@@ -9,12 +9,20 @@ SpecialOffer
 from .discount_code_model import (
     DiscountCode
 )
+from .rooms_model import (
+    Rooms,
+    RoomType,
+    BedType
+)
 
 __all__ = [
  "Tenant",
  "Property",
  "Amenity",
  "SpecialOffer",
- "DiscountCode"
+ "DiscountCode",
+ "Rooms",
+ "RoomType",
+ "BedType"
  
 ]

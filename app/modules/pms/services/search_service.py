@@ -167,6 +167,7 @@ class SearchService:
                         "state": prop.state,
                         "city": prop.city,
                         "address": prop.address,
+                        "type":str(prop.type),
                         "cover_photo": str(prop.photos.get("cover"))
                         if prop.photos
                         else None,
