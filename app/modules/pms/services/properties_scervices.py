@@ -32,6 +32,7 @@ from app.modules.pms.services.image_services import ImageService
 
 from app.utils.logging import LoggerFactory
 from decimal import Decimal
+
 logger = LoggerFactory.get_logger(__name__)
 
 
@@ -287,7 +288,7 @@ class PropertyService:
             return TenantPropertiesListResponse(
                 tenant_id=tenant_id,
                 properties=formatted_properties,
-            ) , total_count
+            ), total_count
         except RepositoryException:
             raise
 
@@ -437,17 +438,24 @@ class PropertyService:
                 internal_detail=f"Failed to get specific property: {str(e)}"
             )
 
-    async def get_property_bookings(self, property_id: uuid.UUID, tenant_id: uuid.UUID, skip: int, limit: int) -> tuple[list[PropertyBookingsResponse], int]:
-        logger.info(f"[PropertyService] Getting the property bookings for property {property_id}")
+    async def get_property_bookings(
+        self, property_id: uuid.UUID, tenant_id: uuid.UUID, skip: int, limit: int
+    ) -> tuple[list[PropertyBookingsResponse], int]:
+        logger.info(
+            f"[PropertyService] Getting the property bookings for property {property_id}"
+        )
         try:
-            property_obj = await self.property_repo.get_property_by_id(property_id, tenant_id)
+            property_obj = await self.property_repo.get_property_by_id(
+                property_id, tenant_id
+            )
             if not property_obj:
                 raise PropertyNotFoundException("Property not found or access denied")
-            bookings, total_count = await self.property_repo.get_property_bookings(property_id, tenant_id, skip, limit)
+            bookings, total_count = await self.property_repo.get_property_bookings(
+                property_id, tenant_id, skip, limit
+            )
 
             formatted_bookings = []
             for booking in bookings:
-                
                 room_names = [
                     br.room_unit.room_name
                     for br in booking.booking_rooms
@@ -456,23 +464,34 @@ class PropertyService:
 
                 formatted_booking = {
                     "id": booking.id,
-                    "guest_name":booking.guest.full_name,
-                    "guest_email":booking.guest.email,
+                    "guest_name": booking.guest.full_name,
+                    "guest_email": booking.guest.email,
                     "booking_number": booking.ref_number,
                     "room_names": room_names,
-                    "checkin_date":booking.checkin_date,
-                    "checkout_date":booking.checkout_date,
-                    "status":str(booking.status),
-                    "payment_gateway":booking.payment_gateway,
-                    "subtotal": Decimal(booking.subtotal) if booking.subtotal else Decimal(0),
-                    "special_offer_discount": Decimal(booking.special_offer_discount) if booking.special_offer_discount else Decimal(0),
-                    "coupon_code":booking.coupon_code if booking.coupon_code else None,
-                    "coupon_discount": Decimal(booking.coupon_discount) if booking.coupon_discount else Decimal(0),
-                    "total_amount":Decimal(booking.total_amount) if booking.total_amount else Decimal(0),
+                    "checkin_date": booking.checkin_date,
+                    "checkout_date": booking.checkout_date,
+                    "status": str(booking.status),
+                    "payment_gateway": booking.payment_gateway,
+                    "subtotal": Decimal(booking.subtotal)
+                    if booking.subtotal
+                    else Decimal(0),
+                    "special_offer_discount": Decimal(booking.special_offer_discount)
+                    if booking.special_offer_discount
+                    else Decimal(0),
+                    "coupon_code": booking.coupon_code if booking.coupon_code else None,
+                    "coupon_discount": Decimal(booking.coupon_discount)
+                    if booking.coupon_discount
+                    else Decimal(0),
+                    "total_amount": Decimal(booking.total_amount)
+                    if booking.total_amount
+                    else Decimal(0),
+                    "created_at": booking.created_at,
                 }
                 formatted_bookings.append(formatted_booking)
 
-            return [PropertyBookingsResponse(**booking) for booking in formatted_bookings], total_count
+            return [
+                PropertyBookingsResponse(**booking) for booking in formatted_bookings
+            ], total_count
         except (PropertyNotFoundException, RepositoryException):
             raise
         except Exception as e:
@@ -480,5 +499,3 @@ class PropertyService:
             raise ServiceException(
                 internal_detail=f"Failed to get property bookings: {str(e)}"
             )
-
-    

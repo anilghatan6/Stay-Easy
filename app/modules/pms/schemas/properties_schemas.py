@@ -468,6 +468,7 @@ class PropertyBookingsResponse(BaseModel):
     coupon_code: str | None
     coupon_discount: Decimal | None
     total_amount: Decimal
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
     

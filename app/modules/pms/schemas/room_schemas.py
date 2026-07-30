@@ -241,18 +241,6 @@ class BedTypeResponse(BaseModel):
     is_default: bool
 
 
-# class AvailableRoomTypeResponse(BaseModel):
-#     model_config = ConfigDict(from_attributes=True)
-
-#     room_type_name: str
-
-
-# class AvailableBedTypeResponse(BaseModel):
-#     model_config = ConfigDict(from_attributes=True)
-
-#     bed_name: str
-
-
 class AvailableRoomResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
