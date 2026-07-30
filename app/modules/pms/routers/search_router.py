@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from uuid import UUID
 from typing import List
 from app.utils.schemas import StandardResponse
-from datetime import date, datetime, timezone,timedelta
+from datetime import date, datetime, timezone, timedelta
 
 
 class PropertySearchItem(BaseModel):
@@ -55,7 +55,8 @@ async def search_properties(
     check_out: date = Query(
         datetime.now(timezone.utc).date() + timedelta(days=1),
         description="Check out date",
-        examples=["2026-01-01"]),
+        examples=["2026-01-01"],
+    ),
     adults: int = Query(2, description="Number of adults", ge=1, le=30),
     children: int = Query(0, description="Number of children", ge=0, le=15),
     rooms: int = Query(1, description="Number of rooms", ge=1, le=30),
@@ -111,3 +112,4 @@ async def get_nearby_properties(
             "count": service_result["count"],
         },
     )
+

@@ -241,24 +241,24 @@ class BedTypeResponse(BaseModel):
     is_default: bool
 
 
-class AvailableRoomTypeResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+# class AvailableRoomTypeResponse(BaseModel):
+#     model_config = ConfigDict(from_attributes=True)
 
-    room_type_name: str
+#     room_type_name: str
 
 
-class AvailableBedTypeResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+# class AvailableBedTypeResponse(BaseModel):
+#     model_config = ConfigDict(from_attributes=True)
 
-    bed_name: str
+#     bed_name: str
 
 
 class AvailableRoomResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
     room_name: str
-    room_type: AvailableRoomTypeResponse
-    bed_type: AvailableBedTypeResponse
+    room_type: str
+    bed_type: str
     base_rate: Decimal
     photos: RoomPhotos
     max_adults: int
@@ -270,3 +270,19 @@ class AvailableRoomResponse(BaseModel):
     cancellation_description: Optional[str]
     system_amenities: List[AmenityResponse]
     custom_amenities: List[CustomAmenity]
+
+    @field_validator("room_type", mode="before")
+    @classmethod
+    def extract_room_type_name(cls, v):
+        if isinstance(v, str):
+            return v
+        # ORM relationship object — pull the name attribute
+        return getattr(v, "room_type_name", None) or str(v)
+
+    @field_validator("bed_type", mode="before")
+    @classmethod
+    def extract_bed_type_name(cls, v):
+        if isinstance(v, str):
+            return v
+        # ORM relationship object — pull the name attribute
+        return getattr(v, "bed_name", None) or str(v)
