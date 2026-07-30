@@ -255,19 +255,3 @@ async def get_property_bookings(
             "total": total_count, "skip": skip, "limit": limit, "has_more": has_more
         },
     }
-
-@router.get(
-    "/{property_id}/floors-meta",
-    response_model=StandardResponse[dict],
-    summary="Get configuration meta options for floor layout selection",
-    status_code=status.HTTP_200_OK,
-)
-async def get_property_floors_meta(
-    property_id: uuid.UUID,
-    current_user: CurrentUser,
-    property_service: PropertyService = Depends(get_property_service),
-):
-    verify_tenant(current_user)
-    tenant_id = current_user.tenant_id
-    response = await property_service.get_property_floors_meta(tenant_id,property_id)
-    return {"success": True, "data": response}

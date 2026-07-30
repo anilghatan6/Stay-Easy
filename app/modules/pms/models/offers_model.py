@@ -2,7 +2,7 @@ from sqlalchemy.dialects.postgresql import UUID
 import uuid
 from datetime import date
 from typing import Optional
-
+from decimal import Decimal
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -37,8 +37,8 @@ class SpecialOffer(Base, TimestampMixin):
     title: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
 
-    discount_percentage: Mapped[float] = mapped_column(
-        Numeric(precision=5, scale=2), nullable=False, default=0.00
+    discount_percentage: Mapped[Decimal] = mapped_column(
+        Numeric(precision=5, scale=2), nullable=False, default=Decimal("0.00")
     )
 
     # Offer Dates * Constraints configuration

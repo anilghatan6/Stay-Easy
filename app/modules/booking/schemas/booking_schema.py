@@ -79,6 +79,9 @@ class PropertySummary(BaseModel):
     country: Optional[str] = None
     currency: str = "USD"
 
+class AppliedSpecialOffer(BaseModel):
+    title: str
+    description: str
 
 class BookingReservationResponse(BaseModel):
     booking_id: uuid.UUID
@@ -92,6 +95,7 @@ class BookingReservationResponse(BaseModel):
     rooms: list[RoomReservationDetail]
     total_amount: float
     subtotal: float = 0.0
+    special_offer_applied:list[AppliedSpecialOffer]  = Field(default_factory=list)
     special_offer_discount: float = 0.0
     coupon_code: Optional[str] = None
     coupon_discount: float = 0.0

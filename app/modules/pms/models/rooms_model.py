@@ -1,6 +1,6 @@
 from decimal import Decimal
 import uuid
-from sqlalchemy.ext.mutable import MutableDict, MutableList
+from sqlalchemy.ext.mutable import  MutableList
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID,JSONB, ARRAY
 from sqlalchemy import (
@@ -21,7 +21,7 @@ from enum import StrEnum
 
 from app.utils.timestamp import TimestampMixin
 from app.modules.pms.models.nested_mutable import NestedMutable
-
+from .properties_model import Property, Amenity
 class RoomStatus(StrEnum):
     AVAILABLE = "AVAILABLE"
     BLOCKED = "BLOCKED"

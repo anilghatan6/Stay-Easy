@@ -161,6 +161,11 @@ class BookingService:
             special_offer_discount = special_offer_discount.quantize(Decimal("0.01"))
             total_amount = subtotal - special_offer_discount
 
+            special_offer_applied = [
+                {"title":offer.title, "description":offer.description} 
+                for offer in active_offers
+            ]
+        
             booking = await self.booking_repo.create_booking(
                 guest_id=guest_id,
                 property_id=property_id,
@@ -228,6 +233,7 @@ class BookingService:
                 "rooms": rooms_data,
                 "total_amount": float(booking.total_amount),
                 "subtotal": float(booking.subtotal),
+                "special_offer_applied": special_offer_applied,
                 "special_offer_discount": float(booking.special_offer_discount),
                 "coupon_code": booking.coupon_code,
                 "coupon_discount": float(booking.coupon_discount),

@@ -138,8 +138,8 @@ class SpecialOfferRepository:
                 .where(
                     SpecialOffer.property_id == property_id,
                     SpecialOffer.is_active.is_(True),
-                    SpecialOffer.start_date < check_out,
-                    SpecialOffer.end_date > check_in,
+                    SpecialOffer.start_date <= check_out,
+                    SpecialOffer.end_date >= check_in,
                 )
                 .order_by(SpecialOffer.discount_percentage.desc())
             )
