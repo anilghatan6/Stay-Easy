@@ -172,6 +172,7 @@ class SearchService:
                         if prop.photos
                         else None,
                         "amenities": [a.name for a in amenities],
+                        "description":prop.description,
                         "currency": prop.currency,
                         "total_price": float(r["total_price"]),
                         "nights": r["nights"],

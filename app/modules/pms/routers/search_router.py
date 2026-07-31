@@ -18,6 +18,7 @@ class PropertySearchItem(BaseModel):
     type: str
     cover_photo: str
     amenities: List[str]
+    description: str
     currency: str
     total_price: float
     nights: int

@@ -1,17 +1,12 @@
 import uuid
-import uuid
-import re
-from datetime import datetime, time, date, timedelta
+from datetime import datetime, date
 from decimal import Decimal
-from typing import Annotated, Any, List, Optional
+from typing import Any, List, Optional
 from typing_extensions import Self
 from pydantic import (
     BaseModel,
-    BeforeValidator,
     ConfigDict,
     Field,
-    PlainSerializer,
-    WithJsonSchema,
     field_validator,
     model_validator,
     EmailStr,
@@ -191,7 +186,7 @@ class PhotoCollection(BaseModel):
     @classmethod
     def validate_cover_url(cls, v: Optional[str]) -> Optional[str]:
         if v and not v.startswith(CLOUDINARY_BASE):
-            raise ValueError(f"Invalid Image Format.")
+            raise ValueError("Invalid Image Format.")
         return v
 
     @field_validator("gallery", mode="before")
@@ -200,7 +195,7 @@ class PhotoCollection(BaseModel):
         if isinstance(v, list):
             for url in v:
                 if not url.startswith(CLOUDINARY_BASE):
-                    raise ValueError(f"Invalid Image Format.")
+                    raise ValueError("Invalid Image Format.")
         return v
 
 
@@ -367,7 +362,7 @@ class BrandVisual(BaseModel):
     @classmethod
     def validate_brand_logo_url(cls, v: str) -> str:
         if v and not v.startswith(CLOUDINARY_BASE):
-            raise ValueError(f"Invalid Image Format.")
+            raise ValueError("Invalid Image Format.")
         return v
 
 
