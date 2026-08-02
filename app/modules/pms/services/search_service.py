@@ -8,21 +8,28 @@ from datetime import date
 from app.modules.pms.repositories.properties_repo import PropertyRepository
 from app.modules.pms.repositories.room_repo import RoomRepository
 from app.utils.exceptions import RepositoryException, ServiceException
+from app.utils.cache import build_cache_key, get_cached, set_cached
 
 from app.utils.logging import LoggerFactory
+from typing import Optional
+import redis.asyncio as aioredis
 
 logger = LoggerFactory.get_logger(__name__)
 
+SEARCH_CACHEABLE_DESTINATIONS={"pokhara","kathmandu","nagarkot"}
+SEARCH_CACHE_TTL_SECONDS=600
 
 class SearchService:
     def __init__(
         self,
         property_repo: PropertyRepository,
         room_repo: RoomRepository,
+        redis_client: Optional[aioredis.Redis] = None,
     ):
         self.property_repo = property_repo
         self.room_repo = room_repo
-
+        self.redis = redis_client
+        
     async def search(
         self,
         destination: str,
@@ -37,6 +44,34 @@ class SearchService:
         logger.info(
             f"[SearchService] Initiationg searching for destination: {destination}"
         )
+        normalized_destination = destination.strip().lower()
+        is_cacheable = self.redis is not None and normalized_destination in SEARCH_CACHEABLE_DESTINATIONS
+
+        cache_key = None
+        if is_cacheable:
+            try:
+                cache_key = build_cache_key(
+                    "property_search",
+                    destination=normalized_destination,
+                    check_in=check_in.isoformat(),
+                    check_out=check_out.isoformat(),
+                    adults=adults,
+                    children=children,
+                    rooms=rooms_needed,
+                    skip=skip,
+                    limit=limit,
+                )
+
+            except ValueError as e:
+                logger.error(f"[SearchService] Failed to build cache key: {e}")
+                cache_key = None
+
+            if cache_key:
+                cached = await get_cached(self.redis, cache_key)
+                if cached is not None:
+                    logger.info(f"[SearchService] Retrieved search results from cache for key: {cache_key}")
+                    return cached
+                logger.info(f"[SearchService] Cache MISS: {cache_key}")
         try:
             nights = (check_out - check_in).days
 
@@ -111,7 +146,7 @@ class SearchService:
                 results=paginated_candidates
             )
 
-            return {
+            response =  {
                 "data": {
                     "adults": adults,
                     "children": children,
@@ -125,6 +160,11 @@ class SearchService:
                     "has_more": has_more,
                 },
             }
+            if is_cacheable and cache_key:
+                await set_cached(self.redis, cache_key, response, SEARCH_CACHE_TTL_SECONDS)
+                logger.info(f"[SearchService] Cached search results for key: {cache_key}")
+
+            return response
         except RepositoryException:
             raise
 

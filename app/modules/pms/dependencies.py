@@ -17,7 +17,7 @@ from app.modules.pms.repositories.discount_code_repo import DiscountCodeReposito
 from app.modules.pms.services.discount_code_service import DiscountCodeService
 
 from app.modules.pms.services.search_service import SearchService
-
+from app.config.redis_config import get_redis_client
 
 from app.config.database_config import get_db
 from fastapi import Depends
@@ -54,8 +54,12 @@ def get_discount_code_service(db=Depends(get_db)) -> DiscountCodeService:
     return DiscountCodeService(discount_code_repo=DiscountCodeRepository(db=db))
 
 
-def get_search_service(db=Depends(get_db)) -> SearchService:
+def get_search_service(
+    db=Depends(get_db),
+    redis_client=Depends(get_redis_client),
+    ) -> SearchService:
     return SearchService(
         property_repo=PropertyRepository(db=db),
         room_repo=RoomRepository(db=db),
+        redis_client=redis_client,
     )
