@@ -41,7 +41,7 @@ async def upload_images(
     for file in files:
         if not file.content_type.startswith("image/"):
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"File '{file.filename}' is invalid. Only valid image media files are accepted.",
             )
 
@@ -81,7 +81,7 @@ async def upload_room_images(
     for file in files:
         if not file.content_type.startswith("image/"):
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"File '{file.filename}' is invalid. Only valid image media files are accepted.",
             )
     fake_room_id = str(uuid.uuid4())
@@ -108,7 +108,7 @@ async def upload_image_property(
 
     if not image.content_type.startswith("image/"):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"File '{image.filename}' is invalid. Only valid image media files are accepted.",
         )
 
@@ -118,6 +118,33 @@ async def upload_image_property(
 
     return {"success": True, "data": uploaded_image_url}
 
+
+
+@router.post("/{property_id}/staffs/image")
+async def upload_image_staff(
+    user: CurrentUser,
+    property_id: uuid.UUID = Path(...),
+    image: UploadFile = File(...),
+    image_service: ImageService = Depends(get_image_service),
+):
+    if user.tenant_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You are not authorized to upload images. You must belong to an active tenant.",
+        )
+
+    if not image.content_type.startswith("image/"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"File '{image.filename}' is invalid. Only valid image media files are accepted.",
+        )
+
+    fake_staff_id = str(uuid.uuid4())
+    uploaded_image_url = await image_service._process_and_upload_single(
+        folder_name=f"temp/{user.tenant_id}/properties/{property_id}/staffs/{fake_staff_id}", file=image
+    )
+
+    return {"success": True, "data": uploaded_image_url}
 
 @router.post("/{property_id}/rooms/image")
 async def upload_image_room(
@@ -134,7 +161,7 @@ async def upload_image_room(
 
     if not image.content_type.startswith("image/"):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"File '{image.filename}' is invalid. Only valid image media files are accepted.",
         )
 
@@ -145,3 +172,4 @@ async def upload_image_room(
     )
 
     return {"success": True, "data": uploaded_image_url}
+

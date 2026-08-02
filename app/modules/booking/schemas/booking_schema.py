@@ -69,6 +69,9 @@ class RoomReservationDetail(BaseModel):
     base_rate: float
     nights: int
     subtotal: float
+    photo:str |None=None
+    cancellation_title:str
+    cancellation_description:str
 
 
 class PropertySummary(BaseModel):
@@ -78,6 +81,9 @@ class PropertySummary(BaseModel):
     city: Optional[str] = None
     country: Optional[str] = None
     currency: str = "USD"
+    photo:str | None=None
+    phone_number:str
+    email:str
 
 class AppliedSpecialOffer(BaseModel):
     title: str
@@ -87,6 +93,8 @@ class BookingReservationResponse(BaseModel):
     booking_id: uuid.UUID
     ref_number: str
     status: str
+    number_of_adults:int
+    number_of_children:int
     check_in: date
     check_out: date
     nights: int
@@ -106,10 +114,16 @@ class BookingListItemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    property_id: uuid.UUID
+    property_name: str
+    property_photo: Optional[str]
     ref_number: str
     status: str
+    number_of_adults: int
+    number_of_children: int
     checkin_date: date
     checkout_date: date
+    currency: Optional[str]
     total_amount: Decimal
     created_at: datetime
 

@@ -15,7 +15,11 @@ MOCK_RESULTS = [
         "state": "Auckland",
         "city": "Auckland City",
         "address": "123 Ocean Drive",
+        "type": "HOTEL",
+        "cover_photo": "",
         "amenities": ["Free WiFi"],
+        "description": "A test hotel",
+        "currency": "USD",
         "total_price": 450.0,
         "nights": 3,
     }

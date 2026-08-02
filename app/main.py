@@ -21,6 +21,9 @@ from app.modules.pms.routers.search_router import router as search_router
 
 from app.modules.booking.models import *
 from app.modules.booking.routers.booking_router import router as booking_router
+
+from app.modules.staff_mgmt.models import *
+from app.modules.staff_mgmt.routers.staffs_router import router as staff_router
 from app.utils.cors import configure_cors
 from app.utils.exception_handlers import register_exception_handlers
 from app.utils.expiry_loop import _expire_stale_bookings_loop
@@ -63,6 +66,7 @@ app.include_router(property_router)
 app.include_router(room_router)
 app.include_router(offer_router)
 app.include_router(discount_code_router)
+app.include_router(staff_router)
 app.include_router(image_router)
 app.include_router(search_router)
 app.include_router(booking_router)

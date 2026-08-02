@@ -12,6 +12,7 @@ from sqlalchemy import (
     CheckConstraint,
     Enum as SqlEnum,
     UUID,
+    Integer,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.utils.timestamp import TimestampMixin
@@ -72,6 +73,16 @@ class Booking(Base, TimestampMixin):
         SqlEnum(PaymentGateway, native_enum=False, length=20),
         nullable=False,
         default=PaymentGateway.DUMMY,
+    )
+
+    number_of_adults: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    number_of_children: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
     )
 
     # Overall reservation timeline

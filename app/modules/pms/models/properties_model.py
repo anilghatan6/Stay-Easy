@@ -11,7 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from enum import StrEnum
 from app.utils.timestamp import TimestampMixin
 from app.config.database_config import Base
-from app.modules.pms.models.nested_mutable import NestedMutable
+from app.utils.nested_mutable import NestedMutable
 
 class PropertyType(StrEnum):
     HOTEL = "HOTEL"
@@ -124,8 +124,12 @@ class Property(Base, TimestampMixin):
     special_offers: Mapped[List["SpecialOffer"]] = relationship(
         "SpecialOffer", back_populates="property", cascade="all, delete-orphan", passive_deletes=True
     )
+   
+    staff_assignments: Mapped[List["StaffProperty"]] = relationship(
+        "StaffProperty", back_populates="property", cascade="all, delete-orphan", passive_deletes=True,
+    )
 
-
+    
 class Amenity(Base, TimestampMixin):
     __tablename__ = "amenities"
 

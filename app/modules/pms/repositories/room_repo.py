@@ -518,15 +518,14 @@ class RoomRepository:
                     Booking.checkin_date < check_out,
                     Booking.checkout_date > check_in,
                 )
-                .scalar_subquery()  # Crucial for clean subquery compilation
             )
-            
+
             # 2. Query available rooms that are not in the overlapping subquery
             stmt = select(Rooms).where(
                 Rooms.property_id == property_id,
-                Rooms.status == RoomStatus.AVAILABLE,  
-                Rooms.id.not_in(overlapping_room_ids_subq),  
-               ).options(
+                Rooms.status == RoomStatus.AVAILABLE,
+                Rooms.id.notin_(overlapping_room_ids_subq),
+            ).options(
                 selectinload(Rooms.room_type),
                 selectinload(Rooms.bed_type),
                 selectinload(Rooms.system_amenities)

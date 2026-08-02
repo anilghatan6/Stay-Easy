@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from sqlalchemy import func, select, delete
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload,joinedload
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,6 +28,8 @@ class BookingRepository:
         guest_id: uuid.UUID,
         property_id: uuid.UUID,
         room_ids: list[uuid.UUID],
+        adults: int,
+        children: int,
         check_in: date,
         check_out: date,
         total_amount: Decimal,
@@ -42,6 +44,8 @@ class BookingRepository:
                 property_id=property_id,
                 guest_id=guest_id,
                 status=MasterBookingStatus.PENDING,
+                number_of_adults=adults,
+                number_of_children=children,
                 checkin_date=check_in,
                 checkout_date=check_out,
                 total_amount=total_amount,
@@ -189,6 +193,7 @@ class BookingRepository:
 
             stmt = (
                 select(Booking)
+                .options(joinedload(Booking.property))
                 .where(
                     Booking.guest_id == guest_id, 
                     ~Booking.status.in_(excluded_statuses)

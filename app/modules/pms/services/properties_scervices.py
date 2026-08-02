@@ -17,6 +17,7 @@ from app.modules.pms.schemas.properties_schemas import (
     SystemAmenityResponse,
     SystemAmenitiesListResponse,
     PropertyBookingsResponse,
+    UpdatePropertyInfo,
 )
 from app.utils.exceptions import (
     PropertyAlreadyExistsException,
@@ -330,7 +331,32 @@ class PropertyService:
     ):
         logger.info(f"[PropertyService] deleting property {property_id}")
         try:
+            # Fetch property with rooms eagerly to capture all photo URLs before deletion
+            property_obj = await self.property_repo.get_property_with_rooms(
+                property_id, tenant_id
+            )
+            if not property_obj:
+                raise PropertyNotFoundException("Property not found or access denied")
+
+            # Collect all photo URLs: property cover/gallery + every room's cover/gallery
+            all_photo_urls: list[str] = []
+
+            prop_photos: dict = property_obj.photos or {}
+            if prop_photos.get("cover"):
+                all_photo_urls.append(prop_photos["cover"])
+            all_photo_urls.extend(prop_photos.get("gallery") or [])
+
+            for room in (property_obj.rooms or []):
+                room_photos: dict = room.photos or {}
+                if room_photos.get("cover"):
+                    all_photo_urls.append(room_photos["cover"])
+                all_photo_urls.extend(room_photos.get("gallery") or [])
+
             await self.property_repo.delete_property(property_id, tenant_id)
+
+            # Best-effort Cloudinary cleanup (non-fatal)
+            await self.image_service.delete_images_by_urls(all_photo_urls)
+
         except (PropertyNotFoundException, RepositoryException):
             raise
         except Exception as e:
@@ -499,3 +525,161 @@ class PropertyService:
             raise ServiceException(
                 internal_detail=f"Failed to get property bookings: {str(e)}"
             )
+
+    async def update_property_by_id(
+        self,
+        property_id: uuid.UUID,
+        tenant_id: uuid.UUID,
+        payload: UpdatePropertyInfo,
+    ) -> PropertyResponse:
+        logger.info(f"[PropertyService] Updating property {property_id} for tenant {tenant_id}")
+        try:
+            # 1. Fetch existing property
+            existing_property = await self.property_repo.get_property_by_id(
+                property_id, tenant_id
+            )
+            if not existing_property:
+                raise PropertyNotFoundException("Property not found or access denied")
+
+            update_data = payload.model_dump(exclude_unset=True)
+
+            if not update_data:
+                # Nothing to update, return current property state
+                return await self.get_property_by_id(property_id, tenant_id)
+
+            # 2. Name Uniqueness Check
+            if "name" in update_data and update_data["name"] != existing_property.name:
+                name_collision = await self.property_repo.get_property_by_name(
+                    update_data["name"], tenant_id
+                )
+                if name_collision and name_collision.id != property_id:
+                    raise PropertyAlreadyExistsException(
+                        f"Property with name '{update_data['name']}' already exists"
+                    )
+
+            # 3. System & Custom Amenities Validation
+            if "system_amenity_ids" in update_data or "custom_amenities" in update_data:
+                new_system_ids = update_data.get(
+                    "system_amenity_ids", existing_property.system_amenity_ids or []
+                )
+                raw_custom = update_data.get(
+                    "custom_amenities", existing_property.custom_amenities or []
+                )
+
+                # Convert custom amenities items if pydantic models
+                new_custom_amenities = [
+                    c.model_dump() if hasattr(c, "model_dump") else c
+                    for c in raw_custom
+                ]
+
+                # Validate system amenities exist
+                system_names = await self.property_repo.validate_amenities(
+                    new_system_ids, new_custom_amenities
+                )
+
+                # Check duplicate custom amenity names within payload if custom_amenities was provided
+                if "custom_amenities" in update_data and new_custom_amenities:
+                    custom_names_lower = [c["name"].lower() for c in new_custom_amenities]
+                    seen = set()
+                    duplicates = []
+                    for c_name in custom_names_lower:
+                        if c_name in seen:
+                            duplicates.append(c_name)
+                        seen.add(c_name)
+
+                    if duplicates:
+                        dup_str = ", ".join(sorted(set(duplicates)))
+                        raise ResourceConflictException(
+                            f"Duplicate custom amenity names are not allowed: {dup_str}"
+                        )
+
+                    # Custom amenity name must not match a system amenity
+                    conflicts = [
+                        c["name"] for c in new_custom_amenities if c["name"].lower() in system_names
+                    ]
+                    if conflicts:
+                        conflict_str = ", ".join(conflicts)
+                        raise ResourceConflictException(
+                            f"These custom amenity names already exist as system amenities: {conflict_str}"
+                        )
+
+                if "custom_amenities" in update_data:
+                    update_data["custom_amenities"] = new_custom_amenities
+
+            # 4. Image Promotion (Photos & Brand Logo)
+            urls_to_promote = []
+            if "brand_logo_url" in update_data and update_data["brand_logo_url"]:
+                urls_to_promote.append(update_data["brand_logo_url"])
+
+            photos_payload = update_data.get("photos")
+            if photos_payload:
+                if isinstance(photos_payload, dict):
+                    cover = photos_payload.get("cover")
+                    gallery = photos_payload.get("gallery") or []
+                else:
+                    cover = photos_payload.cover
+                    gallery = photos_payload.gallery or []
+
+                if cover:
+                    urls_to_promote.append(cover)
+                if gallery:
+                    urls_to_promote.extend(gallery)
+
+            if urls_to_promote:
+                promoted_urls = await self.image_service.promote_temp_images(
+                    urls=urls_to_promote,
+                    property_id=str(property_id),
+                    tenant_id=str(tenant_id),
+                )
+                promoted_map = dict(zip(urls_to_promote, promoted_urls))
+
+                if "brand_logo_url" in update_data and update_data["brand_logo_url"]:
+                    update_data["brand_logo_url"] = promoted_map.get(
+                        update_data["brand_logo_url"], update_data["brand_logo_url"]
+                    )
+
+                if photos_payload:
+                    existing_photos = existing_property.photos or {"cover": None, "gallery": []}
+                    updated_photos = {
+                        "cover": existing_photos.get("cover"),
+                        "gallery": list(existing_photos.get("gallery") or []),
+                    }
+
+                    if isinstance(photos_payload, dict):
+                        cov = photos_payload.get("cover")
+                        gal = photos_payload.get("gallery")
+                    else:
+                        cov = photos_payload.cover
+                        gal = photos_payload.gallery
+
+                    if cov is not None:
+                        updated_photos["cover"] = promoted_map.get(cov, cov)
+
+                    if gal is not None:
+                        updated_photos["gallery"] = [
+                            promoted_map.get(g_url, g_url) for g_url in gal
+                        ]
+
+                    update_data["photos"] = updated_photos
+
+            # 5. Persist Update
+            await self.property_repo.update_property(property_id, tenant_id, update_data)
+
+            # 6. Fetch and return full PropertyResponse
+            return await self.get_property_by_id(property_id, tenant_id)
+
+        except (
+            PropertyNotFoundException,
+            PropertyAlreadyExistsException,
+            AmenityNotFoundException,
+            ResourceConflictException,
+            ImageStorageException,
+            RepositoryException,
+        ):
+            raise
+        except Exception as e:
+            logger.error(f"[PropertyService] Error updating property: {str(e)}", exc_info=True)
+            raise ServiceException(
+                internal_detail=f"Failed to update property: {str(e)}"
+            )
+

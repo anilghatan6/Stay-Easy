@@ -561,3 +561,258 @@ async def test_create_room_type_name_too_long(
         headers=headers,
     )
     assert resp.status_code == 422, resp.text
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Room list filtering & pagination
+# ────────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_get_rooms_filter_by_status(
+    pms_client: AsyncClient, pms_token_store: dict, pms_property_id: str
+):
+    headers = auth_headers(pms_token_store["access_token"])
+    resp = await pms_client.get(
+        f"/properties/{pms_property_id}/rooms",
+        params={"status": "AVAILABLE"},
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["success"] is True
+    assert all(
+        room["status"] == "AVAILABLE" for room in body["data"]
+    ), body["data"]
+
+
+@pytest.mark.asyncio
+async def test_get_rooms_filter_by_floor(
+    pms_client: AsyncClient, pms_token_store: dict, pms_property_id: str
+):
+    headers = auth_headers(pms_token_store["access_token"])
+    resp = await pms_client.get(
+        f"/properties/{pms_property_id}/rooms",
+        params={"floor_number": 1},
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["success"] is True
+    assert all(room["floor_number"] == 1 for room in body["data"])
+
+
+@pytest.mark.asyncio
+async def test_get_rooms_invalid_status(
+    pms_client: AsyncClient, pms_token_store: dict, pms_property_id: str
+):
+    headers = auth_headers(pms_token_store["access_token"])
+    resp = await pms_client.get(
+        f"/properties/{pms_property_id}/rooms",
+        params={"status": "BOGUS"},
+        headers=headers,
+    )
+    assert resp.status_code in (400, 422), resp.text
+
+
+@pytest.mark.asyncio
+async def test_get_rooms_meta_pagination(
+    pms_client: AsyncClient, pms_token_store: dict, pms_property_id: str
+):
+    headers = auth_headers(pms_token_store["access_token"])
+    resp = await pms_client.get(
+        f"/properties/{pms_property_id}/rooms",
+        params={"skip": 0, "limit": 1},
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    meta = body["meta"]
+    assert "total" in meta and "skip" in meta and "limit" in meta
+    assert meta["skip"] == 0 and meta["limit"] == 1
+    assert isinstance(meta["has_more"], bool)
+    assert len(body["data"]) <= 1
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Public available-rooms endpoint (no auth required)
+# ────────────────────────────────────────────────────────────────────────────
+
+def _future_date(days: int) -> str:
+    from datetime import date, timedelta
+    return (date.today() + timedelta(days=days)).isoformat()
+
+
+@pytest.mark.asyncio
+async def test_available_rooms_public_success(
+    async_client: AsyncClient, mocker
+):
+    from app.modules.pms.dependencies import get_room_service
+    from app.modules.pms.services.room_services import RoomService
+    from unittest.mock import AsyncMock
+    from app.main import app
+
+    available_payload = {
+        "id": str(uuid.uuid4()),
+        "room_name": "101",
+        "room_type": "Deluxe Suite",
+        "bed_type": "King",
+        "base_rate": "150.00",
+        "photos": {"cover": None, "gallery": []},
+        "max_adults": 2,
+        "max_children": 1,
+        "status": "AVAILABLE",
+        "floor_number": 1,
+        "cancellation_policy": "FLEXIBLE",
+        "cancellation_title": "Flexible Cancellation",
+        "cancellation_description": "Full refund",
+        "system_amenities": [],
+        "custom_amenities": [],
+    }
+    mock = AsyncMock(spec=RoomService)
+    mock.get_available_rooms.return_value = [available_payload]
+    app.dependency_overrides[get_room_service] = lambda: mock
+    resp = await async_client.get(
+        f"/properties/{uuid.uuid4()}/rooms/available-rooms",
+        params={
+            "checkin_date": _future_date(5),
+            "checkout_date": _future_date(7),
+        },
+    )
+    app.dependency_overrides.pop(get_room_service, None)
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["success"] is True
+    assert body["data"][0]["status"] == "AVAILABLE"
+
+
+@pytest.mark.asyncio
+async def test_public_available_rooms_inverted_dates(
+    pms_client: AsyncClient, pms_token_store: dict, pms_property_id: str
+):
+    resp = await pms_client.get(
+        f"/properties/{pms_property_id}/rooms/available-rooms",
+        params={
+            "checkin_date": _future_date(7),
+            "checkout_date": _future_date(5),
+        },
+    )
+    assert resp.status_code == 400, resp.text
+
+
+@pytest.mark.asyncio
+async def test_public_available_rooms_past_checkin(
+    pms_client: AsyncClient, pms_token_store: dict, pms_property_id: str
+):
+    resp = await pms_client.get(
+        f"/properties/{pms_property_id}/rooms/available-rooms",
+        params={
+            "checkin_date": _future_date(-5),
+            "checkout_date": _future_date(2),
+        },
+    )
+    assert resp.status_code == 400, resp.text
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# No-tenant admin can't list/create rooms (verify_tenant → 400)
+# ────────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_get_rooms_no_tenant(async_client: AsyncClient):
+    from .test_image_routers import _register_no_tenant_admin
+
+    token = await _register_no_tenant_admin(async_client)
+    headers = auth_headers(token)
+    resp = await async_client.get(
+        "/properties/00000000-0000-0000-0000-000000000000/rooms",
+        headers=headers,
+    )
+    assert resp.status_code == 400, resp.text
+
+
+@pytest.mark.asyncio
+async def test_create_rooms_no_tenant(async_client: AsyncClient):
+    from .test_image_routers import _register_no_tenant_admin
+
+    token = await _register_no_tenant_admin(async_client)
+    headers = auth_headers(token)
+    valid = _room_payload(
+        room_type_id=str(uuid.uuid4()), bed_type_id=str(uuid.uuid4()), room_name="NoTenant"
+    )
+    resp = await async_client.post(
+        "/properties/00000000-0000-0000-0000-000000000000/rooms",
+        json=valid,
+        headers=headers,
+    )
+    assert resp.status_code == 400, resp.text
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# CUSTOM cancellation policy requires fields
+# ────────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_create_rooms_custom_policy_without_fields(
+    pms_client: AsyncClient, pms_token_store: dict, pms_property_id: str
+):
+    headers = auth_headers(pms_token_store["access_token"])
+    payload = _room_payload(
+        room_type_id=pms_token_store["room_type_id"],
+        bed_type_id=pms_token_store["bed_type_id"],
+        room_name="CustomNoFields",
+        cancellation_policy="CUSTOM",
+    )
+    resp = await pms_client.post(
+        f"/properties/{pms_property_id}/rooms",
+        json=payload,
+        headers=headers,
+    )
+    assert resp.status_code == 422, resp.text
+
+
+@pytest.mark.asyncio
+async def test_create_rooms_custom_policy_with_fields(
+    pms_client: AsyncClient, pms_token_store: dict, pms_property_id: str
+):
+    headers = auth_headers(pms_token_store["access_token"])
+    payload = _room_payload(
+        room_type_id=pms_token_store["room_type_id"],
+        bed_type_id=pms_token_store["bed_type_id"],
+        room_name="CustomWithFields",
+        cancellation_policy="CUSTOM",
+        cancellation_title="Custom Title",
+        cancellation_description="Custom Description",
+    )
+    resp = await pms_client.post(
+        f"/properties/{pms_property_id}/rooms",
+        json=payload,
+        headers=headers,
+    )
+    assert resp.status_code == 201, resp.text
+    room = resp.json()["data"]["rooms"][0]
+    assert room["cancellation_title"] == "Custom Title"
+
+
+@pytest.mark.asyncio
+async def test_create_rooms_duplicate_room_name_across_requests(
+    pms_client: AsyncClient, pms_token_store: dict, pms_property_id: str
+):
+    headers = auth_headers(pms_token_store["access_token"])
+    payload = _room_payload(
+        room_type_id=pms_token_store["room_type_id"],
+        bed_type_id=pms_token_store["bed_type_id"],
+        room_name="UniqueRoomA",
+    )
+    first = await pms_client.post(
+        f"/properties/{pms_property_id}/rooms",
+        json=payload,
+        headers=headers,
+    )
+    assert first.status_code == 201, first.text
+
+    second = await pms_client.post(
+        f"/properties/{pms_property_id}/rooms",
+        json=payload,
+        headers=headers,
+    )
+    assert second.status_code in (400, 409), second.text

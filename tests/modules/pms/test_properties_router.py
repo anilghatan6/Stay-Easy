@@ -65,6 +65,16 @@ async def _create_property(client: AsyncClient, store: dict) -> str:
     return resp.json()["data"]["id"]
 
 
+async def _create_unique_property(client: AsyncClient, store: dict, name: str) -> str:
+    headers = auth_headers(store["access_token"])
+    payload = {**GENERAL_INFO_PAYLOAD, "name": name}
+    resp = await client.post(
+        "/properties/general-information", json=payload, headers=headers
+    )
+    assert resp.status_code == 201, resp.text
+    return resp.json()["data"]["id"]
+
+
 # ────────────────────────────────────────────────────────────────────────────
 # Unauthenticated — all endpoints without token → 401/403
 # ────────────────────────────────────────────────────────────────────────────
@@ -400,10 +410,10 @@ async def test_get_properties_list(
         headers=auth_headers(pms_token_store["access_token"]),
     )
     assert resp.status_code == 200, resp.text
-    data = resp.json()
-    assert data["success"] is True
-    assert data["data"]["total_count"] >= 1
-    assert len(data["data"]["properties"]) >= 1
+    body = resp.json()
+    assert body["success"] is True
+    assert body["meta"]["total"] >= 1
+    assert len(body["data"]["properties"]) >= 1
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -515,3 +525,170 @@ async def test_delete_property_not_found(
         headers=auth_headers(pms_token_store["access_token"]),
     )
     assert resp.status_code == 404, resp.text
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# PATCH /properties/{property_id}
+# ────────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_update_property_success(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    prop_id = await _create_unique_property(pms_client, pms_token_store, "Update Hotel")
+    resp = await pms_client.patch(
+        f"/properties/{prop_id}",
+        json={"name": "Updated Hotel"},
+        headers=auth_headers(pms_token_store["access_token"]),
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["success"] is True
+    assert data["data"]["name"] == "Updated Hotel"
+
+
+@pytest.mark.asyncio
+async def test_update_property_not_found(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    fake_id = "00000000-0000-0000-0000-000000000002"
+    resp = await pms_client.patch(
+        f"/properties/{fake_id}",
+        json={"name": "Ghost"},
+        headers=auth_headers(pms_token_store["access_token"]),
+    )
+    assert resp.status_code == 404, resp.text
+
+
+@pytest.mark.asyncio
+async def test_update_property_unauthenticated(pms_client: AsyncClient):
+    resp = await pms_client.patch(
+        "/properties/00000000-0000-0000-0000-000000000000",
+        json={"name": "Hacked"},
+    )
+    assert resp.status_code in (401, 403), resp.text
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# GET /properties/{property_id}/public  (no auth required)
+# ────────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_get_specific_public_property(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    prop_id = await _create_unique_property(pms_client, pms_token_store, "Public Hotel")
+    headers = auth_headers(pms_token_store["access_token"])
+    act_resp = await pms_client.post(
+        f"/properties/{prop_id}/toggle-property-activation", headers=headers
+    )
+    assert act_resp.status_code == 200, act_resp.text
+    resp = await pms_client.get(f"/properties/{prop_id}/public")
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["success"] is True
+    assert data["data"]["id"] == prop_id
+
+
+@pytest.mark.asyncio
+async def test_get_specific_public_property_not_found(pms_client: AsyncClient):
+    fake_id = "00000000-0000-0000-0000-000000000003"
+    resp = await pms_client.get(f"/properties/{fake_id}/public")
+    assert resp.status_code == 404, resp.text
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# GET /properties/{property_id}/number-of-floors
+# ────────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_get_number_of_floors(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    prop_id = await _create_unique_property(pms_client, pms_token_store, "Floors Hotel")
+    resp = await pms_client.get(
+        f"/properties/{prop_id}/number-of-floors",
+        headers=auth_headers(pms_token_store["access_token"]),
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["success"] is True
+    assert isinstance(data["data"]["number_of_floors"], int)
+
+
+@pytest.mark.asyncio
+async def test_get_number_of_floors_not_found(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    fake_id = "00000000-0000-0000-0000-000000000004"
+    resp = await pms_client.get(
+        f"/properties/{fake_id}/number-of-floors",
+        headers=auth_headers(pms_token_store["access_token"]),
+    )
+    assert resp.status_code == 404, resp.text
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# GET /properties/{property_id}/bookings (empty list for a fresh property)
+# ────────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_get_property_bookings_empty(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    prop_id = await _create_unique_property(pms_client, pms_token_store, "Bookings Hotel")
+    resp = await pms_client.get(
+        f"/properties/{prop_id}/bookings",
+        headers=auth_headers(pms_token_store["access_token"]),
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["success"] is True
+    assert body["data"] == []
+    assert body["meta"]["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_get_property_bookings_not_found(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    fake_id = "00000000-0000-0000-0000-000000000005"
+    resp = await pms_client.get(
+        f"/properties/{fake_id}/bookings",
+        headers=auth_headers(pms_token_store["access_token"]),
+    )
+    assert resp.status_code == 404, resp.text
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# GET /properties/ — pagination meta
+# ────────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_get_properties_pagination(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    resp = await pms_client.get(
+        "/properties/",
+        params={"skip": 0, "limit": 1},
+        headers=auth_headers(pms_token_store["access_token"]),
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["success"] is True
+    meta = body["meta"]
+    assert meta["skip"] == 0 and meta["limit"] == 1
+    assert isinstance(meta["has_more"], bool)
+    assert len(body["data"]["properties"]) <= 1
+
+
+@pytest.mark.asyncio
+async def test_get_properties_invalid_limit(
+    pms_client: AsyncClient, pms_token_store: dict
+):
+    resp = await pms_client.get(
+        "/properties/",
+        params={"limit": 0},
+        headers=auth_headers(pms_token_store["access_token"]),
+    )
+    assert resp.status_code == 422, resp.text

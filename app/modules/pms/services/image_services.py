@@ -177,6 +177,55 @@ class ImageService:
 
         return [url_map[url] if url else url for url in urls]
 
+    async def promote_staff_temp_images(
+        self,
+        urls: list[str],
+        staff_id: str,
+    ) -> list[str]:
+        """
+        Promotes staff images from temp/ to their permanent paths.
+
+        Temp path format:
+            temp/staff/{fake_staff_id}/{filename}
+        Permanent path format:
+            staff/{staff_id}/{filename}
+        """
+        unique_urls = list(dict.fromkeys(url for url in urls if url))
+
+        async def _promote_one(url: str) -> str:
+            if "/temp/" not in url:
+                return url
+
+            old_public_id = self.extract_public_id_from_url(url)
+            fake_staff_id = self.extract_fake_id_from_public_id(old_public_id, "staffs")
+
+            # Replace temp/ and swap the fake_staff_id with the real staff_id
+            new_public_id = old_public_id.replace("temp/", "", 1)
+            new_public_id = new_public_id.replace(fake_staff_id, staff_id, 1)
+
+            logger.info(
+                f"[ImageService] Promoting staff image: {old_public_id} -> {new_public_id}"
+            )
+            result = await self.provider.rename_image(old_public_id, new_public_id)
+            return result["url"]
+
+        tasks = [_promote_one(url) for url in unique_urls]
+        promoted_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        url_map: dict[str, str] = {}
+        for original, result in zip(unique_urls, promoted_results):
+            if isinstance(result, Exception):
+                logger.error(
+                    f"[ImageService] Failed to promote staff image {original}: {result}"
+                )
+                raise ImageStorageException(
+                    "Failed to promote one or more staff images from temp storage.",
+                    internal_detail=str(result),
+                )
+            url_map[original] = result
+
+        return [url_map[url] if url else url for url in urls]
+
     def extract_fake_id_from_public_id(self, public_id: str, segment: str) -> str:
         """
         public_id looks like:
@@ -221,3 +270,39 @@ class ImageService:
         return self.extract_fake_property_id_from_public_id(
             self.extract_public_id_from_url(url)
         )
+
+    async def delete_images_by_urls(self, urls: list[str]) -> None:
+        """
+        Best-effort Cloudinary cleanup for a list of image URLs.
+
+        Extracts each URL's public_id and calls the provider's bulk
+        delete_images(). Failures are logged but never re-raised — the
+        caller's DB transaction has already committed, so this is
+        intentionally non-fatal.
+
+        Skips None/empty/non-Cloudinary values silently.
+        """
+        public_ids: list[str] = []
+        for url in urls:
+            if not url or "/upload/" not in url:
+                continue
+            try:
+                pid = self.extract_public_id_from_url(url)
+                public_ids.append(pid)
+            except Exception as e:
+                logger.warning(
+                    f"[ImageService] Could not extract public_id from URL '{url}': {e}"
+                )
+
+        if not public_ids:
+            return
+
+        try:
+            await self.provider.delete_images(public_ids)
+            logger.info(
+                f"[ImageService] Successfully deleted {len(public_ids)} image(s) from Cloudinary"
+            )
+        except Exception as e:
+            logger.error(
+                f"[ImageService] Non-fatal: failed to delete images from Cloudinary: {e}"
+            )

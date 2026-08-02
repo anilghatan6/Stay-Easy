@@ -72,7 +72,7 @@ class GuestCreate(GuestBase):
         if " " in value:
             raise ValueError("Password must not contain spaces between the words.")
 
-        return value
+        return value.strip()
 
 
 

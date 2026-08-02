@@ -438,23 +438,27 @@ async def test_get_my_bookings_as_guest(
 ):
     resp = await booking_guest_client.get("/bookings/me")
     assert resp.status_code == 200, resp.text
-    data = resp.json()["data"]
-    assert data["total"] >= 4
+    body = resp.json()
+    data = body["data"]
+    meta = body["meta"]
     assert len(data["items"]) >= 4
-    assert data["page"] == 1
-    assert data["limit"] == 20
-    assert data["total_pages"] >= 1
+    assert meta["total"] >= 4
+    assert meta["skip"] == 0
+    assert meta["limit"] == 10
+    assert isinstance(meta["has_more"], bool)
 
 
 @pytest.mark.asyncio
 async def test_get_my_bookings_pagination(booking_guest_client: AsyncClient):
-    resp = await booking_guest_client.get("/bookings/me?page=1&limit=2")
+    resp = await booking_guest_client.get("/bookings/me?skip=0&limit=2")
     assert resp.status_code == 200, resp.text
-    data = resp.json()["data"]
+    body = resp.json()
+    data = body["data"]
+    meta = body["meta"]
     assert len(data["items"]) <= 2
-    assert data["limit"] == 2
-    assert data["page"] == 1
-    assert data["total"] >= 4
+    assert meta["limit"] == 2
+    assert meta["skip"] == 0
+    assert meta["total"] >= 4
 
 
 @pytest.mark.asyncio
@@ -463,9 +467,12 @@ async def test_get_my_bookings_other_guest(
 ):
     resp = await booking_second_guest_client.get("/bookings/me")
     assert resp.status_code == 200, resp.text
-    data = resp.json()["data"]
+    body = resp.json()
+    data = body["data"]
+    meta = body["meta"]
     assert data["items"] == []
-    assert data["total"] == 0
+    assert meta["total"] == 0
+    assert meta["has_more"] is False
 
 
 # ============================================================

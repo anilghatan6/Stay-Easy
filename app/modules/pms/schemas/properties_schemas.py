@@ -467,3 +467,234 @@ class PropertyBookingsResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
     
+
+class UpdatePhotoCollection(BaseModel):
+    cover: Optional[str] = Field(
+        None, description="The primary cover image URL."
+    )
+    gallery: Optional[List[str]] = Field(
+        None, description="List of secondary image URLs."
+    )
+
+    @field_validator("cover", mode="before")
+    @classmethod
+    def validate_cover_url(cls, v: Optional[str]) -> Optional[str]:
+        if v and not v.startswith(CLOUDINARY_BASE):
+            raise ValueError("Invalid Image Format.")
+        return v
+
+    @field_validator("gallery", mode="before")
+    @classmethod
+    def validate_gallery_urls(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if isinstance(v, list):
+            for url in v:
+                if not url.startswith(CLOUDINARY_BASE):
+                    raise ValueError("Invalid Image Format.")
+        return v
+
+    @model_validator(mode="after")
+    def validate_gallery_limit(self):
+        if self.gallery is not None and len(self.gallery) > 5:
+            raise ValueError("You can't upload more than 5 images.")
+        return self
+
+
+class UpdatePropertyInfo(BaseModel):
+    name: Optional[str] = Field(
+        None,
+        min_length=2,
+        max_length=255,
+        title="Property Name",
+        description="Name of the property",
+    )
+    type: Optional[PropertyType] = Field(
+        None,
+        title="Property Type",
+        description="Type of the property",
+    )
+    description: Optional[str] = Field(
+        None,
+        max_length=2000,
+        title="Description",
+        description="Description of the property",
+    )
+    total_rooms: Optional[int] = Field(
+        None,
+        ge=1,
+        le=10000,
+        title="Total Rooms",
+        description="Total number of rooms",
+    )
+    year_built: Optional[int] = Field(
+        None,
+        ge=1800,
+        le=2100,
+        title="Year Built",
+        description="Year when the property was built",
+    )
+    number_of_floors: Optional[int] = Field(
+        None,
+        ge=0,
+        le=1000,
+        title="Number of Floors",
+        description="Number of floors in the property",
+    )
+    phone_number: Optional[str] = Field(
+        None,
+        min_length=10,
+        max_length=10,
+        title="Phone Number",
+        description="Phone number of the property owner",
+    )
+    email: Optional[EmailStr] = Field(
+        None,
+        title="Email",
+        description="Email of the property owner",
+    )
+    country: Optional[str] = Field(
+        None,
+        min_length=2,
+        max_length=100,
+        title="Country",
+    )
+    state: Optional[str] = Field(
+        None,
+        min_length=2,
+        max_length=100,
+        title="State",
+    )
+    city: Optional[str] = Field(
+        None,
+        min_length=2,
+        max_length=100,
+        title="City",
+    )
+    zip_code: Optional[str] = Field(
+        None,
+        min_length=2,
+        max_length=10,
+        title="Zip Code",
+    )
+    address: Optional[str] = Field(
+        None,
+        min_length=2,
+        max_length=255,
+        title="Address",
+    )
+    latitude: Optional[Decimal] = Field(
+        None,
+        max_digits=9,
+        decimal_places=6,
+    )
+    longitude: Optional[Decimal] = Field(
+        None,
+        max_digits=9,
+        decimal_places=6,
+    )
+    currency: Optional[str] = Field(
+        None,
+        min_length=3,
+        max_length=20,
+    )
+    timezone: Optional[str] = Field(
+        None,
+        min_length=3,
+        max_length=100,
+    )
+    language: Optional[str] = Field(
+        None,
+        min_length=2,
+        max_length=50,
+    )
+    check_in_time: Optional[str] = Field(
+        None,
+        min_length=2,
+        max_length=8,
+    )
+    check_out_time: Optional[str] = Field(
+        None,
+        min_length=2,
+        max_length=8,
+    )
+    check_in_grace_period: Optional[int] = Field(
+        None,
+        le=60,
+        ge=0,
+    )
+    check_out_grace_period: Optional[int] = Field(
+        None,
+        le=60,
+        ge=0,
+    )
+    always_allow_check_in_out: Optional[bool] = Field(
+        None,
+    )
+    brand_logo_url: Optional[str] = Field(
+        None,
+        max_length=2048,
+    )
+    brand_color: Optional[str] = Field(
+        None,
+        min_length=3,
+        max_length=7,
+    )
+    system_amenity_ids: Optional[List[uuid.UUID]] = Field(
+        None,
+        description="List of system-provided amenity IDs",
+    )
+    custom_amenities: Optional[List[CustomAmenityItem]] = Field(
+        None,
+        description="List of user-defined custom amenities",
+    )
+    photos: Optional[UpdatePhotoCollection] = Field(
+        None,
+        description="Photos collection",
+    )
+
+    @field_validator("phone_number")
+    @classmethod
+    def verify_phone_number(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        value = value.strip()
+        if " " in value:
+            raise ValueError("Phone number must not contain spaces.")
+        if not value.isdigit():
+            raise ValueError("Phone number must contain only digits.")
+        if len(value) != 10:
+            raise ValueError("Phone number must be 10 digits.")
+        return value
+
+    @field_validator("name")
+    @classmethod
+    def clean_and_verify_name(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        return value.strip()
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def pre_strip_email(cls, value: Optional[str]) -> Optional[str]:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+    @field_validator("brand_logo_url", mode="before")
+    @classmethod
+    def validate_brand_logo_url(cls, v: Optional[str]) -> Optional[str]:
+        if v and not v.startswith(CLOUDINARY_BASE):
+            raise ValueError("Invalid Image Format.")
+        return v
+
+    @model_validator(mode="after")
+    def validate_check_in_out_time(self) -> Self:
+        always_allow = self.always_allow_check_in_out
+        has_check_in = self.check_in_time is not None
+        has_check_out = self.check_out_time is not None
+
+        if always_allow is True:
+            if has_check_in or has_check_out:
+                raise ValueError(
+                    "Check in time and check out time must be None when always allow check in and check out is On"
+                )
+        return self

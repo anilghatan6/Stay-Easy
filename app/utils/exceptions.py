@@ -360,3 +360,18 @@ class ServiceBusyError(AppBaseException):
         super().__init__(
             user_message=user_message, internal_detail=user_message, status_code=409
         )
+
+
+class StaffAlreadlyExistException(AppBaseException):
+    def __init__(self, internal_detail: str = None):
+        super().__init__(
+            user_message="Staff with this email already exists",
+            internal_detail=internal_detail,
+            status_code=400,
+        )
+
+class StaffNotFound(AppBaseException):
+    def __init__(self, user_message: str):
+        super().__init__(
+            user_message=user_message, internal_detail=user_message, status_code=404
+        )

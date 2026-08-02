@@ -30,10 +30,10 @@ class User(Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
     # Relationships
-    # 1. The workspace this user works inside (Applies to Admins AND Staff)
-    workspace: Mapped[Optional["Tenant"]] = relationship(
-        "Tenant", foreign_keys=[tenant_id], back_populates="staff_members"
-    )
+    # # 1. The workspace this user works inside (Applies to Admins AND Staff)
+    # workspace: Mapped[Optional["Tenant"]] = relationship(
+    #     "Tenant", foreign_keys=[tenant_id], back_populates="staff_members"
+    # )
 
     # 2. The workspaces this user legally OWNS (Applies to Admins only)
     owned_tenants: Mapped[List["Tenant"]] = relationship(

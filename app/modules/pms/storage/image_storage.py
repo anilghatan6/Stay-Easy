@@ -25,6 +25,11 @@ class ImageStorageStrategy(ABC):
         """Rename/move an image to a new path. Returns dict with 'url' and 'public_id'."""
         pass
 
+    @abstractmethod
+    async def delete_images(self, public_ids: list[str]) -> dict:
+        """Bulk-delete images by their public IDs. Returns Cloudinary API response dict."""
+        pass
+
 
 class LocalImageStorage(ImageStorageStrategy):
     def __init__(self, base_path: str = "static/uploads"):
@@ -55,6 +60,13 @@ class LocalImageStorage(ImageStorageStrategy):
             f"[LocalImageStorage] rename_image called but not supported locally: {old_public_id} -> {new_public_id}"
         )
         return {"url": old_public_id, "public_id": new_public_id}
+
+    async def delete_images(self, public_ids: list[str]) -> dict:
+        """Local storage delete is a no-op placeholder."""
+        logger.warning(
+            f"[LocalImageStorage] delete_images called but not supported locally: {public_ids}"
+        )
+        return {"result": "ok"}
 
 
 class CloudinaryImageStorage(ImageStorageStrategy):
@@ -139,7 +151,7 @@ class CloudinaryImageStorage(ImageStorageStrategy):
             logger.error(f"Error renaming image {old_public_id} -> {new_public_id}: {error_msg}")
             raise ImageStorageException("Error renaming image", error_msg)
     
-    async def delete_temp_assets(self,public_id:str)->dict:
+    async def delete_temp_assets(self, public_id: str) -> dict:
         try:
             def _delete():
                 return cloudinary.uploader.destroy(
@@ -154,6 +166,30 @@ class CloudinaryImageStorage(ImageStorageStrategy):
         except Exception as e:
             logger.error(f"Error deleting image {public_id}: {str(e)}")
             raise ImageStorageException("Error deleting image", str(e))
+
+    async def delete_images(self, public_ids: list[str]) -> dict:
+        """
+        Bulk-delete images by public ID using Cloudinary's delete_resources API
+        (single HTTP call, more efficient than calling destroy() in a loop).
+        """
+        if not public_ids:
+            return {"result": "ok", "deleted": {}}
+        try:
+            def _bulk_delete():
+                return cloudinary.api.delete_resources(
+                    public_ids,
+                    resource_type="image",
+                    invalidate=True,
+                )
+
+            response = await asyncio.to_thread(_bulk_delete)
+            logger.info(
+                f"[CloudinaryImageStorage] Bulk deleted {len(public_ids)} image(s) from Cloudinary"
+            )
+            return response
+        except Exception as e:
+            logger.error(f"Error bulk-deleting images {public_ids}: {str(e)}")
+            raise ImageStorageException("Error bulk-deleting images", str(e))
 
     async def clean_old_temp_images(self):
         """

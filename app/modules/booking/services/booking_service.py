@@ -170,6 +170,8 @@ class BookingService:
                 guest_id=guest_id,
                 property_id=property_id,
                 room_ids=room_ids,
+                adults=adults,
+                children=children,
                 check_in=check_in,
                 check_out=check_out,
                 total_amount=total_amount,
@@ -205,6 +207,9 @@ class BookingService:
                         "base_rate": float(r.base_rate),
                         "nights": nights,
                         "subtotal": room_subtotal,
+                        "photo": r.photos.get("cover") if r.photos else None,
+                        "cancellation_title": r.cancellation_title,
+                        "cancellation_description": r.cancellation_description,
                     }
                 )
 
@@ -214,6 +219,8 @@ class BookingService:
                 "status": booking.status.value
                 if hasattr(booking.status, "value")
                 else booking.status,
+                "number_of_adults": adults,
+                "number_of_children": children,
                 "check_in": check_in,
                 "check_out": check_out,
                 "nights": nights,
@@ -227,6 +234,11 @@ class BookingService:
                     "city": property_obj.city,
                     "country": property_obj.country,
                     "currency": property_obj.currency or "USD",
+                    "photo": property_obj.photos.get("cover")
+                    if property_obj.photos
+                    else None,
+                    "phone_number": property_obj.phone_number,
+                    "email": property_obj.email,
                 }
                 if property_obj
                 else None,
@@ -457,6 +469,10 @@ class BookingService:
                             "base_rate": float(r.base_rate),
                             "nights": nights,
                             "subtotal": room_subtotal,
+                            "photo":r.photos.get("cover") if r.photos else None,
+                            "cancellation_title":r.cancellation_title,
+                            "cancellation_description":r.cancellation_description
+
                         }
                     )
             soft_lock_key = f"booking:softlock:{booking.id}"
@@ -474,6 +490,8 @@ class BookingService:
                 "status": booking.status.value
                 if hasattr(booking.status, "value")
                 else booking.status,
+                "number_of_adults": booking.number_of_adults,
+                "number_of_children": booking.number_of_children,
                 "check_in": booking.checkin_date,
                 "check_out": booking.checkout_date,
                 "nights": nights,
@@ -489,6 +507,9 @@ class BookingService:
                     "city": property_obj.city,
                     "country": property_obj.country,
                     "currency": property_obj.currency or "USD",
+                    "photo":property_obj.photos.get("cover") if property_obj.photos else None,
+                    "phone_number":property_obj.phone_number,
+                    "email":property_obj.email,
                 }
                 if property_obj
                 else None,
@@ -517,8 +538,30 @@ class BookingService:
             bookings, total = await self.booking_repo.get_bookings_by_guest(
                 guest_id, skip, limit
             )
+            
+            booking_items = []
+            for b in bookings:
+                property_name = b.property.name
+                property_photo = b.property.photos.get("cover") if b.property.photos else None
+                property_currency = b.property.currency
+
+                booking_items.append({
+                    "id":b.id,
+                    "property_id":b.property_id,
+                    "property_name":property_name,
+                    "property_photo":property_photo,
+                    "ref_number":b.ref_number,
+                    "status":b.status.value if hasattr(b.status, "value") else b.status,
+                    "number_of_adults":b.number_of_adults,
+                    "number_of_children":b.number_of_children,
+                    "checkin_date":b.checkin_date,
+                    "checkout_date":b.checkout_date,
+                    "total_amount":float(b.total_amount),
+                    "currency":property_currency,
+                    "created_at":b.created_at,
+                })
             return {
-                "bookings": bookings,
+                "bookings": booking_items,
                 "total": total,
             }
         except RepositoryException:
@@ -598,6 +641,9 @@ class BookingService:
                             "base_rate": float(r.base_rate),
                             "nights": nights,
                             "subtotal": room_subtotal,
+                            "photo": r.photos.get("cover") if r.photos else None,
+                            "cancellation_title": r.cancellation_title,
+                            "cancellation_description": r.cancellation_description,
                         }
                     )
 
@@ -616,6 +662,8 @@ class BookingService:
                 "status": updated.status.value
                 if hasattr(updated.status, "value")
                 else updated.status,
+                "number_of_adults": booking.number_of_adults,
+                "number_of_children": booking.number_of_children,
                 "check_in": updated.checkin_date,
                 "check_out": updated.checkout_date,
                 "nights": nights,
@@ -631,6 +679,11 @@ class BookingService:
                     "city": property_obj.city,
                     "country": property_obj.country,
                     "currency": property_obj.currency or "USD",
+                    "photo": property_obj.photos.get("cover")
+                    if property_obj.photos
+                    else None,
+                    "phone_number": property_obj.phone_number,
+                    "email": property_obj.email,
                 }
                 if property_obj
                 else None,

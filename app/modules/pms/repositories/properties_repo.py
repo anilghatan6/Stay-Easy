@@ -50,6 +50,47 @@ class PropertyRepository:
             logger.error(f"[PropertyRepository] Error getting property by id: {str(e)}")
             raise RepositoryException(internal_detail=str(e))
 
+    async def get_property_with_rooms(
+        self, property_id: uuid.UUID, tenant_id: uuid.UUID
+    ) -> Property | None:
+        logger.info(f"[PropertyRepository] Getting property with rooms by id: {property_id}")
+        try:
+            stmt = (
+                select(Property)
+                .where(
+                    Property.id == property_id,
+                    Property.tenant_id == tenant_id,
+                )
+                .options(selectinload(Property.rooms))
+            )
+            result = await self.db.execute(stmt)
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"[PropertyRepository] Error getting property with rooms: {str(e)}")
+            raise RepositoryException(internal_detail=str(e))
+
+    async def update_property(
+        self, property_id: uuid.UUID, tenant_id: uuid.UUID, update_data: dict
+    ) -> Property:
+        logger.info(f"[PropertyRepository] Updating property: {property_id}")
+        try:
+            property_obj = await self.get_property_by_id(property_id, tenant_id)
+            if not property_obj:
+                raise PropertyNotFoundException("Property not found or access denied")
+
+            for field, value in update_data.items():
+                setattr(property_obj, field, value)
+
+            await self.db.commit()
+            await self.db.refresh(property_obj)
+            return property_obj
+        except PropertyNotFoundException:
+            raise
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"[PropertyRepository] Error updating property: {str(e)}")
+            raise RepositoryException(internal_detail=str(e))
+
     async def get_by_id(self, property_id: uuid.UUID) -> Property | None:
         logger.info(f"[PropertyRepository] Getting specific property by id: {property_id}")
         try:

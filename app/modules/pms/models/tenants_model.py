@@ -48,13 +48,16 @@ class Tenant(Base):
     )
 
     # 2. All the users (Admins, Managers, Receptionists) who work in this workspace
-    staff_members: Mapped[List["User"]] = relationship(
-        "User",
-        foreign_keys="[User.tenant_id]",
-        back_populates="workspace",
-        cascade="all, delete-orphan",
+    # staff_members: Mapped[List["User"]] = relationship(
+    #     "User",
+    #     foreign_keys="[User.tenant_id]",
+    #     back_populates="workspace",
+    #     cascade="all, delete-orphan",
+    # )
+    staffs: Mapped[List["Staff"]] = relationship(
+        "Staff", back_populates="tenant", cascade="all, delete-orphan"
     )
-
+    
     properties: Mapped[List["Property"]] = relationship(
         "Property", back_populates="tenant", cascade="all, delete-orphan"
     )

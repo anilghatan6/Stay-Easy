@@ -20,7 +20,7 @@ from typing import Optional, List,Dict,Any
 from enum import StrEnum
 
 from app.utils.timestamp import TimestampMixin
-from app.modules.pms.models.nested_mutable import NestedMutable
+from app.utils.nested_mutable import NestedMutable
 from .properties_model import Property, Amenity
 class RoomStatus(StrEnum):
     AVAILABLE = "AVAILABLE"

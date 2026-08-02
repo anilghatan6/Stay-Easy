@@ -18,7 +18,8 @@ from app.modules.pms.schemas.properties_schemas import (
     TenantPropertiesListResponse,
     SystemAmenitiesListResponse,
     PropertyResponse,
-    PropertyBookingsResponse
+    PropertyBookingsResponse,
+    UpdatePropertyInfo,
 )
 from app.modules.pms.services.properties_scervices import PropertyService
 from app.utils.schemas import StandardResponse
@@ -94,6 +95,21 @@ async def get_property_by_id(
     response = await property_service.get_property_by_id(property_id, tenant_id)
     return {"success": True, "data": response}
 
+@router.patch(
+    "/{property_id}",
+    status_code=status.HTTP_200_OK,
+    response_model=StandardResponse[PropertyResponse],
+)
+async def update_property_by_id(
+    property_id: uuid.UUID,
+    current_user: CurrentUser,
+    payload: UpdatePropertyInfo,
+    property_service: PropertyService = Depends(get_property_service),
+):
+    verify_tenant(current_user)
+    tenant_id = current_user.tenant_id
+    response = await property_service.update_property_by_id(property_id, tenant_id, payload)
+    return {"success": True, "data": response}
 
 @router.delete(
     "/{property_id}",

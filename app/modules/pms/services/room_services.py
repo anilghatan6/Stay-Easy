@@ -288,8 +288,24 @@ class RoomService:
         logger.info(f"[RoomService] Deleting room {room_id} for property {property_id}")
         try:
             await self._validate_property(property_id, tenant_id)
+
+            # Fetch room first to capture photo URLs before the row is gone
+            room = await self.room_repo.get_room(room_id)
+            if not room:
+                raise RoomNotFoundException("Room not found")
+
+            photos: dict = room.photos or {}
+            photo_urls: list[str] = []
+            if photos.get("cover"):
+                photo_urls.append(photos["cover"])
+            photo_urls.extend(photos.get("gallery") or [])
+
             await self.room_repo.delete_room(room_id)
             logger.info(f"[RoomService] Room {room_id} deleted successfully")
+
+            # Best-effort Cloudinary cleanup (non-fatal)
+            await self.image_service.delete_images_by_urls(photo_urls)
+
             return {"message": "Room deleted successfully"}
         except (PropertyNotFoundException, UnauthorizedException, RepositoryException, RoomNotFoundException):
             raise
