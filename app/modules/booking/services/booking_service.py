@@ -250,6 +250,7 @@ class BookingService:
                 "coupon_code": booking.coupon_code,
                 "coupon_discount": float(booking.coupon_discount),
                 "soft_lock_expires_at": soft_lock_expires_at,
+                "created_at":booking.created_at
             }
 
             await self.idempotency_repo.save_result(idempotency_key, response)
@@ -520,6 +521,7 @@ class BookingService:
                 "coupon_code": booking.coupon_code,
                 "coupon_discount": float(booking.coupon_discount),
                 "soft_lock_expires_at": soft_lock_expires_at,
+                "created_at":booking.created_at,
             }
         except RepositoryException:
             raise
@@ -694,6 +696,7 @@ class BookingService:
                 "coupon_code": updated.coupon_code,
                 "coupon_discount": float(updated.coupon_discount),
                 "soft_lock_expires_at": soft_lock_expires_at,
+                "created_at":updated.created_at,
             }
         except (BookingException, RepositoryException):
             raise

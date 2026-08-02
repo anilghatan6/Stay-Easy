@@ -108,6 +108,8 @@ class BookingReservationResponse(BaseModel):
     coupon_code: Optional[str] = None
     coupon_discount: float = 0.0
     soft_lock_expires_at: datetime
+    created_at: datetime
+    
 
 
 class BookingListItemResponse(BaseModel):

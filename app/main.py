@@ -36,8 +36,8 @@ logger = LoggerFactory.get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # async with engine.begin() as conn:
+        # await conn.run_sync(Base.metadata.create_all)
 
     stop_event = asyncio.Event()
     expiry_task = asyncio.create_task(_expire_stale_bookings_loop(stop_event))
