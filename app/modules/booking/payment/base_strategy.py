@@ -1,6 +1,7 @@
 
 from abc import ABC, abstractmethod
 from decimal import Decimal
+from typing import Optional
 
 
 class PaymentStrategy(ABC):
@@ -11,7 +12,7 @@ class PaymentStrategy(ABC):
     """
 
     @abstractmethod
-    async def create_payment_intent(self, ref_number: str, amount: Decimal, currency: str) -> dict:
+    async def create_payment_intent(self, ref_number: str, amount: Decimal, currency: str,return_url: Optional[str] = None) -> dict:
         """Create a payment intent with the given details"""
         pass
     

@@ -31,6 +31,7 @@ class PaymentGateway(StrEnum):
     STRIPE = "STRIPE"
     RAZORPAY = "RAZORPAY"
     DUMMY = "DUMMY"
+    KHALTI = "KHALTI"
 
 class Booking(Base, TimestampMixin):
     """The parent record enforcing that a checkout belongs to exactly one property."""

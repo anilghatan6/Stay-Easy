@@ -5,6 +5,7 @@ import asyncio
 import os
 from datetime import date, datetime, timezone, timedelta
 from decimal import Decimal
+from typing import Optional
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,10 +30,12 @@ from app.utils.exceptions import (
     UnsupportedGatewayError,
     PaymentGatewayError,
     ServiceBusyError,
+    UrlValidationException
 )
 from app.modules.booking.models.booking_model import PaymentGateway as PGEnum
 
 from app.utils.logging import LoggerFactory
+from app.utils.url_validation import validate_khalti_return_url
 
 load_dotenv()
 
@@ -366,6 +369,7 @@ class BookingService:
         self,
         ref_number: str,
         payment_gateway: str,
+        return_url: Optional[str] = None,
     ) -> dict:
         try:
             try:
@@ -393,6 +397,14 @@ class BookingService:
                     f"Booking is in status {booking.status}, cannot proceed to payment"
                 )
 
+            if payment_gateway.upper() == "KHALTI":
+                if not return_url:
+                    raise UrlValidationException("Return url is required for Khalti payments")
+                try:
+                    return_url = validate_khalti_return_url(return_url)
+                except ValueError as e:
+                    raise UrlValidationException(str(e))
+
             updated_booking = await self.booking_repo.set_payment_gateway(
                 ref_number, payment_gateway
             )
@@ -411,6 +423,7 @@ class BookingService:
                 ref_number=ref_number,
                 amount=updated_booking.total_amount,
                 currency=currency,
+                return_url=return_url,
             )
 
             return {
@@ -426,6 +439,7 @@ class BookingService:
             PaymentGatewayError,
             ServiceException,
             BookingException,
+            UrlValidationException
         ):
             await self.db.rollback()
             raise

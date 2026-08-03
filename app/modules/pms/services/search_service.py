@@ -16,7 +16,7 @@ import redis.asyncio as aioredis
 
 logger = LoggerFactory.get_logger(__name__)
 
-SEARCH_CACHEABLE_DESTINATIONS={"pokhara","kathmandu","nagarkot"}
+SEARCH_CACHEABLE_DESTINATIONS={"pokhara","kathmandu"}
 SEARCH_CACHE_TTL_SECONDS=600
 
 class SearchService:

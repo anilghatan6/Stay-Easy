@@ -4,6 +4,7 @@ from app.modules.booking.payment.base_strategy import PaymentStrategy
 from app.utils.exceptions import PaymentGatewayError
 from app.utils.logging import LoggerFactory
 from dotenv import load_dotenv
+from typing import Optional
 
 load_dotenv()
 logger = LoggerFactory.get_logger(__name__)
@@ -14,7 +15,7 @@ class RazorpayPaymentStrategy(PaymentStrategy):
         self.client = razorpay.Client(auth=(key_id, key_secret))
 
     async def create_payment_intent(
-        self, ref_number: str, amount: Decimal, currency: str
+        self, ref_number: str, amount: Decimal, currency: str,return_url: Optional[str] = None
     ) -> dict:
         logger.info(f"[RazorpayStrategy] Creating order for {ref_number}")
         try:

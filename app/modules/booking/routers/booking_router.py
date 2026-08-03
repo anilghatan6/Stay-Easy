@@ -63,6 +63,7 @@ async def create_payment_intent(
     result = await booking_service.create_payment_intent(
         ref_number=ref_number,
         payment_gateway=body.payment_gateway,
+        return_url=body.return_url
     )
     return StandardResponse(data=PaymentIntentResponse(**result))
 

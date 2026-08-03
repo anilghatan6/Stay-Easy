@@ -2,6 +2,7 @@ from decimal import Decimal
 from app.modules.booking.payment.factory import PaymentServiceFactory
 from app.utils.exceptions import PaymentGatewayError, UnsupportedGatewayError, ServiceException
 from app.utils.logging import LoggerFactory
+from typing import Optional
 
 logger = LoggerFactory.get_logger(__name__)
 
@@ -9,10 +10,10 @@ class PaymentService:
     def __init__(self, factory: PaymentServiceFactory):
         self.factory = factory
 
-    async def create_intent(self, gateway: str, ref_number: str, amount: Decimal, currency: str) -> dict:
+    async def create_intent(self, gateway: str, ref_number: str, amount: Decimal, currency: str, return_url: Optional[str] = None) -> dict:
         try:
             strategy = self.factory.get_strategy(gateway)
-            return await strategy.create_payment_intent(ref_number, amount, currency)
+            return await strategy.create_payment_intent(ref_number, amount, currency, return_url)
     
         except (UnsupportedGatewayError,PaymentGatewayError):
             raise

@@ -3,6 +3,7 @@ from decimal import Decimal
 from app.modules.booking.payment.base_strategy import PaymentStrategy
 from app.utils.exceptions import PaymentGatewayError
 from app.utils.logging import LoggerFactory
+from typing import Optional
 
 logger = LoggerFactory.get_logger(__name__)
 
@@ -14,7 +15,7 @@ class StripePaymentStrategy(PaymentStrategy):
         logger.info(f"[StripeStrategy] API key: {api_key}")
         stripe.api_key = api_key
 
-    async def create_payment_intent(self, ref_number: str, amount: Decimal, currency: str) -> dict:
+    async def create_payment_intent(self, ref_number: str, amount: Decimal, currency: str,return_url: Optional[str] = None) -> dict:
         logger.info(f"[StripeStrategy] Creating payment intent for {ref_number}")
         try:
             intent = stripe.PaymentIntent.create(

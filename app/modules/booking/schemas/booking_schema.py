@@ -22,6 +22,7 @@ class ApplyDiscountRequest(BaseModel):
 
 class PaymentIntentRequest(BaseModel):
     payment_gateway: str = Field(..., max_length=20)
+    return_url: Optional[str] = Field(None, max_length=255)
 
     @field_validator("payment_gateway", mode="before")
     @classmethod
@@ -37,6 +38,7 @@ class PaymentIntentResponse(BaseModel):
     payment_intent_id: Optional[str] = None
     client_secret: Optional[str] = None
     order_id: Optional[str] = None
+    payment_url:Optional[str]=None
 
 
 class ConfirmPaymentRequest(BaseModel):
@@ -47,7 +49,8 @@ class ConfirmPaymentRequest(BaseModel):
             "Gateway-specific verification data from the frontend:\n"
             "- DUMMY: {} (ignored)\n"
             '- STRIPE: {"payment_intent_id": "pi_..."}\n'
-            '- RAZORPAY: {"order_id": "...", "payment_id": "...", "signature": "..."}'
+            '- RAZORPAY: {"order_id": "...", "payment_id": "...", "signature": "..."}\n'
+            '- KHALTI: {"pidx": "..."} or {"payment_intent_id": "..."}'
         ),
     )
 

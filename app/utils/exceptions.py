@@ -375,3 +375,9 @@ class StaffNotFound(AppBaseException):
         super().__init__(
             user_message=user_message, internal_detail=user_message, status_code=404
         )
+
+class UrlValidationException(AppBaseException):
+    def __init__(self,user_message:str):
+        super().__init__(
+            user_message=user_message,internal_detail=user_message,status_code=400
+        )
