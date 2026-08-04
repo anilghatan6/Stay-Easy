@@ -165,10 +165,9 @@ class PasswordResetService:
             )
             raise ServiceException("Could not reset password. Please try again.")
 
-    def _verify_password(self, plain_password: str, hashed_password: str):
+    async def _verify_password(self, account: User | Guest, plain_password: str):
         try:
-            # Securely verify using passlib/bcrypt via your auth service utility
-            if not self.auth_service.verify_password(plain_password, hashed_password):
+            if not self.auth_service.verify_password(plain_password, account.hashed_password):
                 raise InvalidPasswordException("Current Password is incorrect")
             return True
 
@@ -184,7 +183,7 @@ class PasswordResetService:
         self, account: User | Guest, current_password: str, new_password: str, role: str
     ) -> None:
         try:
-            await self._verify_password(current_password, account.hashed_password)
+            await self._verify_password(account,current_password)
             hashed_new_password = self.auth_service.get_password_hash(new_password)
             if role == "guest":
                 await self.password_reset_repo.update_guest_password(
