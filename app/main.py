@@ -3,14 +3,16 @@ from dotenv import load_dotenv
 import asyncio
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
-from app.config.database_config import Base, engine
+from fastapi import FastAPI, Request, Depends
+from app.config.database_config import engine
 
 from app.modules.auth.models import *
 from app.modules.auth.routers.guests_router import router as guest_router
 from app.modules.auth.routers.users_router import router as user_router
 from app.modules.auth.routers.login_router import router as login_router
-from app.modules.auth.routers.password_reset_router import router as password_reset_router
+from app.modules.auth.routers.password_reset_router import (
+    router as password_reset_router,
+)
 from app.modules.pms.models import *
 from app.modules.pms.routers.properties_routers import router as property_router
 from app.modules.pms.routers.room_routers import router as room_router
@@ -29,7 +31,12 @@ from app.modules.staff_mgmt.routers.staffs_router import router as staff_router
 from app.utils.cors import configure_cors
 from app.utils.exception_handlers import register_exception_handlers
 from app.utils.expiry_loop import _expire_stale_bookings_loop
+from app.config.redis_config import redis_pool
+import redis.asyncio as aioredis
+from app.middlewares.rate_limiter import RateLimiter
+
 from app.utils.logging import LoggerFactory
+
 load_dotenv()
 
 logger = LoggerFactory.get_logger(__name__)
@@ -38,7 +45,8 @@ logger = LoggerFactory.get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # async with engine.begin() as conn:
-        # await conn.run_sync(Base.metadata.create_all)
+    # await conn.run_sync(Base.metadata.create_all)
+    app.state.redis_client = aioredis.Redis(connection_pool=redis_pool)
 
     stop_event = asyncio.Event()
     expiry_task = asyncio.create_task(_expire_stale_bookings_loop(stop_event))
@@ -47,6 +55,8 @@ async def lifespan(app: FastAPI):
 
     stop_event.set()
     await expiry_task
+    await app.state.redis_client.close()
+    await redis_pool.disconnect()
     await engine.dispose()
 
 
@@ -74,12 +84,30 @@ app.include_router(search_router)
 app.include_router(booking_router)
 
 
-@app.get("/")
+@app.get(
+    "/",
+    dependencies=[
+        Depends(RateLimiter(max_requests=5, window_seconds=60, scope="public_root"))
+    ],
+)
 async def root():
     return {"message": "Welcome to the Easy Booking System API"}
 
 
-@app.get("/health")
+@app.get(
+    "/health",
+    dependencies=[
+        Depends(RateLimiter(max_requests=5, window_seconds=60, scope="public_health"))
+    ],
+)
 async def health_check():
     return {"status": "ok"}
 
+
+@app.get("/redis/health", include_in_schema=False)
+async def redis_health(request: Request):
+    try:
+        pong = await request.app.state.redis_client.ping()
+        return {"redis": "ok" if pong else "unreachable"}
+    except Exception as e:
+        return {"redis": "error", "detail": str(e)}

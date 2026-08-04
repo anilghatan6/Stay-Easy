@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, status
 from app.modules.auth.services.guests_services import GuestService
 from app.modules.auth.dependencies import get_guest_service
 from app.modules.auth.schemas.guests_schema import GuestCreate, GuestResponse
+
 # from fastapi.security import OAuth2PasswordRequestForm
 from typing import Annotated
 from app.modules.auth.schemas.token_schema import (
@@ -12,11 +13,18 @@ from app.modules.auth.schemas.token_schema import (
     AccessTokenResponse,
 )
 from app.modules.auth.auth_middlewares import CurrentGuest
+from app.middlewares.rate_limiter import RateLimiter
 
 router = APIRouter(prefix="/auth/guests", tags=["guests"])
 
 
-@router.post("/register", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[
+        Depends(RateLimiter(max_requests=5, window_seconds=60, scope="guests_register"))
+    ],
+)
 async def register_guest(
     guest: GuestCreate,
     guest_service: Annotated[GuestService, Depends(get_guest_service)],
@@ -29,7 +37,15 @@ async def register_guest(
     }
 
 
-@router.post("/verify-otp", status_code=status.HTTP_200_OK)
+@router.post(
+    "/verify-otp",
+    status_code=status.HTTP_200_OK,
+    dependencies=[
+        Depends(
+            RateLimiter(max_requests=5, window_seconds=60, scope="guests_verify_otp")
+        )
+    ],
+)
 async def verify_otp(
     otp: VerifyOTP,
     guest_service: Annotated[GuestService, Depends(get_guest_service)],
@@ -37,7 +53,15 @@ async def verify_otp(
     return await guest_service.verify_registration_otp(otp.email, otp.otp)
 
 
-@router.post("/resend-otp", status_code=status.HTTP_200_OK)
+@router.post(
+    "/resend-otp",
+    status_code=status.HTTP_200_OK,
+    dependencies=[
+        Depends(
+            RateLimiter(max_requests=5, window_seconds=60, scope="guests_resend_otp")
+        )
+    ],
+)
 async def resend_otp(
     resend_data: ResendOTP,
     guest_service: Annotated[GuestService, Depends(get_guest_service)],
@@ -55,7 +79,14 @@ async def resend_otp(
 #     return await guest_service.login_guest(guest_dict)
 
 
-@router.post("/refresh", response_model=AccessTokenResponse, status_code=status.HTTP_200_OK)
+@router.post(
+    "/refresh",
+    response_model=AccessTokenResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[
+        Depends(RateLimiter(max_requests=10, window_seconds=60, scope="guests_refresh"))
+    ],
+)
 async def refresh_token(
     refresh_token: RefreshTokenRequest,
     guest_service: Annotated[GuestService, Depends(get_guest_service)],
@@ -63,7 +94,14 @@ async def refresh_token(
     return await guest_service.refresh_token(refresh_token.refresh_token)
 
 
-@router.get("/me", response_model=GuestResponse, status_code=status.HTTP_200_OK)
+@router.get(
+    "/me",
+    response_model=GuestResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[
+        Depends(RateLimiter(max_requests=100, window_seconds=60, scope="guests_me"))
+    ],
+)
 async def get_current_guest(
     guest: CurrentGuest,
 ):

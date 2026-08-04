@@ -6,11 +6,11 @@ from app.modules.auth.schemas.token_schema import Token
 from fastapi.security import OAuth2PasswordRequestForm
 from typing import Annotated
 from app.utils.exceptions import UserNotFoundException, AccountInactiveException
-
+from app.middlewares.rate_limiter import RateLimiter
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/login", response_model=Token, status_code=status.HTTP_200_OK)
+@router.post("/login", response_model=Token, status_code=status.HTTP_200_OK, dependencies=[Depends(RateLimiter(max_requests=10, window_seconds=60, scope="auth_login"))])
 async def login(
     credentials: Annotated[OAuth2PasswordRequestForm, Depends()],
     guest_service: GuestService = Depends(get_guest_service),

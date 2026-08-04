@@ -7,7 +7,7 @@ from app.modules.auth.schemas.password_reset_schema import (
 )
 from app.modules.auth.dependencies import get_password_reset_service
 from app.modules.auth.auth_middlewares import CurrentGuest, CurrentUser
-
+from app.middlewares.rate_limiter import RateLimiter
 from app.utils.schemas import StandardResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -17,6 +17,11 @@ router = APIRouter(prefix="/auth", tags=["auth"])
     "/forgot-password",
     response_model=StandardResponse,
     status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[
+        Depends(
+            RateLimiter(max_requests=5, window_seconds=60, scope="auth_forgot_password")
+        )
+    ],
 )
 async def forgot_password(
     payload: ForgotPasswordRequest,
@@ -36,6 +41,11 @@ async def forgot_password(
     "/reset-password",
     response_model=StandardResponse,
     status_code=status.HTTP_200_OK,
+    dependencies=[
+        Depends(
+            RateLimiter(max_requests=5, window_seconds=60, scope="auth_reset_password")
+        )
+    ],
 )
 async def reset_password(
     payload: ResetPasswordRequest,
@@ -52,6 +62,11 @@ async def reset_password(
     "/guest/change-password",
     response_model=StandardResponse,
     status_code=status.HTTP_200_OK,
+    dependencies=[
+        Depends(
+            RateLimiter(max_requests=5, window_seconds=60, scope="auth_change_password")
+        )
+    ],
 )
 async def change_guest_password(
     payload: ChangePasswordRequest,
@@ -71,6 +86,11 @@ async def change_guest_password(
     "/user/change-password",
     response_model=StandardResponse,
     status_code=status.HTTP_200_OK,
+    dependencies=[
+        Depends(
+            RateLimiter(max_requests=5, window_seconds=60, scope="auth_change_password")
+        )
+    ],
 )
 async def change_user_password(
     payload: ChangePasswordRequest,

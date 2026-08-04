@@ -10,13 +10,14 @@ from app.modules.auth.schemas.token_schema import (
 from app.modules.auth.services.users_services import UserService
 from app.modules.auth.dependencies import get_user_service
 from app.modules.auth.auth_middlewares import CurrentUser
+from app.middlewares.rate_limiter import RateLimiter
 # from fastapi.security import OAuth2PasswordRequestForm
 # from typing import Annotated
 
 router = APIRouter(prefix="/auth/users", tags=["Users"])
 
 
-@router.post("/register", status_code=status.HTTP_201_CREATED)
+@router.post("/register", status_code=status.HTTP_201_CREATED,dependencies=[Depends(RateLimiter(max_requests=5, window_seconds=60,scope="users:register"))])
 async def register_user(
     user_create: UserCreate,
     user_service: UserService = Depends(get_user_service),
@@ -29,7 +30,7 @@ async def register_user(
     }
 
 
-@router.post("/verify-otp", status_code=status.HTTP_200_OK)
+@router.post("/verify-otp", status_code=status.HTTP_200_OK,dependencies=[Depends(RateLimiter(max_requests=5, window_seconds=60,scope="users:verify-otp"))])
 async def verify_otp(
     verify_data: VerifyOTP,
     user_service: UserService = Depends(get_user_service),
@@ -39,7 +40,7 @@ async def verify_otp(
     )
 
 
-@router.post("/resend-otp", status_code=status.HTTP_200_OK)
+@router.post("/resend-otp", status_code=status.HTTP_200_OK,dependencies=[Depends(RateLimiter(max_requests=5, window_seconds=60,scope="users:resend-otp"))])
 async def resend_otp(
     resend_data: ResendOTP,
     user_service: UserService = Depends(get_user_service),
@@ -60,7 +61,7 @@ async def resend_otp(
 #     return await user_service.login_user(user_info)
 
 
-@router.post("/refresh", response_model=AccessTokenResponse, status_code=status.HTTP_200_OK)
+@router.post("/refresh", response_model=AccessTokenResponse, status_code=status.HTTP_200_OK,dependencies=[Depends(RateLimiter(max_requests=5, window_seconds=60, scope="users:refresh"))])
 async def refresh_token(
     refresh_token: RefreshTokenRequest,
     user_service: UserService = Depends(get_user_service),
@@ -68,6 +69,6 @@ async def refresh_token(
     return await user_service.refresh_token(refresh_token.refresh_token)
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get("/me", response_model=UserResponse,dependencies=[Depends(RateLimiter(max_requests=100, window_seconds=60,scope="users:me"))])
 async def get_current_user(current_user: CurrentUser) -> UserResponse:
     return current_user
