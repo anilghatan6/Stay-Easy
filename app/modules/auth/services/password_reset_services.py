@@ -1,6 +1,5 @@
 import hashlib
 import secrets
-import uuid
 from datetime import datetime, timedelta, UTC
 from app.modules.auth.repositories.password_reset_repository import (
     PasswordResetRepository,
@@ -19,7 +18,6 @@ from app.utils.exceptions import (
 )
 from app.modules.auth.models import Guest, User
 from app.utils.logging import LoggerFactory
-# from pwdlib import PasswordHash
 
 import os
 
@@ -32,12 +30,6 @@ def generate_reset_token() -> str:
 
 def hash_reset_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
-
-
-# def get_hash_password(password: str) -> str:
-#     password_hash = PasswordHash.recommended()
-#     return password_hash.hash(password)
-
 
 class PasswordResetService:
     def __init__(
