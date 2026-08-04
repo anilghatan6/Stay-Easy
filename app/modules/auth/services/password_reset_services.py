@@ -173,28 +173,18 @@ class PasswordResetService:
             )
             raise ServiceException("Could not reset password. Please try again.")
 
-    async def _verify_password(
-        self, id: uuid.UUID, current_password: str, hashed_password: str, role: str
-    ):
+    def _verify_password(self, plain_password: str, hashed_password: str):
         try:
-            if role == "guest":
-                guest = await self.guest_repo.get_guest_by_id(id)
-                if current_password == guest.hashed_password:
-                    return True
-                else:
-                    raise InvalidPasswordException("Current Password is incorrect")
-            elif role == "user":
-                user = await self.user_repo.get_user_by_id(id)
-                if current_password == user.hashed_password:
-                    return True
-                else:
-                    raise InvalidPasswordException("Current Password is incorrect")
+            # Securely verify using passlib/bcrypt via your auth service utility
+            if not self.auth_service.verify_password(plain_password, hashed_password):
+                raise InvalidPasswordException("Current Password is incorrect")
+            return True
 
-        except (InvalidPasswordException, RepositoryException):
+        except InvalidPasswordException:
             raise
         except Exception as e:
             logger.error(
-                f"[PasswordResetService] Unexpected error verifying password: {e}"
+                f"[PasswordResetService] Unexpected error hashing verification match: {e}"
             )
             raise ServiceException("Could not verify password. Please try again.")
 
@@ -202,10 +192,7 @@ class PasswordResetService:
         self, account: User | Guest, current_password: str, new_password: str, role: str
     ) -> None:
         try:
-            if not self._verify_password(
-                account.id, current_password, account.hashed_password, role
-            ):
-                raise InvalidPasswordException("Current Password is incorrect")
+            await self._verify_password(current_password, account.hashed_password)
             hashed_new_password = self.auth_service.get_password_hash(new_password)
             if role == "guest":
                 await self.password_reset_repo.update_guest_password(
