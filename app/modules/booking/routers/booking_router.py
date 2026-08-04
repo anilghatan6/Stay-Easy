@@ -63,7 +63,8 @@ async def create_payment_intent(
     result = await booking_service.create_payment_intent(
         ref_number=ref_number,
         payment_gateway=body.payment_gateway,
-        return_url=body.return_url
+        return_url=body.return_url,
+        guest_id=guest.id,
     )
     return StandardResponse(data=PaymentIntentResponse(**result))
 
@@ -79,6 +80,7 @@ async def confirm_payment(
         idempotency_key=body.idempotency_key,
         ref_number=ref_number,
         gateway_payload=body.gateway_payload,
+        guest_id=guest.id,
     )
     payment_data = ConfirmPaymentResponse(**result)
     filtered_data = payment_data.model_dump(exclude_none=True)

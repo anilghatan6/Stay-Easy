@@ -122,7 +122,10 @@ class PasswordResetService:
             if reset_token is None:
                 raise InvalidResetTokenException("Invalid or expired reset token")
 
-            if reset_token.expires_at < datetime.now(UTC):
+            expires_at = reset_token.expires_at
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=UTC)
+            if expires_at < datetime.now(UTC):
                 await self.password_reset_repo.delete_token(reset_token)
                 await self.db.commit()
                 raise InvalidResetTokenException("Invalid or expired reset token")

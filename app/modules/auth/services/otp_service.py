@@ -79,16 +79,6 @@ class OTPService:
         """
         Verifies the OTP.
         """
-        is_dev = os.getenv("ENVIRONMENT") == "development"
-        master_otp = os.getenv("DEVELOPMENT_MASTER_OTP", "123456")
-
-        if is_dev and otp_code == master_otp:
-            logger.info(f"[OTPService][DEV MODE] Master OTP used successfully for {email}")
-            # Optionally delete the real OTP from Redis if it exists
-            await self.delete_otp(email)
-            return True
-
-    # 2. Standard production validation logic
         try:
             stored_otp = await self.get_otp(email)
             if not stored_otp:

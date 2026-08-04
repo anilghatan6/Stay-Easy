@@ -279,6 +279,7 @@ class BookingService:
         idempotency_key: str,
         ref_number: str,
         gateway_payload: dict,
+        guest_id: uuid.UUID,
     ) -> dict:
         reserved = await self.idempotency_repo.try_reserve(idempotency_key)
 
@@ -296,6 +297,12 @@ class BookingService:
             booking = await self.booking_repo.get_by_ref(ref_number)
 
             if booking is None:
+                response = {"status": "NOT_FOUND", "message": "Booking not found"}
+                await self.idempotency_repo.save_result(idempotency_key, response)
+                return response
+
+            if booking.guest_id != guest_id:
+                await self.idempotency_repo.release(idempotency_key)
                 response = {"status": "NOT_FOUND", "message": "Booking not found"}
                 await self.idempotency_repo.save_result(idempotency_key, response)
                 return response
@@ -370,6 +377,7 @@ class BookingService:
         ref_number: str,
         payment_gateway: str,
         return_url: Optional[str] = None,
+        guest_id: Optional[uuid.UUID] = None,
     ) -> dict:
         try:
             try:
@@ -382,6 +390,9 @@ class BookingService:
             booking = await self.booking_repo.get_by_ref(ref_number)
 
             if booking is None:
+                raise BookingException("Booking not found")
+
+            if guest_id is not None and booking.guest_id != guest_id:
                 raise BookingException("Booking not found")
 
             if booking.status == "EXPIRED":

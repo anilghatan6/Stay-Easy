@@ -14,8 +14,14 @@ async def test_khalti_init_missing_secret_key():
 
 
 @pytest.mark.asyncio
-async def test_khalti_create_payment_intent_invalid_currency():
+# Mock the internal forex call so it doesn't make live calls to NRB
+@patch("app.modules.booking.payment.khalti_strategy.convert_to_npr") 
+async def test_khalti_create_payment_intent_invalid_currency(mock_convert_forex):
     strategy = KhaltiPaymentStrategy(secret_key="test_secret", website_url="https://example.com")
+    
+    # Simulate that the conversion utility throws an error for unsupported currencies
+    mock_convert_forex.side_effect = PaymentGatewayError("Currency 'USD' is not supported by NRB FOREX API.")
+
     with pytest.raises(PaymentGatewayError) as exc:
         await strategy.create_payment_intent(
             ref_number="BK-1234",
@@ -23,8 +29,9 @@ async def test_khalti_create_payment_intent_invalid_currency():
             currency="USD",
             return_url="https://example.com/return"
         )
-    assert "Khalti only supports NPR" in str(exc.value)
-
+    
+    # Assert that the error from the forex conversion bubbles up cleanly
+    assert "not supported by NRB FOREX API" in str(exc.value)
 
 @pytest.mark.asyncio
 async def test_khalti_create_payment_intent_success():
