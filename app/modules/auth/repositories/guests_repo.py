@@ -83,7 +83,7 @@ class GuestRepository:
                     full_name=guest.full_name,
                     phone=guest.phone,
                     nationality=guest.nationality,
-                    password_hash=guest.hashed_password,
+                    hashed_password=guest.hashed_password,
                     is_active=guest.is_active,
                 )
             )
