@@ -39,3 +39,6 @@ class User(Base):
     owned_tenants: Mapped[List["Tenant"]] = relationship(
         "Tenant", foreign_keys="[Tenant.owner_id]", back_populates="owner"
     )
+    reset_tokens: Mapped[list["PasswordResetToken"]] = relationship(
+        "PasswordResetToken", back_populates="user", cascade="all, delete-orphan"
+    )

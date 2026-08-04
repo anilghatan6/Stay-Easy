@@ -27,7 +27,6 @@ class GuestRepository:
             logger.error(f"[GuestRepository] Error creating guest: {str(e)}")
             await self.session.rollback()
             raise RepositoryException(
-                user_message="Guest already exists",
                 internal_detail=f"Integrity error: {str(e)}",
                 status_code=409,
             )
@@ -59,8 +58,12 @@ class GuestRepository:
     async def get_guest_by_id(self, guest_id: str) -> Guest | None:
         logger.info("[GuestRepository] Getting guest by ID")
         try:
+            if isinstance(guest_id, str):
+                parsed_id = uuid.UUID(guest_id)
+            else:
+                parsed_id = guest_id
             result = await self.session.execute(
-                select(Guest).where(Guest.id == uuid.UUID(guest_id))
+                select(Guest).where(Guest.id == parsed_id)
             )
             guest = result.scalar_one_or_none()
             return guest
@@ -80,7 +83,7 @@ class GuestRepository:
                     full_name=guest.full_name,
                     phone=guest.phone,
                     nationality=guest.nationality,
-                    password_hash=guest.password_hash,
+                    password_hash=guest.hashed_password,
                     is_active=guest.is_active,
                 )
             )

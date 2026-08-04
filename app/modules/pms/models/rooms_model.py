@@ -22,6 +22,7 @@ from enum import StrEnum
 from app.utils.timestamp import TimestampMixin
 from app.utils.nested_mutable import NestedMutable
 from .properties_model import Property, Amenity
+
 class RoomStatus(StrEnum):
     AVAILABLE = "AVAILABLE"
     BLOCKED = "BLOCKED"

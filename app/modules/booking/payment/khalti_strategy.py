@@ -62,7 +62,7 @@ class KhaltiPaymentStrategy(PaymentStrategy):
         except Exception as e:
             logger.error(f"[KhaltiStrategy] Initiate failed for {ref_number}: {e}")
             raise PaymentGatewayError(internal_detail=f"Khalti initiate failed: {e}")
-        
+    
     async def verify_payment(self, ref_number: str, gateway_payload: dict) -> bool:
         pidx = gateway_payload.get("pidx") or gateway_payload.get("payment_intent_id")
         if not pidx:

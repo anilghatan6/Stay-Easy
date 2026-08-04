@@ -27,7 +27,6 @@ class UserRepository:
             logger.error(f"[UserRepository] Error creating user: {str(e)}")
             await self.session.rollback()
             raise RepositoryException(
-                user_message="User already exists",
                 internal_detail=f"Integrity error: {str(e)}",
                 status_code=409,
             )
@@ -58,8 +57,12 @@ class UserRepository:
     async def get_user_by_id(self, user_id: str) -> User | None:
         logger.info("[UserRepository] Getting user by ID")
         try:
+            if isinstance(user_id, str):
+                parsed_id = uuid.UUID(user_id)
+            else:
+                parsed_id = user_id
             result = await self.session.execute(
-                select(User).where(User.id == uuid.UUID(user_id))
+                select(User).where(User.id == parsed_id)
             )
             user = result.scalar_one_or_none()
             return user

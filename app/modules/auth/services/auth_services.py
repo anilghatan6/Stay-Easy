@@ -64,3 +64,4 @@ class AuthService:
             return None
         else:
             return {"user_id": payload.get("sub"), "role": payload.get("role")}
+

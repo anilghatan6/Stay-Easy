@@ -1,12 +1,15 @@
 import httpx
 from app.utils.logging import LoggerFactory
 from app.utils.exceptions import ServiceException
+from fastapi.templating import Jinja2Templates
+
 from dotenv import load_dotenv
 import os
 
 load_dotenv()
 
 logger = LoggerFactory.get_logger(__name__)
+templates = Jinja2Templates(directory="app/templates")
 
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")
@@ -32,7 +35,6 @@ async def send_transactional_email(to_email: str, subject: str, html_content: st
         logger.error(f"Error creating email payload: {str(e)}")
         raise ServiceException(str(e))
     
-    # Use httpx.AsyncClient to prevent blocking the async event loop
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(url, json=payload, headers=headers)
@@ -49,18 +51,7 @@ async def send_verification_email(to_email: str, verification_code: str) -> None
     Sends a verification email to the specified email address.
     """
     logger.info("[MailService] Sending verification email")
-    is_dev = os.getenv("ENVIRONMENT") == "development"
-    
-    if is_dev:
-        # Bypasses Resend entirely and outputs the credentials directly to your terminal
-        logger.info(f"\n"
-                    f"========================================================\n"
-                    f"[MailService][DEV MODE] Intercepted outbound email\n"
-                    f"TO: {to_email}\n"
-                    f"SUBJECT: StayEasy - Verify Your Email Address\n"
-                    f"DEVELOPMENT OTP CODE: {verification_code}\n"
-                    f"========================================================")
-        return
+
     try:
         html_content = f"""
         <html>
@@ -78,4 +69,28 @@ async def send_verification_email(to_email: str, verification_code: str) -> None
         logger.error(f"Error sending verification email: {str(e)}")
         raise ServiceException(str(e))
 
-        
+
+async def send_password_reset_email(to_email: str, username: str, token: str) -> None:
+    reset_url = f"{os.getenv('FRONTEND_URL')}/reset-password?token={token}"
+
+    template = templates.env.get_template("password_reset.html")
+    html_content = template.render(reset_url=reset_url, username=username)
+
+    plain_text = f"""Hi {username},
+
+    You requested to reset your password. Click the link below to set a new password:
+
+    {reset_url}
+
+    This link will expire in {os.getenv("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES")} minutes.
+
+    If you didn't request this, you can safely ignore this email.
+
+    Best regards,
+    StayEasy Team
+    """
+    try:
+        await send_transactional_email(to_email, "StayEasy - Reset Your Password", html_content or plain_text)
+    except Exception as e:
+        logger.error(f"Error sending password reset email: {str(e)}")
+        raise ServiceException(str(e))

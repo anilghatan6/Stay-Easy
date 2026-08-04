@@ -370,14 +370,44 @@ class StaffAlreadlyExistException(AppBaseException):
             status_code=400,
         )
 
+
 class StaffNotFound(AppBaseException):
     def __init__(self, user_message: str):
         super().__init__(
             user_message=user_message, internal_detail=user_message, status_code=404
         )
 
+
 class UrlValidationException(AppBaseException):
-    def __init__(self,user_message:str):
+    def __init__(self, user_message: str):
         super().__init__(
-            user_message=user_message,internal_detail=user_message,status_code=400
+            user_message=user_message, internal_detail=user_message, status_code=400
+        )
+
+
+class EmailDeliveryError(AppBaseException):
+    def __init__(self, user_message: str, internal_detail: str = None):
+        super().__init__(
+            user_message=user_message, internal_detail=internal_detail, status_code=500
+        )
+
+
+class InvalidResetTokenException(AppBaseException):
+    def __init__(self, user_message: str):
+        super().__init__(
+            user_message=user_message, internal_detail=user_message, status_code=400
+        )
+
+
+class InvalidPasswordException(AppBaseException):
+    def __init__(self, user_message: str):
+        super().__init__(
+            user_message=user_message, internal_detail=user_message, status_code=400
+        )
+
+
+class InvalidAccountTypeException(AppBaseException):
+    def __init__(self, user_message: str):
+        super().__init__(
+            user_message=user_message, internal_detail=user_message, status_code=400
         )

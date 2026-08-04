@@ -1,6 +1,7 @@
+from dotenv import load_dotenv
+
 import asyncio
 from contextlib import asynccontextmanager
-from dotenv import load_dotenv
 
 from fastapi import FastAPI
 from app.config.database_config import Base, engine
@@ -9,6 +10,7 @@ from app.modules.auth.models import *
 from app.modules.auth.routers.guests_router import router as guest_router
 from app.modules.auth.routers.users_router import router as user_router
 from app.modules.auth.routers.login_router import router as login_router
+from app.modules.auth.routers.password_reset_router import router as password_reset_router
 from app.modules.pms.models import *
 from app.modules.pms.routers.properties_routers import router as property_router
 from app.modules.pms.routers.room_routers import router as room_router
@@ -28,7 +30,6 @@ from app.utils.cors import configure_cors
 from app.utils.exception_handlers import register_exception_handlers
 from app.utils.expiry_loop import _expire_stale_bookings_loop
 from app.utils.logging import LoggerFactory
-
 load_dotenv()
 
 logger = LoggerFactory.get_logger(__name__)
@@ -61,6 +62,7 @@ configure_cors(app)
 app.include_router(guest_router)
 app.include_router(user_router)
 app.include_router(login_router)
+app.include_router(password_reset_router)
 app.include_router(tenant_router)
 app.include_router(property_router)
 app.include_router(room_router)
@@ -80,3 +82,4 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
+

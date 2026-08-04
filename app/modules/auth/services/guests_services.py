@@ -66,7 +66,7 @@ class GuestService:
         guest.full_name = new_data["full_name"]
         guest.phone = new_data.get("phone")
         guest.nationality = new_data.get("nationality")
-        guest.password_hash = self.auth_service.get_password_hash(new_data["password"])
+        guest.hashed_password = self.auth_service.get_password_hash(new_data["password"])
 
         updated_guest = await self.guest_repository.update_guest(guest)
         await self._send_verification_otp(updated_guest.email)
@@ -75,7 +75,7 @@ class GuestService:
     async def _create_new_guest(self, guest_data: dict) -> Guest:
         """Helper to create a fresh inactive guest record."""
         logger.info(f"[GuestService] Creating new guest record: {guest_data['email']}")
-        guest_data["password_hash"] = self.auth_service.get_password_hash(
+        guest_data["hashed_password"] = self.auth_service.get_password_hash(
             guest_data.pop("password")
         )
 
@@ -152,7 +152,7 @@ class GuestService:
         try:
             guest = await self.guest_repository.get_guest_by_email(credentials["email"])
             if not guest or not self.auth_service.verify_password(
-                credentials["password"], guest.password_hash
+                credentials["password"], guest.hashed_password
             ):
                 raise UserNotFoundException(
                     "Invalid credentials", "Email/Password mismatch"
