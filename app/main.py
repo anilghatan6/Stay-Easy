@@ -85,20 +85,14 @@ app.include_router(booking_router)
 
 
 @app.get(
-    "/",
-    dependencies=[
-        Depends(RateLimiter(max_requests=5, window_seconds=60, scope="public_root"))
-    ],
+    "/"
 )
 async def root():
     return {"message": "Welcome to the Easy Booking System API"}
 
 
 @app.get(
-    "/health",
-    dependencies=[
-        Depends(RateLimiter(max_requests=5, window_seconds=60, scope="public_health"))
-    ],
+    "/health"
 )
 async def health_check():
     return {"status": "ok"}
