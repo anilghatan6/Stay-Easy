@@ -1,11 +1,12 @@
 import traceback
 
-from fastapi import FastAPI,  Request
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
 
 from app.utils.exceptions import AppBaseException
 from app.utils.logging import LoggerFactory
@@ -135,6 +136,7 @@ async def handle_integrity_error(request: Request, exc: IntegrityError):
         content={"success": False, "error": error_msg},
     )
 
+
 # ── 6. Catch-all safety net handler ───────────────────────────────────────────
 async def handle_unhandled_exception(request: Request, exc: Exception):
     logger.critical(
@@ -150,7 +152,6 @@ async def handle_unhandled_exception(request: Request, exc: Exception):
             "error": "An unexpected error occurred. Please contact support.",
         },
     )
-
 
 
 def register_exception_handlers(app: FastAPI) -> None:

@@ -6,6 +6,7 @@ from uuid import UUID
 from typing import List
 from app.utils.schemas import StandardResponse
 from datetime import date, datetime, timezone, timedelta
+from app.middlewares.rate_limiter import RateLimiter, bypass_global_limit
 
 
 class PropertySearchItem(BaseModel):
@@ -39,7 +40,13 @@ router = APIRouter(prefix="/search", tags=["search"])
 
 
 @router.get(
-    "", response_model=StandardResponse[SearchResponse], status_code=status.HTTP_200_OK
+    "",
+    response_model=StandardResponse[SearchResponse],
+    status_code=status.HTTP_200_OK,
+    dependencies=[
+        Depends(bypass_global_limit),
+        Depends(RateLimiter(max_requests=30, window_seconds=60, scope="search")),
+    ],
 )
 async def search_properties(
     destination: str = Query(
@@ -93,6 +100,10 @@ async def search_properties(
     "/nearby",
     response_model=StandardResponse,
     status_code=status.HTTP_200_OK,
+    dependencies=[
+        Depends(bypass_global_limit),
+        Depends(RateLimiter(max_requests=30, window_seconds=60, scope="search/nearby")),
+    ],
 )
 async def get_nearby_properties(
     lat: float = Query(
@@ -113,4 +124,3 @@ async def get_nearby_properties(
             "count": service_result["count"],
         },
     )
-

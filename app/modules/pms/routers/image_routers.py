@@ -1,15 +1,23 @@
 from fastapi import APIRouter, Depends, status, HTTPException, UploadFile, File, Path
 from typing import List
-from app.modules.auth.auth_middlewares import CurrentUser
+from app.middlewares.auth_middlewares import CurrentUser
 from app.modules.pms.services.image_services import ImageService
 from app.modules.pms.dependencies import get_image_service
 from app.utils.schemas import StandardResponse
 from app.utils.logging import LoggerFactory
+from app.middlewares.rate_limiter import RateLimiter, bypass_global_limit
 import uuid
 
 logger = LoggerFactory.get_logger(__name__)
 
-router = APIRouter(prefix="/properties", tags=["Image"])
+router = APIRouter(
+    prefix="/properties",
+    tags=["Image"],
+    dependencies=[
+        Depends(bypass_global_limit),
+        Depends(RateLimiter(max_requests=30, window_seconds=60, scope="image_upload")),
+    ],
+)
 
 
 @router.post(
@@ -119,7 +127,6 @@ async def upload_image_property(
     return {"success": True, "data": uploaded_image_url}
 
 
-
 @router.post("/{property_id}/staffs/image")
 async def upload_image_staff(
     user: CurrentUser,
@@ -141,10 +148,12 @@ async def upload_image_staff(
 
     fake_staff_id = str(uuid.uuid4())
     uploaded_image_url = await image_service._process_and_upload_single(
-        folder_name=f"temp/{user.tenant_id}/properties/{property_id}/staffs/{fake_staff_id}", file=image
+        folder_name=f"temp/{user.tenant_id}/properties/{property_id}/staffs/{fake_staff_id}",
+        file=image,
     )
 
     return {"success": True, "data": uploaded_image_url}
+
 
 @router.post("/{property_id}/rooms/image")
 async def upload_image_room(
@@ -172,4 +181,3 @@ async def upload_image_room(
     )
 
     return {"success": True, "data": uploaded_image_url}
-

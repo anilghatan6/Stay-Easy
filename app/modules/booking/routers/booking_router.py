@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query, status, HTTPException
 from typing import Annotated
 from datetime import datetime, timezone
-from app.modules.auth.auth_middlewares import CurrentGuest
+from app.middlewares.auth_middlewares import CurrentGuest
 from app.modules.booking.dependencies import get_booking_service
 from app.modules.booking.services.booking_service import BookingService
 from app.modules.booking.schemas.booking_schema import (
@@ -13,14 +13,25 @@ from app.modules.booking.schemas.booking_schema import (
     PaginatedBookingsResponse,
     PaymentIntentRequest,
     PaymentIntentResponse,
-
 )
 from app.utils.schemas import StandardResponse
 from app.utils.exceptions import BookingException
-router = APIRouter(prefix="/bookings", tags=["bookings"])
+from app.middlewares.rate_limiter import RateLimiter, bypass_global_limit
+
+router = APIRouter(
+    prefix="/bookings",
+    tags=["bookings"],
+)
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[
+        Depends(bypass_global_limit),
+        Depends(RateLimiter(max_requests=15, window_seconds=60, scope="booking")),
+    ],
+)
 async def create_booking(
     body: BookingCreateRequest,
     guest: CurrentGuest,
@@ -53,7 +64,13 @@ async def create_booking(
     return StandardResponse(data=BookingReservationResponse(**result))
 
 
-@router.post("/{ref_number}/payment-intent")
+@router.post(
+    "/{ref_number}/payment-intent",
+    dependencies=[
+        Depends(bypass_global_limit),
+        Depends(RateLimiter(max_requests=15, window_seconds=60, scope="booking")),
+    ],
+)
 async def create_payment_intent(
     ref_number: str,
     body: PaymentIntentRequest,
@@ -69,7 +86,13 @@ async def create_payment_intent(
     return StandardResponse(data=PaymentIntentResponse(**result))
 
 
-@router.post("/{ref_number}/confirm")
+@router.post(
+    "/{ref_number}/confirm",
+    dependencies=[
+        Depends(bypass_global_limit),
+        Depends(RateLimiter(max_requests=15, window_seconds=60, scope="booking")),
+    ],
+)
 async def confirm_payment(
     ref_number: str,
     body: ConfirmPaymentRequest,
@@ -87,7 +110,13 @@ async def confirm_payment(
     return StandardResponse(data=filtered_data)
 
 
-@router.post("/{ref_number}/apply-discount")
+@router.post(
+    "/{ref_number}/apply-discount",
+    dependencies=[
+        Depends(bypass_global_limit),
+        Depends(RateLimiter(max_requests=15, window_seconds=60, scope="booking")),
+    ],
+)
 async def apply_discount(
     ref_number: str,
     body: ApplyDiscountRequest,
@@ -119,7 +148,7 @@ async def apply_discount(
 async def get_my_bookings(
     guest: CurrentGuest,
     booking_service: Annotated[BookingService, Depends(get_booking_service)],
-    skip: int = Query(0, ge=0,description="Number of bookings to skip"),
+    skip: int = Query(0, ge=0, description="Number of bookings to skip"),
     limit: int = Query(10, ge=1, le=50, description="Max number of bookings to return"),
 ):
     result = await booking_service.get_guest_bookings(guest.id, skip, limit)
@@ -128,11 +157,11 @@ async def get_my_bookings(
     return StandardResponse(
         data=PaginatedBookingsResponse(items=result["bookings"]),
         meta={
-            "total":result["total"],
-            "skip":skip,
-            "limit":limit,
-            "has_more":has_more
-        }
+            "total": result["total"],
+            "skip": skip,
+            "limit": limit,
+            "has_more": has_more,
+        },
     )
 
 

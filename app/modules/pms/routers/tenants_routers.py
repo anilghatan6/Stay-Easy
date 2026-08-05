@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, status
-from app.modules.auth.auth_middlewares import CurrentUser
+from app.middlewares.auth_middlewares import CurrentUser
 from app.modules.pms.schemas.tenant_scheams import (
     TenantCreateSchema,
     TenantResponseSchema,

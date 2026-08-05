@@ -1,4 +1,5 @@
-from pydantic import BaseModel, EmailStr, Field, AfterValidator
+from pydantic import model_validator
+from pydantic import BaseModel, EmailStr, Field, AfterValidator,field_validator
 import re
 from typing import Annotated
 
@@ -36,3 +37,9 @@ class ResetPasswordRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: StrongPassword
+    
+    @model_validator(mode="after")
+    def validate_not_same_current_and_new_password(self) -> "ChangePasswordRequest":
+        if self.current_password == self.new_password:
+            raise ValueError("Current password and new password cannot be the same.")
+        return self

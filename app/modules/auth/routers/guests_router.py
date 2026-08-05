@@ -12,8 +12,9 @@ from app.modules.auth.schemas.token_schema import (
     RefreshTokenRequest,
     AccessTokenResponse,
 )
-from app.modules.auth.auth_middlewares import CurrentGuest
-from app.middlewares.rate_limiter import RateLimiter
+from app.middlewares.auth_middlewares import CurrentGuest
+from app.middlewares.rate_limiter import RateLimiter, bypass_global_limit
+
 
 router = APIRouter(prefix="/auth/guests", tags=["guests"])
 
@@ -22,7 +23,8 @@ router = APIRouter(prefix="/auth/guests", tags=["guests"])
     "/register",
     status_code=status.HTTP_201_CREATED,
     dependencies=[
-        Depends(RateLimiter(max_requests=5, window_seconds=60, scope="guests_register"))
+        Depends(bypass_global_limit),
+        Depends(RateLimiter(max_requests=20, window_seconds=60, scope="guest/register")),
     ],
 )
 async def register_guest(
@@ -41,9 +43,8 @@ async def register_guest(
     "/verify-otp",
     status_code=status.HTTP_200_OK,
     dependencies=[
-        Depends(
-            RateLimiter(max_requests=5, window_seconds=60, scope="guests_verify_otp")
-        )
+        Depends(bypass_global_limit),
+        Depends(RateLimiter(max_requests=10, window_seconds=60, scope="guest/verify-otp")),
     ],
 )
 async def verify_otp(
@@ -57,9 +58,8 @@ async def verify_otp(
     "/resend-otp",
     status_code=status.HTTP_200_OK,
     dependencies=[
-        Depends(
-            RateLimiter(max_requests=5, window_seconds=60, scope="guests_resend_otp")
-        )
+        Depends(bypass_global_limit),
+        Depends(RateLimiter(max_requests=10, window_seconds=60, scope="guest/resend-otp")),
     ],
 )
 async def resend_otp(
@@ -84,7 +84,8 @@ async def resend_otp(
     response_model=AccessTokenResponse,
     status_code=status.HTTP_200_OK,
     dependencies=[
-        Depends(RateLimiter(max_requests=10, window_seconds=60, scope="guests_refresh"))
+        Depends(bypass_global_limit),
+        Depends(RateLimiter(max_requests=20, window_seconds=60, scope="guest/refresh")),
     ],
 )
 async def refresh_token(
@@ -98,9 +99,6 @@ async def refresh_token(
     "/me",
     response_model=GuestResponse,
     status_code=status.HTTP_200_OK,
-    dependencies=[
-        Depends(RateLimiter(max_requests=100, window_seconds=60, scope="guests_me"))
-    ],
 )
 async def get_current_guest(
     guest: CurrentGuest,

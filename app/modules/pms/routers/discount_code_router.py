@@ -2,7 +2,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from app.modules.pms.schemas.discount_code_schema import DiscountCodeCreate, DiscountCodeResponse,DiscountCodeUpdate
 from app.modules.pms.services.discount_code_service import DiscountCodeService
-from app.modules.auth.auth_middlewares import CurrentUser
+from app.middlewares.auth_middlewares import CurrentUser
 from app.utils.schemas import StandardResponse
 from app.modules.pms.dependencies import get_discount_code_service
 

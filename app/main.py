@@ -2,10 +2,10 @@ from dotenv import load_dotenv
 
 import asyncio
 from contextlib import asynccontextmanager
+import redis.asyncio as aioredis
 
-from fastapi import FastAPI, Request, Depends
+from fastapi import FastAPI, Depends
 from app.config.database_config import engine
-
 from app.modules.auth.models import *
 from app.modules.auth.routers.guests_router import router as guest_router
 from app.modules.auth.routers.users_router import router as user_router
@@ -28,13 +28,12 @@ from app.modules.booking.routers.booking_router import router as booking_router
 
 from app.modules.staff_mgmt.models import *
 from app.modules.staff_mgmt.routers.staffs_router import router as staff_router
-from app.utils.cors import configure_cors
+from app.middlewares.cors import configure_cors
 from app.utils.exception_handlers import register_exception_handlers
 from app.utils.expiry_loop import _expire_stale_bookings_loop
-from app.config.redis_config import redis_pool
-import redis.asyncio as aioredis
-from app.middlewares.rate_limiter import RateLimiter
 
+from app.middlewares.rate_limiter import RateLimiter
+from app.config.redis_config import redis_pool
 from app.utils.logging import LoggerFactory
 
 load_dotenv()
@@ -60,9 +59,16 @@ async def lifespan(app: FastAPI):
     await engine.dispose()
 
 
+global_limiter = RateLimiter(max_requests=150, window_seconds=60, scope="global")
+
 app = FastAPI(
-    lifespan=lifespan, title="StayEasy API", version="1.0.0", root_path="/api/v1"
+    lifespan=lifespan,
+    title="StayEasy API",
+    version="1.0.0",
+    root_path="/api/v1",
+    dependencies=[Depends(global_limiter)],
 )
+
 
 register_exception_handlers(app)
 
@@ -84,24 +90,11 @@ app.include_router(search_router)
 app.include_router(booking_router)
 
 
-@app.get(
-    "/"
-)
+@app.get("/")
 async def root():
     return {"message": "Welcome to the Easy Booking System API"}
 
 
-@app.get(
-    "/health"
-)
+@app.get("/health")
 async def health_check():
     return {"status": "ok"}
-
-
-@app.get("/redis/health", include_in_schema=False)
-async def redis_health(request: Request):
-    try:
-        pong = await request.app.state.redis_client.ping()
-        return {"redis": "ok" if pong else "unreachable"}
-    except Exception as e:
-        return {"redis": "error", "detail": str(e)}

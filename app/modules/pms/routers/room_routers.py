@@ -3,7 +3,7 @@ from datetime import date, datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, status, HTTPException, Query
 
-from app.modules.auth.auth_middlewares import CurrentUser
+from app.middlewares.auth_middlewares import CurrentUser
 from app.modules.pms.dependencies import get_room_service
 from app.modules.pms.schemas.room_schemas import (
     RoomBulkCreateRequest,

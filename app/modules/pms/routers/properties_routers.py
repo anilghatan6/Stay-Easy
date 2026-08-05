@@ -2,7 +2,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, status, Query
 
-from app.modules.auth.auth_middlewares import CurrentUser
+from app.middlewares.auth_middlewares import CurrentUser
 from app.modules.pms.dependencies import get_property_service
 from app.modules.pms.schemas.properties_schemas import (
     GeneralPropertyInfo,

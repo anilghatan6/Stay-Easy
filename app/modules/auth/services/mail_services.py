@@ -53,7 +53,7 @@ async def send_verification_email(to_email: str, verification_code: str) -> None
     logger.info("[MailService] Sending verification email")
 
     try:
-        html_content = f"""
+        plain_content = f"""
         <html>
         <body>
             <h1>Verify Your Email Address</h1>
@@ -64,7 +64,11 @@ async def send_verification_email(to_email: str, verification_code: str) -> None
         </body>
         </html>
         """
-        await send_transactional_email(to_email, "StayEasy - Verify Your Email Address", html_content)
+
+        template = templates.env.get_template("verify_email.html")
+        html_content = template.render(verification_code=verification_code)
+
+        await send_transactional_email(to_email, "StayEasy - Verify Your Email Address", html_content or plain_content)
     except Exception as e:
         logger.error(f"Error sending verification email: {str(e)}")
         raise ServiceException(str(e))

@@ -2,7 +2,7 @@ from app.modules.pms.services.room_services import RoomService
 import uuid
 from typing import List
 from fastapi import APIRouter, Depends, status, HTTPException, Query
-from app.modules.auth.auth_middlewares import CurrentUser
+from app.middlewares.auth_middlewares import CurrentUser
 from app.modules.pms.dependencies import get_special_offer_service, get_room_service
 from app.modules.pms.schemas.offers_schema import (
     SpecialOffersCreate,

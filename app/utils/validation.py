@@ -1,6 +1,6 @@
 
 from fastapi import HTTPException, status
-from app.modules.auth.auth_middlewares import CurrentUser
+from app.middlewares.auth_middlewares import CurrentUser
 
 def verify_tenant(user:CurrentUser):
     if user.tenant_id is None:

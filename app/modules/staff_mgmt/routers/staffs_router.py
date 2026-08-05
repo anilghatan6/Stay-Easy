@@ -4,7 +4,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, status, Query
 from app.modules.staff_mgmt.services.staffs_services import StaffService
 from app.modules.staff_mgmt.dependencies import get_staff_service
-from app.modules.auth.auth_middlewares import CurrentUser
+from app.middlewares.auth_middlewares import CurrentUser
 from app.utils.schemas import StandardResponse
 from app.utils.validation import verify_tenant
 from app.modules.staff_mgmt.schemas.staffs_schemas import StaffResponse, CreateStaffRequest, UpdateStaffRequest
