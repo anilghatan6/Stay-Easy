@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 import redis.asyncio as aioredis
 
 from fastapi import FastAPI, Depends
-from app.config.database_config import engine
+from app.config.database_config import engine,Base
 from app.modules.auth.models import *
 from app.modules.auth.routers.guests_router import router as guest_router
 from app.modules.auth.routers.users_router import router as user_router
@@ -43,8 +43,8 @@ logger = LoggerFactory.get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # async with engine.begin() as conn:
-    # await conn.run_sync(Base.metadata.create_all)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     app.state.redis_client = aioredis.Redis(connection_pool=redis_pool)
 
     stop_event = asyncio.Event()

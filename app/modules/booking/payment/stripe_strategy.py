@@ -7,7 +7,6 @@ from typing import Optional
 
 logger = LoggerFactory.get_logger(__name__)
 
-
 class StripePaymentStrategy(PaymentStrategy):
     def __init__(self, api_key: str):
         self._client_configured = bool(api_key)

@@ -1,5 +1,4 @@
 import uuid
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, status, Query
 from app.modules.staff_mgmt.services.staffs_services import StaffService

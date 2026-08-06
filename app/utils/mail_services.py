@@ -190,3 +190,37 @@ async def send_booking_confirmed_owner_email(
         subject=f"New Reservation - {booking.ref_number} | {property_obj.name}",
         html_content=html_content,
     )
+
+async def send_staff_welcome_email(
+    to_email: str,
+    full_name: str,
+    job_role: str,
+    temp_password: str,
+    property_name: str,
+    login_url: str = os.getenv("FRONTEND_LOGIN_URL"),
+) -> None:
+    template = templates.env.get_template("staff_welcome.html")
+
+    html_content = template.render(
+        full_name=full_name,
+        email=to_email,
+        job_role=job_role,
+        temp_password=temp_password,
+        property_name=property_name,
+        login_url=login_url,
+    )
+
+    plain_text = (
+        f"Welcome to StayEasy, {full_name}!\n\n"
+        f"Your staff account at {property_name} has been created.\n"
+        f"Role: {job_role}\n"
+        f"Email: {to_email}\n"
+        f"Temporary Password: {temp_password}\n\n"
+        f"Please log in and update your password."
+    )
+
+    await send_transactional_email(
+        to_email=to_email,
+        subject=f"Welcome to the Team - Account Credentials | {property_name}",
+        html_content=html_content or plain_text,
+    )

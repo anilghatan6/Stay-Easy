@@ -167,7 +167,7 @@ class UserService:
                     "Account not verified. Please verify your email."
                 )
 
-            token_data = {"sub": str(user.id), "role": user.role}
+            token_data = {"sub": str(user.id), "role": str(user.role).lower()}
             return {
                 "access_token": self.auth_service.create_access_token(token_data),
                 "refresh_token": self.auth_service.create_refresh_token(token_data),
