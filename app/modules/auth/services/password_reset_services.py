@@ -7,7 +7,7 @@ from app.modules.auth.repositories.password_reset_repository import (
 from app.modules.auth.repositories.users_repo import UserRepository
 from app.modules.auth.repositories.guests_repo import GuestRepository
 from app.modules.auth.services.auth_services import AuthService
-from app.modules.auth.services.mail_services import send_password_reset_email
+from app.utils.mail_services import send_password_reset_email
 from app.utils.exceptions import (
     ServiceException,
     RepositoryException,

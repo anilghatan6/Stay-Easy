@@ -9,6 +9,8 @@ from typing import Optional
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config.database_config import AsyncSessionLocal
+
 from app.modules.booking.repositories.booking_repository import BookingRepository
 from app.modules.booking.repositories.idempotency_repository import (
     IdempotencyRepository,
@@ -33,6 +35,8 @@ from app.utils.exceptions import (
     UrlValidationException
 )
 from app.modules.booking.models.booking_model import PaymentGateway as PGEnum
+
+from app.utils.mail_services import send_booking_confirmed_guest_email, send_booking_confirmed_owner_email
 
 from app.utils.logging import LoggerFactory
 from app.utils.url_validation import validate_khalti_return_url
@@ -846,3 +850,44 @@ class BookingService:
             await self.db.rollback()
             logger.error(f"[BookingService] Failed to delete stale bookings: {e}")
             raise ServiceException("Could not process booking expiry.")
+
+    async def send_confirmation_emails(self, ref_number:str) -> None:
+        logger.info(f"[BookingService] Sending confirmation emails  for {ref_number}")
+        async with AsyncSessionLocal() as session:
+            try:
+                fresh_booking_repo = BookingRepository(session)
+                booking = await fresh_booking_repo.get_by_ref_with_details(ref_number)
+
+                if booking is None:
+                    logger.error(f"[BookingService] Could not send emails — booking {ref_number} not found")
+                    return
+
+                property_obj = booking.property
+                guest = booking.guest
+                room_units = [br.room_unit for br in booking.booking_rooms]
+
+                await send_booking_confirmed_guest_email(
+                    to_email=guest.email,
+                    guest_name=guest.full_name,
+                    booking=booking,
+                    property_obj=property_obj,
+                    room_units=room_units,
+                )
+
+
+                await send_booking_confirmed_owner_email(
+                        to_email=property_obj.email,
+                        owner_name=property_obj.name,
+                        guest_name=guest.full_name,
+                        guest_email=guest.email,
+                        guest_phone=guest.phone,
+                        guest_nationality=guest.nationality,
+                        booking=booking,
+                        property_obj=property_obj,
+                        room_units=room_units,
+                    )
+
+            except Exception as e:
+                logger.error(f"[BookingService] Failed to send confirmation emails for {ref_number}: {e}")
+                # Deliberately swallowed — this runs after the response is already sent,
+                # there's no request left to fail. Logging is the only recourse here.

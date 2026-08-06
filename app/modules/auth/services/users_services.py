@@ -3,7 +3,7 @@ from app.modules.auth.repositories.users_repo import UserRepository
 from app.modules.auth.models.users_model import User
 from app.modules.auth.services.auth_services import AuthService
 from app.modules.auth.services.otp_service import OTPService
-from app.modules.auth.services.mail_services import send_verification_email
+from app.utils.mail_services import send_verification_email
 
 from app.utils.exceptions import (
     ServiceException,

@@ -81,7 +81,7 @@ async def pr_guest_client(async_client, pr_token_store):
 @pytest.fixture
 def pr_email_capture(mocker):
     """Mocks send_password_reset_email so the raw reset token can be inspected."""
-    from app.modules.auth.services import password_reset_services as prs
+    from app.utils.mail_services import password_reset_services as prs
 
     mock = mocker.patch.object(prs, "send_password_reset_email", new_callable=mocker.AsyncMock)
     return mock

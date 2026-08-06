@@ -15,7 +15,7 @@ from app.utils.exceptions import (
 )
 from app.utils.logging import LoggerFactory
 from app.modules.auth.services.otp_service import OTPService
-from app.modules.auth.services.mail_services import send_verification_email
+from app.utils.mail_services import send_verification_email
 
 logger = LoggerFactory.get_logger(__name__)
 

@@ -2,10 +2,11 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from sqlalchemy import func, select, delete
-from sqlalchemy.orm import selectinload,joinedload
+from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.pms.models import Rooms
 from app.modules.booking.models.booking_model import (
     Booking,
     BookingRoom,
@@ -72,7 +73,7 @@ class BookingRepository:
             raise RepositoryException(
                 "Could not create booking. Please try again."
             ) from e
- 
+
     async def get_by_ref(self, ref_number: str) -> Booking | None:
         logger.info("[BookingRepository] Fetching booking by ref")
         try:
@@ -122,9 +123,11 @@ class BookingRepository:
         Attempts to hard delete a PENDING booking. Returns False if it's
         no longer PENDING (already confirmed or processed by a parallel task).
         """
-        logger.info(f"[BookingRepository] Attempting clean deletion of booking {booking_id}")
+        logger.info(
+            f"[BookingRepository] Attempting clean deletion of booking {booking_id}"
+        )
         try:
-            # 1. Fetch with row-level locking to prevent a race condition 
+            # 1. Fetch with row-level locking to prevent a race condition
             # (e.g., user pays at the exact millisecond the deletion task wakes up)
             result = await self.db.execute(
                 select(Booking).where(Booking.id == booking_id).with_for_update()
@@ -132,18 +135,21 @@ class BookingRepository:
             booking = result.scalar_one_or_none()
 
             # Guard clause: Allow deletion if it's PENDING or EXPIRED
-            valid_statuses_for_deletion = (MasterBookingStatus.PENDING, MasterBookingStatus.EXPIRED)
+            valid_statuses_for_deletion = (
+                MasterBookingStatus.PENDING,
+                MasterBookingStatus.EXPIRED,
+            )
             if booking is None or booking.status not in valid_statuses_for_deletion:
                 return False
 
             # 2. Execute the clear deletion
-            await self.db.execute(
-                delete(Booking).where(Booking.id == booking_id)
-            )
+            await self.db.execute(delete(Booking).where(Booking.id == booking_id))
             return True
 
         except SQLAlchemyError as e:
-            logger.error(f"[BookingRepository] Failed to delete booking {booking_id}: {e}")
+            logger.error(
+                f"[BookingRepository] Failed to delete booking {booking_id}: {e}"
+            )
             raise RepositoryException("Could not delete booking.")
 
     async def get_pending_older_than(self, cutoff: datetime) -> list[Booking]:
@@ -151,7 +157,9 @@ class BookingRepository:
         try:
             stmt = select(Booking).where(
                 # Booking.status == MasterBookingStatus.PENDING,
-                Booking.status.in_([MasterBookingStatus.PENDING, MasterBookingStatus.EXPIRED]),
+                Booking.status.in_(
+                    [MasterBookingStatus.PENDING, MasterBookingStatus.EXPIRED]
+                ),
                 Booking.created_at < cutoff,
             )
             result = await self.db.execute(stmt)
@@ -179,7 +187,7 @@ class BookingRepository:
             )
             raise RepositoryException(
                 "Could not fetch booking details. Please try again."
-            ) 
+            )
 
     async def get_bookings_by_guest(
         self, guest_id: uuid.UUID, skip: int, limit: int
@@ -195,8 +203,7 @@ class BookingRepository:
                 select(Booking)
                 .options(joinedload(Booking.property))
                 .where(
-                    Booking.guest_id == guest_id, 
-                    ~Booking.status.in_(excluded_statuses)
+                    Booking.guest_id == guest_id, ~Booking.status.in_(excluded_statuses)
                 )
                 .order_by(Booking.created_at.desc())
                 .offset(skip)
@@ -208,8 +215,7 @@ class BookingRepository:
                 select(func.count())
                 .select_from(Booking)
                 .where(
-                    Booking.guest_id == guest_id,
-                    ~Booking.status.in_(excluded_statuses)
+                    Booking.guest_id == guest_id, ~Booking.status.in_(excluded_statuses)
                 )
             )
 
@@ -222,9 +228,7 @@ class BookingRepository:
             logger.error(
                 f"[BookingRepository] Failed to fetch bookings for guest {guest_id}: {e}"
             )
-            raise RepositoryException(
-                "Could not fetch bookings. Please try again."
-            ) 
+            raise RepositoryException("Could not fetch bookings. Please try again.")
 
     async def count_by_guest(self, guest_id: uuid.UUID) -> int:
         logger.info("[BookingRepository] Counting bookings by guest")
@@ -246,9 +250,7 @@ class BookingRepository:
             logger.error(
                 f"[BookingRepository] Failed to count bookings for guest {guest_id}: {e}"
             )
-            raise RepositoryException(
-                "Could not count bookings. Please try again."
-            ) 
+            raise RepositoryException("Could not count bookings. Please try again.")
 
     async def set_payment_gateway(self, ref_number: str, payment_gateway: str):
         try:
@@ -276,7 +278,7 @@ class BookingRepository:
             logger.error(
                 f"[BookingRepository] Failed to set payment gateway for {ref_number}: {e}"
             )
-            raise RepositoryException("Could not update booking payment method.") 
+            raise RepositoryException("Could not update booking payment method.")
 
     async def apply_coupon(
         self, ref_number: str, coupon_code: str, coupon_discount: Decimal
@@ -303,7 +305,7 @@ class BookingRepository:
             logger.error(
                 f"[BookingRepository] Failed to apply coupon to {ref_number}: {e}"
             )
-            raise RepositoryException("Could not apply discount code.") 
+            raise RepositoryException("Could not apply discount code.")
 
     async def remove_coupon(self, ref_number: str) -> Booking | None:
         logger.info(f"[BookingRepository] Removing coupon from {ref_number}")
@@ -324,4 +326,34 @@ class BookingRepository:
             logger.error(
                 f"[BookingRepository] Failed to remove coupon from {ref_number}: {e}"
             )
-            raise RepositoryException("Could not remove discount code.") 
+            raise RepositoryException("Could not remove discount code.")
+
+    async def get_by_ref_with_details(self, ref_number: str) -> Booking | None:
+        """
+        Fetches a booking with everything needed for confirmation emails:
+        property (+ owner), guest, and all booked rooms — eagerly loaded
+        in one query so no lazy-load happens outside the request/session scope.
+        """
+        logger.info(
+            f"[BookingRepository] Fetching full booking detail for {ref_number}"
+        )
+        try:
+            stmt = (
+                select(Booking)
+                .options(
+                    joinedload(Booking.guest),
+                    joinedload(Booking.property),
+                    selectinload(Booking.booking_rooms)
+                    .joinedload(BookingRoom.room_unit)
+                    .joinedload(Rooms.room_type),
+                )
+                .where(Booking.ref_number == ref_number)
+            )
+            result = await self.db.execute(stmt)
+            return result.unique().scalar_one_or_none()
+
+        except SQLAlchemyError as e:
+            logger.error(
+                f"[BookingRepository] Failed to fetch full booking detail for {ref_number}: {e}"
+            )
+            raise RepositoryException("Could not fetch booking details.") from e

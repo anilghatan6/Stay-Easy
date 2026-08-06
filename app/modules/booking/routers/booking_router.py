@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, status, HTTPException
+from fastapi import APIRouter, Depends, Query, status, HTTPException,BackgroundTasks
 from typing import Annotated
 from datetime import datetime, timezone
 from app.middlewares.auth_middlewares import CurrentGuest
@@ -66,9 +66,10 @@ async def create_booking(
 
 @router.post(
     "/{ref_number}/payment-intent",
+    status_code=status.HTTP_200_OK,
     dependencies=[
         Depends(bypass_global_limit),
-        Depends(RateLimiter(max_requests=15, window_seconds=60, scope="booking")),
+        Depends(RateLimiter(max_requests=15, window_seconds=60, scope="create_payment_intent")),
     ],
 )
 async def create_payment_intent(
@@ -88,14 +89,16 @@ async def create_payment_intent(
 
 @router.post(
     "/{ref_number}/confirm",
+    status_code=status.HTTP_200_OK,
     dependencies=[
         Depends(bypass_global_limit),
-        Depends(RateLimiter(max_requests=15, window_seconds=60, scope="booking")),
+        Depends(RateLimiter(max_requests=15, window_seconds=60, scope="confirm_booking")),
     ],
 )
 async def confirm_payment(
     ref_number: str,
     body: ConfirmPaymentRequest,
+    background_tasks: BackgroundTasks,
     guest: CurrentGuest,
     booking_service: Annotated[BookingService, Depends(get_booking_service)],
 ):
@@ -105,16 +108,21 @@ async def confirm_payment(
         gateway_payload=body.gateway_payload,
         guest_id=guest.id,
     )
+    if result.get("status") == "CONFIRMED":
+        background_tasks.add_task(
+            booking_service.send_confirmation_emails, ref_number
+        )
     payment_data = ConfirmPaymentResponse(**result)
     filtered_data = payment_data.model_dump(exclude_none=True)
-    return StandardResponse(data=filtered_data)
 
+    return StandardResponse(data=filtered_data)
 
 @router.post(
     "/{ref_number}/apply-discount",
+    status_code=status.HTTP_200_OK,
     dependencies=[
         Depends(bypass_global_limit),
-        Depends(RateLimiter(max_requests=15, window_seconds=60, scope="booking")),
+        Depends(RateLimiter(max_requests=15, window_seconds=60, scope="apply_discount")),
     ],
 )
 async def apply_discount(

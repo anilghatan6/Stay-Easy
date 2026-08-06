@@ -12,7 +12,7 @@ class StripePaymentStrategy(PaymentStrategy):
     def __init__(self, api_key: str):
         self._client_configured = bool(api_key)
         logger.info(f"[StripeStrategy] Client configured: {self._client_configured}")
-        logger.info(f"[StripeStrategy] API key: {api_key}")
+        # logger.info(f"[StripeStrategy] API key: {api_key}")
         stripe.api_key = api_key
 
     async def create_payment_intent(self, ref_number: str, amount: Decimal, currency: str,return_url: Optional[str] = None) -> dict:

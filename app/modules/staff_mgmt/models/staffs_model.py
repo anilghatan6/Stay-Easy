@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from typing import Optional, List, Dict, Any
 
@@ -48,6 +48,7 @@ class Staff(Base, TimestampMixin):
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     phone_number: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+
 
     job_role: Mapped[JobRole] = mapped_column(
         SqlEnum(JobRole, native_enum=False, length=30),

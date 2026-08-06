@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Booking Confirmed - {{ property_name }}</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f2f2f2; color: #1a1a1a;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f2f2f2; padding: 24px 0;">
+        <tr>
+            <td align="center">
+                <!-- Main Container -->
+                <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e7e7e7; width: 100%; max-width: 600px;">
+                    
+                    <!-- Booking.com Style Navy Header -->
+                    <tr>
+                        <td style="background-color: #003580; padding: 20px 30px; text-align: left;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                                <tr>
+                                    <td>
+                                        <span style="color: #ffffff; font-size: 24px; font-weight: bold; letter-spacing: -0.5px;">StayEasy</span>
+                                    </td>
+                                    <td align="right">
+                                        <span style="background-color: #00224f; color: #ffffff; font-size: 12px; font-weight: bold; padding: 6px 12px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;">Confirmed</span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Main Body Area -->
+                    <tr>
+                        <td style="padding: 30px;">
+                            
+                            <!-- Greeting & Confirmation Banner -->
+                            <h1 style="margin: 0 0 8px 0; color: #1a1a1a; font-size: 22px; font-weight: bold;">Your booking in {{ property_city }} is confirmed</h1>
+                            <p style="margin: 0 0 24px 0; color: #4c4c4c; font-size: 15px; line-height: 1.5;">
+                                Hi <strong>{{ guest_name }}</strong>, thank you for booking with StayEasy. We’ve sent your confirmation details to your inbox.
+                            </p>
+
+                            <!-- Reference Code Highlight Box -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #ebf3ff; border: 1px solid #cce1ff; border-radius: 6px; margin-bottom: 24px;">
+                                <tr>
+                                    <td style="padding: 16px 20px;">
+                                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                                            <tr>
+                                                <td style="vertical-align: middle;">
+                                                    <span style="font-size: 12px; text-transform: uppercase; color: #006ce4; font-weight: bold; display: block; margin-bottom: 2px;">Confirmation Reference</span>
+                                                    <span style="font-size: 20px; font-weight: bold; color: #003580; letter-spacing: 1px;">{{ ref_number }}</span>
+                                                </td>
+                                                <td align="right" style="vertical-align: middle;">
+                                                    <span style="background-color: #008009; color: #ffffff; font-size: 13px; font-weight: bold; padding: 4px 10px; border-radius: 4px; display: inline-block;">✓ Guaranteed</span>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Property Overview Card -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border: 1px solid #e7e7e7; border-radius: 6px; margin-bottom: 24px;">
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        <h2 style="margin: 0 0 6px 0; font-size: 18px; color: #006ce4; font-weight: bold;">{{ property_name }}</h2>
+                                        <p style="margin: 0 0 12px 0; color: #4c4c4c; font-size: 14px; line-height: 1.4;">
+                                            {{ property_address }}{% if property_city %}, {{ property_city }}{% endif %}{% if property_state %}, {{ property_state }}{% endif %}{% if property_zip_code %} {{ property_zip_code }}{% endif %}{% if property_country %}, {{ property_country }}{% endif %}
+                                        </p>
+                                        
+                                        <!-- Contact & Directions Buttons -->
+                                        <table role="presentation" cellspacing="0" cellpadding="0" style="margin-top: 12px;">
+                                            <tr>
+                                                <td style="padding-right: 10px;">
+                                                    <a href="{{ map_url }}" target="_blank" style="background-color: #006ce4; color: #ffffff; text-decoration: none; font-size: 13px; font-weight: bold; padding: 8px 16px; border-radius: 4px; display: inline-block;">Show on Map</a>
+                                                </td>
+                                                {% if property_phone_number %}
+                                                <td style="padding-right: 10px;">
+                                                    <a href="tel:{{ property_phone_number }}" style="border: 1px solid #006ce4; color: #006ce4; text-decoration: none; font-size: 13px; font-weight: bold; padding: 7px 15px; border-radius: 4px; display: inline-block;">Call Property</a>
+                                                </td>
+                                                {% endif %}
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Dates & Guest Grid (2 Columns) -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f9f9f9; border: 1px solid #e7e7e7; border-radius: 6px; margin-bottom: 24px;">
+                                <tr>
+                                    <td width="50%" style="padding: 16px 20px; border-right: 1px solid #e7e7e7; vertical-align: top;">
+                                        <span style="font-size: 12px; color: #6b6b6b; font-weight: bold; text-transform: uppercase;">Check-in</span>
+                                        <p style="margin: 4px 0 0 0; font-size: 15px; font-weight: bold; color: #1a1a1a;">{{ checkin_date }}</p>
+                                    </td>
+                                    <td width="50%" style="padding: 16px 20px; vertical-align: top;">
+                                        <span style="font-size: 12px; color: #6b6b6b; font-weight: bold; text-transform: uppercase;">Check-out</span>
+                                        <p style="margin: 4px 0 0 0; font-size: 15px; font-weight: bold; color: #1a1a1a;">{{ checkout_date }}</p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td colspan="2" style="padding: 12px 20px; border-top: 1px solid #e7e7e7; background-color: #ffffff; border-bottom-left-radius: 6px; border-bottom-right-radius: 6px;">
+                                        <span style="font-size: 13px; color: #4c4c4c;">
+                                            <strong>Guests:</strong> {{ adults }} Adult{% if adults|int > 1 %}s{% endif %}{% if children|int > 0 %}, {{ children }} Child{% if children|int > 1 %}ren{% endif %}{% endif %}
+                                        </span>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Reserved Rooms -->
+                            <h3 style="margin: 0 0 12px 0; color: #1a1a1a; font-size: 16px; font-weight: bold;">Your Accommodation Details</h3>
+                            {% for room in rooms %}
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border: 1px solid #e7e7e7; border-radius: 6px; margin-bottom: 12px;">
+                                <tr>
+                                    <td style="padding: 14px 16px; background-color: #ffffff;">
+                                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                                            <tr>
+                                                <td>
+                                                    <p style="margin: 0 0 2px 0; color: #1a1a1a; font-size: 15px; font-weight: bold;">{{ room.room_name }}</p>
+                                                    <p style="margin: 0; color: #6b6b6b; font-size: 13px;">Type ID: {{ room.room_type }}</p>
+                                                </td>
+                                                <td align="right" style="vertical-align: top;">
+                                                    <p style="margin: 0; color: #1a1a1a; font-size: 14px; font-weight: bold;">{{ room.currency }} {{ room.base_rate }} <span style="font-weight: normal; font-size: 12px; color: #6b6b6b;">/ night</span></p>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                            {% endfor %}
+
+                            <!-- Price Breakdown Section -->
+                            <h3 style="margin: 24px 0 12px 0; color: #1a1a1a; font-size: 16px; font-weight: bold;">Price Breakdown</h3>
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f9f9f9; border: 1px solid #e7e7e7; border-radius: 6px; padding: 16px 20px;">
+                                <tr>
+                                    <td style="padding-bottom: 8px; color: #4c4c4c; font-size: 14px;">Subtotal</td>
+                                    <td align="right" style="padding-bottom: 8px; color: #1a1a1a; font-size: 14px; font-weight: bold;">{{ currency }} {{ subtotal }}</td>
+                                </tr>
+                                
+                                {% if special_offer_discount and special_offer_discount|float > 0 %}
+                                <tr>
+                                    <td style="padding-bottom: 8px; color: #008009; font-size: 14px;">Special Offer Discount</td>
+                                    <td align="right" style="padding-bottom: 8px; color: #008009; font-size: 14px; font-weight: bold;">- {{ currency }} {{ special_offer_discount }}</td>
+                                </tr>
+                                {% endif %}
+                                
+                                {% if coupon_code and coupon_discount|float > 0 %}
+                                <tr>
+                                    <td style="padding-bottom: 8px; color: #008009; font-size: 14px;">Coupon Discount (<strong>{{ coupon_code }}</strong>)</td>
+                                    <td align="right" style="padding-bottom: 8px; color: #008009; font-size: 14px; font-weight: bold;">- {{ currency }} {{ coupon_discount }}</td>
+                                </tr>
+                                {% endif %}
+                                
+                                <tr>
+                                    <td style="padding-top: 12px; border-top: 2px solid #e7e7e7; color: #1a1a1a; font-size: 18px; font-weight: bold;">Total Price</td>
+                                    <td align="right" style="padding-top: 12px; border-top: 2px solid #e7e7e7; color: #003580; font-size: 20px; font-weight: bold;">{{ currency }} {{ total_amount }}</td>
+                                </tr>
+                            </table>
+
+                            <!-- Important Info Box -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top: 24px;">
+                                <tr>
+                                    <td style="background-color: #fff9e6; border-left: 4px solid #febb02; padding: 12px 16px; border-radius: 0 4px 4px 0;">
+                                        <p style="margin: 0; font-size: 13px; color: #594700; line-height: 1.4;">
+                                            <strong>Need help with your stay?</strong> Contact {{ property_name }} directly at 
+                                            {% if property_phone_number %}<a href="tel:{{ property_phone_number }}" style="color: #006ce4; text-decoration: none;">{{ property_phone_number }}</a>{% endif %}
+                                            {% if property_email %} or <a href="mailto:{{ property_email }}" style="color: #006ce4; text-decoration: none;">{{ property_email }}</a>{% endif %}.
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+
+                        </td>
+                    </tr>
+
+                    <!-- Footer Section -->
+                    <tr>
+                        <td style="background-color: #f2f2f2; padding: 24px 30px; text-align: center; border-top: 1px solid #e7e7e7;">
+                            <p style="margin: 0 0 8px 0; color: #6b6b6b; font-size: 12px; font-weight: bold;">
+                                StayEasy - Booking Confirmation
+                            </p>
+                            <p style="margin: 0; color: #8c8c8c; font-size: 11px; line-height: 1.5;">
+                                This is an automated email confirmation regarding your reservation.<br>
+                                Please do not reply directly to this email.
+                            </p>
+                        </td>
+                    </tr>
+
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

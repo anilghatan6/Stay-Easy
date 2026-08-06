@@ -87,7 +87,7 @@ def build_service(
 
 def patch_email(mocker):
     return mocker.patch(
-        "app.modules.auth.services.password_reset_services.send_password_reset_email",
+        "app.utils.mail_services.send_password_reset_email",
         new_callable=mocker.AsyncMock,
     )
 

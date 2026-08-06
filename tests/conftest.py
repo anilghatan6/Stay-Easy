@@ -137,11 +137,11 @@ async def async_client(db_session, fake_redis_client) -> AsyncGenerator[AsyncCli
 @pytest.fixture(autouse=True)
 def mock_external_services(mocker):
     mocker.patch(
-        "app.modules.auth.services.mail_services.send_verification_email",
+        "app.utils.mail_services.send_verification_email",
         return_value=None,
     )
     mocker.patch(
-        "app.modules.auth.services.mail_services.send_transactional_email",
+        "app.utils.mail_services.send_transactional_email",
         return_value=None,
     )
     mocker.patch(
