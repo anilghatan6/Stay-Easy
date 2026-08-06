@@ -8,6 +8,7 @@ from app.modules.pms.models.properties_model import (
     Amenity,
     Property,
 )
+from app.modules.pms.models import Tenant
 
 from app.modules.booking.models import (
     MasterBookingStatus,
@@ -94,9 +95,14 @@ class PropertyRepository:
     async def get_by_id(self, property_id: uuid.UUID) -> Property | None:
         logger.info(f"[PropertyRepository] Getting specific property by id: {property_id}")
         try:
-            result = await self.db.execute(
-                select(Property).where(Property.id == property_id)
+            stmt = (
+            select(Property)
+                .options(
+                    joinedload(Property.tenant).joinedload(Tenant.owner)
+                )
+                .where(Property.id == property_id)
             )
+            result = await self.db.execute(stmt)
             return result.scalar_one_or_none()
         except Exception as e:
             logger.error(f"[PropertyRepository] Error getting property by id: {str(e)}")

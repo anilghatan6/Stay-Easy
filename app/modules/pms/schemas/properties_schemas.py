@@ -435,6 +435,10 @@ class PropertyResponse(BaseModel):
     photos: PropertyPhotos
 
 
+class SpecificPropertyResponse(PropertyResponse):
+    owner_name:str
+    
+
 # --- Bulk Retrieval Schema ---
 class TenantPropertiesListResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -697,4 +701,4 @@ class UpdatePropertyInfo(BaseModel):
                 raise ValueError(
                     "Check in time and check out time must be None when always allow check in and check out is On"
                 )
-        return self
+        return self

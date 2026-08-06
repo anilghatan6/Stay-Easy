@@ -16,13 +16,28 @@ logger = LoggerFactory.get_logger(__name__)
 
 # ── 1. Your custom exceptions ─────────────────────────────────
 async def handle_app_exception(request: Request, exc: AppBaseException):
-    logger.info(
-        "[%s] %s | path=%s\n%s",
-        exc.__class__.__name__,
-        exc.internal_detail,
-        request.url.path,
-        traceback.format_exc(),
-    )
+
+    status_code = int(exc.status_code)
+    
+    # Check if the status code falls in the 4xx range (400 to 499)
+    if status_code // 100 == 4:
+        # Log cleaner message without traceback for client errors
+        logger.info(
+            "[%s] %s | path=%s",
+            exc.__class__.__name__,
+            exc.internal_detail,
+            request.url.path,
+        )
+    else:
+        # Keep traceback for server errors (5xx) or other anomalies
+        logger.info(
+            "[%s] %s | path=%s\n%s",
+            exc.__class__.__name__,
+            exc.internal_detail,
+            request.url.path,
+            traceback.format_exc(),
+        )
+
     return JSONResponse(
         status_code=int(exc.status_code),
         content={"success": False, "error": exc.user_message},

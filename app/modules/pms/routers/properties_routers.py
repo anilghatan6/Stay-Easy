@@ -20,6 +20,7 @@ from app.modules.pms.schemas.properties_schemas import (
     PropertyResponse,
     PropertyBookingsResponse,
     UpdatePropertyInfo,
+    SpecificPropertyResponse
 )
 from app.modules.pms.services.properties_scervices import PropertyService
 from app.utils.schemas import StandardResponse
@@ -130,13 +131,14 @@ async def delete_property(
 @router.get(
     "/{property_id}/public",
     status_code=status.HTTP_200_OK,
-    response_model=StandardResponse[PropertyResponse],
+    response_model=StandardResponse[SpecificPropertyResponse],
 )
 async def get_specific_property(
     property_id: uuid.UUID,
     property_service: PropertyService = Depends(get_property_service),
 ):
     response = await property_service.get_specific_property(property_id)
+
     return {"success": True, "data": response}
 
 

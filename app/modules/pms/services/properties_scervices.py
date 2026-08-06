@@ -18,6 +18,7 @@ from app.modules.pms.schemas.properties_schemas import (
     SystemAmenitiesListResponse,
     PropertyBookingsResponse,
     UpdatePropertyInfo,
+    SpecificPropertyResponse
 )
 from app.utils.exceptions import (
     PropertyAlreadyExistsException,
@@ -445,7 +446,7 @@ class PropertyService:
                 internal_detail=f"Failed to get number of floors: {str(e)}"
             )
 
-    async def get_specific_property(self, property_id: uuid.UUID) -> PropertyResponse:
+    async def get_specific_property(self, property_id: uuid.UUID) -> SpecificPropertyResponse:
         logger.info("[PropertyService] Getting the specific property")
         try:
             property = await self.property_repo.get_by_id(property_id)
@@ -455,7 +456,13 @@ class PropertyService:
             if not property.is_active:
                 raise PropertyNotFoundException("Property Not Found ")
 
-            return PropertyResponse.model_validate(property)
+            owner_name = property.tenant.owner.full_name
+            property_data = PropertyResponse.model_validate(property).model_dump()
+
+            return SpecificPropertyResponse(
+                owner_name=owner_name,
+                **property_data
+            )
         except (PropertyNotFoundException, RepositoryException):
             raise
         except Exception as e:
