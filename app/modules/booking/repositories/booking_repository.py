@@ -357,3 +357,30 @@ class BookingRepository:
                 f"[BookingRepository] Failed to fetch full booking detail for {ref_number}: {e}"
             )
             raise RepositoryException("Could not fetch booking details.") from e
+
+    async def delete_booking(self, ref_number: str, guest_id: uuid.UUID) -> dict | None:
+        """
+        Atomically deletes a PENDING or EXPIRED booking.
+        Returns a dictionary with the deleted booking's id and status, 
+        or None if no matching booking was found.
+        """
+        try:
+            # Atomic action: targeting the row directly by credentials
+            stmt = (
+                delete(Booking)
+                .where(
+                    Booking.ref_number == ref_number,
+                    Booking.guest_id == guest_id
+                )
+                .returning(Booking.id, Booking.status)
+            )
+            
+            result = await self.db.execute(stmt)
+            # Safely extracts the fields as a dictionary-like object (or None)
+            return result.mappings().first()
+            
+        except SQLAlchemyError as e:
+            logger.error(
+                f"[BookingRepository] Failed to delete booking {ref_number}: {e}"
+            )
+            raise RepositoryException("Could not delete booking.") from e

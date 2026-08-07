@@ -15,7 +15,11 @@ class RazorpayPaymentStrategy(PaymentStrategy):
         self.client = razorpay.Client(auth=(key_id, key_secret))
 
     async def create_payment_intent(
-        self, ref_number: str, amount: Decimal, currency: str,return_url: Optional[str] = None
+        self,
+        ref_number: str,
+        amount: Decimal,
+        currency: str,
+        return_url: Optional[str] = None,
     ) -> dict:
         logger.info(f"[RazorpayStrategy] Creating order for {ref_number}")
         try:
@@ -36,9 +40,15 @@ class RazorpayPaymentStrategy(PaymentStrategy):
             ) from e
 
     async def verify_payment(self, ref_number: str, gateway_payload: dict) -> bool:
-        order_id = gateway_payload.get("razorpay_order_id") or gateway_payload.get("order_id")
-        payment_id = gateway_payload.get("razorpay_payment_id") or gateway_payload.get("payment_id")
-        signature = gateway_payload.get("razorpay_signature") or gateway_payload.get("signature")
+        order_id = gateway_payload.get("razorpay_order_id") or gateway_payload.get(
+            "order_id"
+        )
+        payment_id = gateway_payload.get("razorpay_payment_id") or gateway_payload.get(
+            "payment_id"
+        )
+        signature = gateway_payload.get("razorpay_signature") or gateway_payload.get(
+            "signature"
+        )
 
         if not all([order_id, payment_id, signature]):
             logger.error(
@@ -65,7 +75,9 @@ class RazorpayPaymentStrategy(PaymentStrategy):
         self, ref_number: str, gateway_payload: dict, amount: Decimal | None = None
     ) -> dict:
         logger.info(f"[RazorpayStrategy] Refunding {ref_number}")
-        payment_id = gateway_payload.get("razorpay_payment_id") or gateway_payload.get("payment_id")
+        payment_id = gateway_payload.get("razorpay_payment_id") or gateway_payload.get(
+            "payment_id"
+        )
         if not payment_id:
             raise PaymentGatewayError(
                 internal_detail="Missing payment_id — cannot process refund"

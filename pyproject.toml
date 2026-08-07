@@ -5,10 +5,6 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "aiofiles>=25.1.0",
-    "aiosmtplib>=5.1.2",
-    "aiosqlite>=0.22.1",
-    "alembic>=1.18.4",
     "cloudinary>=1.44.2",
     "fastapi[standard]>=0.136.3",
     "geoalchemy2>=0.20.0",
@@ -31,7 +27,10 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "alembic>=1.18.4",
+    "aiosqlite>=0.22.1",
     "fakeredis>=2.36.2",
+    "aiofiles>=25.1.0",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-mock>=3.15.1",

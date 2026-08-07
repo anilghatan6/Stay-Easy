@@ -27,7 +27,13 @@ class PaymentIntentRequest(BaseModel):
     @field_validator("payment_gateway", mode="before")
     @classmethod
     def uppercase_gateway(cls, v: str) -> str:
-        return v.upper()
+        payment_gateways = {"STRIPE", "RAZORPAY", "KHALTI"}
+        v_upper = v.upper()
+        if v_upper not in payment_gateways:
+            raise ValueError(
+                f"Invalid payment gateway. Must be one of: {', '.join(payment_gateways)}"
+            )
+        return v_upper
 
 
 class PaymentIntentResponse(BaseModel):
@@ -38,7 +44,7 @@ class PaymentIntentResponse(BaseModel):
     payment_intent_id: Optional[str] = None
     client_secret: Optional[str] = None
     order_id: Optional[str] = None
-    payment_url:Optional[str]=None
+    payment_url: Optional[str] = None
 
 
 class ConfirmPaymentRequest(BaseModel):
@@ -72,9 +78,9 @@ class RoomReservationDetail(BaseModel):
     base_rate: float
     nights: int
     subtotal: float
-    photo:str |None=None
-    cancellation_title:str
-    cancellation_description:str
+    photo: str | None = None
+    cancellation_title: str
+    cancellation_description: str
 
 
 class PropertySummary(BaseModel):
@@ -84,20 +90,22 @@ class PropertySummary(BaseModel):
     city: Optional[str] = None
     country: Optional[str] = None
     currency: str = "USD"
-    photo:str | None=None
-    phone_number:str
-    email:str
+    photo: str | None = None
+    phone_number: str
+    email: str
+
 
 class AppliedSpecialOffer(BaseModel):
     title: str
     description: str
 
+
 class BookingReservationResponse(BaseModel):
     booking_id: uuid.UUID
     ref_number: str
     status: str
-    number_of_adults:int
-    number_of_children:int
+    number_of_adults: int
+    number_of_children: int
     check_in: date
     check_out: date
     nights: int
@@ -106,13 +114,12 @@ class BookingReservationResponse(BaseModel):
     rooms: list[RoomReservationDetail]
     total_amount: float
     subtotal: float = 0.0
-    special_offer_applied:list[AppliedSpecialOffer]  = Field(default_factory=list)
+    special_offer_applied: list[AppliedSpecialOffer] = Field(default_factory=list)
     special_offer_discount: float = 0.0
     coupon_code: Optional[str] = None
     coupon_discount: float = 0.0
     soft_lock_expires_at: datetime
     created_at: datetime
-    
 
 
 class BookingListItemResponse(BaseModel):
@@ -135,5 +142,3 @@ class BookingListItemResponse(BaseModel):
 
 class PaginatedBookingsResponse(BaseModel):
     items: list[BookingListItemResponse]
- 
-   

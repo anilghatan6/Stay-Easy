@@ -656,7 +656,7 @@ class PropertyRepository:
             )
 
     async def get_property_bookings(self, property_id, tenant_id, skip:int, limit:int):
-        logger.info(f"[PropertyRepository] getting property bookings")
+        logger.info("[PropertyRepository] getting property bookings")
         try:
             excludes_booking_status = {
                 MasterBookingStatus.EXPIRED,

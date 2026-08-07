@@ -1,5 +1,5 @@
 import uuid
-import aiofiles
+# import aiofiles
 import asyncio
 import cloudinary.uploader
 import cloudinary.api
@@ -46,8 +46,8 @@ class LocalImageStorage(ImageStorageStrategy):
 
         # Asynchronously write the bytes to disk
         try:
-            async with aiofiles.open(filepath, 'wb') as out_file:
-                await out_file.write(image_bytes)
+            # async with aiofiles.open(filepath, 'wb') as out_file:
+            #     await out_file.write(image_bytes)
             logger.info(f"[LocalImageStorage] Image saved successfully at {filepath}")
             return f"/{self.base_path.name}/{folder_name}/{filename}"
         except Exception as e:

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, status, HTTPException,BackgroundTasks
+from fastapi import APIRouter, Depends, Query, status, HTTPException, BackgroundTasks
 from typing import Annotated
 from datetime import datetime, timezone
 from app.middlewares.auth_middlewares import CurrentGuest
@@ -69,7 +69,11 @@ async def create_booking(
     status_code=status.HTTP_200_OK,
     dependencies=[
         Depends(bypass_global_limit),
-        Depends(RateLimiter(max_requests=15, window_seconds=60, scope="create_payment_intent")),
+        Depends(
+            RateLimiter(
+                max_requests=15, window_seconds=60, scope="create_payment_intent"
+            )
+        ),
     ],
 )
 async def create_payment_intent(
@@ -92,7 +96,9 @@ async def create_payment_intent(
     status_code=status.HTTP_200_OK,
     dependencies=[
         Depends(bypass_global_limit),
-        Depends(RateLimiter(max_requests=15, window_seconds=60, scope="confirm_booking")),
+        Depends(
+            RateLimiter(max_requests=15, window_seconds=60, scope="confirm_booking")
+        ),
     ],
 )
 async def confirm_payment(
@@ -109,20 +115,21 @@ async def confirm_payment(
         guest_id=guest.id,
     )
     if result.get("status") == "CONFIRMED":
-        background_tasks.add_task(
-            booking_service.send_confirmation_emails, ref_number
-        )
+        background_tasks.add_task(booking_service.send_confirmation_emails, ref_number)
     payment_data = ConfirmPaymentResponse(**result)
     filtered_data = payment_data.model_dump(exclude_none=True)
 
     return StandardResponse(data=filtered_data)
+
 
 @router.post(
     "/{ref_number}/apply-discount",
     status_code=status.HTTP_200_OK,
     dependencies=[
         Depends(bypass_global_limit),
-        Depends(RateLimiter(max_requests=15, window_seconds=60, scope="apply_discount")),
+        Depends(
+            RateLimiter(max_requests=15, window_seconds=60, scope="apply_discount")
+        ),
     ],
 )
 async def apply_discount(
@@ -137,19 +144,6 @@ async def apply_discount(
         coupon_code=body.code,
     )
     return StandardResponse(data=BookingReservationResponse(**result))
-
-
-# @router.delete("/{ref_number}/discount")
-# async def remove_discount(
-#     ref_number: str,
-#     guest: CurrentGuest,
-#     booking_service: Annotated[BookingService, Depends(get_booking_service)],
-# ):
-#     result = await booking_service.remove_discount_code(
-#         ref_number=ref_number,
-#         guest_id=guest.id,
-#     )
-#     return StandardResponse(data=BookingReservationResponse(**result))
 
 
 @router.get("/me")
@@ -183,3 +177,22 @@ async def get_booking(
     if result is None:
         raise BookingException("Booking not found")
     return StandardResponse(data=BookingReservationResponse(**result))
+
+
+@router.delete(
+    "/{ref_number}",
+    status_code=status.HTTP_200_OK,
+    dependencies=[
+        Depends(bypass_global_limit),
+        Depends(
+            RateLimiter(max_requests=15, window_seconds=60, scope="delete_booking")
+        ),
+    ],
+)
+async def delete_booking(
+    ref_number: str,
+    guest: CurrentGuest,
+    booking_service: Annotated[BookingService, Depends(get_booking_service)],
+):
+    response = await booking_service.delete_booking(ref_number, guest.id)
+    return response

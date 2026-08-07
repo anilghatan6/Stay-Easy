@@ -27,11 +27,13 @@ class MasterBookingStatus(StrEnum):
     CANCELLED = "CANCELLED"
     EXPIRED = "EXPIRED"
 
+
 class PaymentGateway(StrEnum):
     STRIPE = "STRIPE"
     RAZORPAY = "RAZORPAY"
-    DUMMY = "DUMMY"
+    # DUMMY = "DUMMY"
     KHALTI = "KHALTI"
+
 
 class Booking(Base, TimestampMixin):
     """The parent record enforcing that a checkout belongs to exactly one property."""
@@ -70,10 +72,10 @@ class Booking(Base, TimestampMixin):
         index=True,
     )
 
-    payment_gateway: Mapped[PaymentGateway] = mapped_column(
+    payment_gateway: Mapped[PaymentGateway | None] = mapped_column(
         SqlEnum(PaymentGateway, native_enum=False, length=20),
-        nullable=False,
-        default=PaymentGateway.DUMMY,
+        nullable=True,
+        default=None,
     )
 
     number_of_adults: Mapped[int] = mapped_column(
@@ -93,9 +95,15 @@ class Booking(Base, TimestampMixin):
     # Financial snapshot across all rooms booked in this transaction
     total_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     subtotal: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
-    special_offer_discount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
-    coupon_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, default=None)
-    coupon_discount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=0)
+    special_offer_discount: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=0
+    )
+    coupon_code: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True, default=None
+    )
+    coupon_discount: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=0
+    )
     ref_number: Mapped[str] = mapped_column(
         String(50), unique=True, index=True, nullable=False
     )
@@ -115,7 +123,6 @@ class BookingRoom(Base, TimestampMixin):
     """Tracks each individual room allocated inside a parent booking record."""
 
     __tablename__ = "booking_rooms"
-
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4

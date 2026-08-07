@@ -1,4 +1,5 @@
 import traceback
+from typing import Callable
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -12,6 +13,49 @@ from app.utils.exceptions import AppBaseException
 from app.utils.logging import LoggerFactory
 
 logger = LoggerFactory.get_logger(__name__)
+
+
+# ── Validation error lookup table ─────────────────────────────────────────────
+# Maps Pydantic v2 error types → user-friendly message builders.
+# To support a new field type or constraint, just add an entry here.
+_VALIDATION_MESSAGES: dict[str, Callable[[str, dict], str]] = {
+    "missing":                    lambda f, _: f"{f} is required",
+    "greater_than_equal":         lambda f, c: f"{f} should be at least {c.get('ge')}",
+    "less_than_equal":            lambda f, c: f"{f} should be at most {c.get('le')}",
+    "greater_than":               lambda f, c: f"{f} should be greater than {c.get('gt')}",
+    "less_than":                  lambda f, c: f"{f} should be less than {c.get('lt')}",
+    "string_too_short":           lambda f, c: f"{f} must be at least {c.get('min_length')} characters long",
+    "string_too_long":            lambda f, c: f"{f} must be at most {c.get('max_length')} characters long",
+    "date_from_datetime_parsing": lambda f, _: f"{f} must be a valid date (e.g. 2026-08-15)",
+    "date_parsing":               lambda f, _: f"{f} must be a valid date (e.g. 2026-08-15)",
+    "datetime_parsing":           lambda f, _: f"{f} must be a valid date (e.g. 2026-08-15)",
+    "int_parsing":                lambda f, _: f"{f} must be a valid integer",
+    "int_type":                   lambda f, _: f"{f} must be a valid integer",
+    "float_parsing":              lambda f, _: f"{f} must be a valid number",
+    "bool_parsing":               lambda f, _: f"{f} must be true or false",
+    "uuid_parsing":               lambda f, _: f"{f} must be a valid UUID",
+    "list_type":                  lambda f, _: f"{f} must be a list",
+    "too_short":                  lambda f, c: f"{f} must have at least {c.get('min_length')} item(s)",
+    "too_long":                   lambda f, c: f"{f} must have at most {c.get('max_length')} item(s)",
+}
+
+
+def _format_validation_error(error: dict) -> str:
+    """Converts a single Pydantic v2 error dict into a clean user-facing string."""
+    loc = error.get("loc", ())
+    field = str(loc[-1]).replace("_", " ").title() if len(loc) > 1 else "Input"
+    error_type = error.get("type", "")
+    ctx = error.get("ctx", {})
+
+    formatter = _VALIDATION_MESSAGES.get(error_type)
+    if formatter:
+        return formatter(field, ctx)
+
+    # Fallback: strip Pydantic internals and produce something readable
+    raw = error.get("msg", "").replace("Value error, ", "")
+    if raw.startswith("Input should be "):
+        return f"{field} must be {raw.removeprefix('Input should be ')}"
+    return f"{field}: {raw}"
 
 
 # ── 1. Your custom exceptions ─────────────────────────────────
@@ -56,48 +100,17 @@ async def handle_request_validation_error(
 
     first_error = exc.errors()[0]
 
-    # 1. Intercept malformed JSON syntax errors explicitly
     if first_error.get("type") == "json_invalid":
         return JSONResponse(
             status_code=400,
             content={"success": False, "error": "Invalid JSON payload format."},
         )
 
-    # 2. Extract field name from the location tuple and format it cleanly
-    # e.g., ('body', 'hotel_detail', 'total_rooms') -> "Total Rooms"
-    loc = first_error.get("loc", ())
-    if loc and len(loc) > 1:
-        field_name = str(loc[-1]).replace("_", " ").title()
-    else:
-        field_name = "Input"
-
-    # 3. Handle custom readable messages based on error types
-    error_type = first_error.get("type", "")
-    ctx = first_error.get("ctx", {})
-
-    if error_type == "greater_than_equal":
-        message = f"{field_name} should be greater than or equal to {ctx.get('ge')}"
-    elif error_type == "less_than_equal":
-        message = f"{field_name} should be less than or equal to {ctx.get('le')}"
-    elif error_type == "string_too_short":
-        message = (
-            f"{field_name} must be at least {ctx.get('min_length')} characters long"
-        )
-    elif error_type == "missing":
-        message = f"{field_name} is required"
-    elif error_type == "value_error":
-        message = first_error["msg"].replace("Value error, ", "")
-    else:
-        raw_msg = first_error["msg"].replace("Value error, ", "")
-        if raw_msg.startswith("Input should be "):
-            message = f"{field_name} must be {raw_msg.replace('Input should be ', '')}"
-        else:
-            message = f"{field_name}: {raw_msg}"
-
     return JSONResponse(
         status_code=422,
-        content={"success": False, "error": message},
+        content={"success": False, "error": _format_validation_error(first_error)},
     )
+
 
 
 # ── 3. Pydantic ValidationError (raised inside your code, not from request) ──
