@@ -13,6 +13,7 @@ from app.modules.booking.schemas.booking_schema import (
     PaginatedBookingsResponse,
     PaymentIntentRequest,
     PaymentIntentResponse,
+    UpdateSpecialRequest,
 )
 from app.utils.schemas import StandardResponse
 from app.utils.exceptions import BookingException
@@ -146,6 +147,29 @@ async def apply_discount(
     return StandardResponse(data=BookingReservationResponse(**result))
 
 
+@router.patch(
+    "/{ref_number}/special-requests",
+    status_code=status.HTTP_200_OK,
+    dependencies=[
+        Depends(bypass_global_limit),
+        Depends(
+            RateLimiter(max_requests=15, window_seconds=60, scope="update_booking")
+        ),
+    ],
+)
+async def update_special_requests(
+    ref_number: str,
+    body: UpdateSpecialRequest,
+    guest: CurrentGuest,
+    booking_service: Annotated[BookingService, Depends(get_booking_service)],
+):
+    result = await booking_service.update_special_requests(
+        ref_number=ref_number,
+        guest_id=guest.id,
+        special_requests=body.special_requests,
+    )
+    return result
+    
 @router.get("/me")
 async def get_my_bookings(
     guest: CurrentGuest,

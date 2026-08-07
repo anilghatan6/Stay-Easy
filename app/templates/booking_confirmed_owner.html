@@ -150,6 +150,18 @@
                                 </tr>
                             </table>
 
+                            {% if special_requests %}
+                            <!-- Special Requests / Comments -->
+                            <h3 style="margin: 24px 0 12px 0; color: #1a1a1a; font-size: 16px; font-weight: bold;">Special Requests / Comments</h3>
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #fff9f0; border: 1px solid #ffcca3; border-radius: 6px; padding: 16px 20px;">
+                                <tr>
+                                    <td style="color: #1a1a1a; font-size: 14px; line-height: 1.5; font-style: italic;">
+                                        "{{ special_requests }}"
+                                    </td>
+                                </tr>
+                            </table>
+                            {% endif %}
+
                             <!-- Host Next Steps Note -->
                             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top: 24px;">
                                 <tr>

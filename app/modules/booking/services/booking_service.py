@@ -194,6 +194,7 @@ class BookingService:
             "coupon_discount": float(booking.coupon_discount),
             "soft_lock_expires_at": soft_lock_expires_at,
             "created_at": booking.created_at,
+            "special_requests": booking.special_requests,
         }
 
     # ─────────────────────────── public methods ──────────────────────────────
@@ -748,3 +749,36 @@ class BookingService:
             await self.db.rollback()
             logger.error(f"[BookingService] Failed to cancel booking {ref_number}: {e}")
             raise ServiceException("Could not cancel booking. Please try again.")
+
+    async def update_special_requests(
+        self, ref_number: str, guest_id: uuid.UUID, special_requests: str
+    ) -> dict:
+        try:
+            # 1. Run the single atomic update query
+            updated_booking = await self.booking_repo.update_special_requests(
+                ref_number, guest_id, special_requests
+            )
+            
+            # 2. If it returns None, either it doesn't exist OR it exists but isn't PENDING
+            if updated_booking is None:
+                # Quick check to provide an accurate exception message to the user
+                exists = await self.booking_repo.get_by_ref(ref_number)
+                if exists and exists.guest_id == guest_id:
+                    raise BookingException("Only pending bookings can be updated.")
+                raise BookingException("Booking not found")
+
+            # 3. Securely commit changes to disk
+            await self.db.commit()
+
+            # 4. Convert your fully pre-loaded ORM object into your response payload dictionary format
+            return {
+                "success": True,
+                "message": "Special requests updated successfully.",
+            }
+
+        except (BookingException, ServiceException):
+            raise
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"[BookingService] Error updating special requests for {ref_number}: {e}")
+            raise ServiceException("Could not update special requests.")

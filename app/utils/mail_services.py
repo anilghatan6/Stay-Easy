@@ -115,9 +115,14 @@ async def send_booking_confirmed_guest_email(
     template = templates.env.get_template("booking_confirmed_guest.html")
     map_url = f"https://www.google.com/maps?q={property_obj.latitude},{property_obj.longitude}"
 
+    nights = (booking.checkout_date - booking.checkin_date).days
+    booking_created_at = booking.created_at.strftime("%B %d, %Y at %I:%M %p")
+
     html_content = template.render(
         guest_name=guest_name,
         ref_number=booking.ref_number,
+        nights=nights,
+        booking_created_at=booking_created_at,
         property_name=property_obj.name,
         property_email=property_obj.email,
         property_phone_number=property_obj.phone_number,
@@ -126,8 +131,11 @@ async def send_booking_confirmed_guest_email(
         property_city=property_obj.city,
         property_state=property_obj.state,
         property_country=property_obj.country,
+        brand_logo_url=property_obj.brand_logo_url,
         checkin_date=booking.checkin_date.strftime("%B %d, %Y"),
         checkout_date=booking.checkout_date.strftime("%B %d, %Y"),
+        checkin_gcal = booking.checkin_date.strftime('%Y%m%dT%H%M%SZ'),
+        checkout_gcal = booking.checkout_date.strftime('%Y%m%dT%H%M%SZ'),
         adults=booking.number_of_adults,
         children=booking.number_of_children,
         rooms=[
@@ -136,6 +144,15 @@ async def send_booking_confirmed_guest_email(
                 "room_type": r.room_type.room_type_name,
                 "base_rate": f"{r.base_rate:.2f}",
                 "currency": property_obj.currency,
+                "cancellation_title":r.cancellation_title,
+                "cancellation_description":r.cancellation_description,
+                "cover_photo": (r.photos or {}).get("cover") if r.photos else None,
+                "room_amenities": [
+                    # 1. Pull human-readable names from the loaded Amenity relationship objects
+                    *[amenity.name for amenity in (r.system_amenities or [])],
+                    # 2. Flatten and extract names from your inline JSONB custom amenities array
+                    *[custom.get("name") for custom in (r.custom_amenities or []) if "name" in custom]
+                ]
             }
             for r in room_units
         ],
@@ -146,6 +163,7 @@ async def send_booking_confirmed_guest_email(
         coupon_discount=f"{booking.coupon_discount:.2f}",
         total_amount=f"{booking.total_amount:.2f}",
         map_url=map_url,
+        special_requests=booking.special_requests,
     )
 
     plain_text = f"Your booking {booking.ref_number} at {property_obj.name} is confirmed. Total: {property_obj.currency} {booking.total_amount:.2f}"
@@ -183,6 +201,7 @@ async def send_booking_confirmed_owner_email(
         rooms=[{"room_name": r.room_name} for r in room_units],
         currency=property_obj.currency,
         total_amount=f"{booking.total_amount:.2f}",
+        special_requests=booking.special_requests,
     )
 
     await send_transactional_email(

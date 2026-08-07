@@ -107,6 +107,9 @@ class Booking(Base, TimestampMixin):
     ref_number: Mapped[str] = mapped_column(
         String(50), unique=True, index=True, nullable=False
     )
+    special_requests: Mapped[Optional[str]] = mapped_column(
+        String(1000), nullable=True
+    )
 
     # Relationships
     guest: Mapped["Guest"] = relationship("Guest")

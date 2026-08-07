@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from sqlalchemy import func, select, delete
+from sqlalchemy import func, select, delete,update
 from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -345,7 +345,11 @@ class BookingRepository:
                     joinedload(Booking.property),
                     selectinload(Booking.booking_rooms)
                     .joinedload(BookingRoom.room_unit)
-                    .joinedload(Rooms.room_type),
+                    .options(
+                    joinedload(Rooms.room_type),
+                    # Preloads the system_amenities relationship on the Rooms model
+                    selectinload(Rooms.system_amenities) 
+                )
                 )
                 .where(Booking.ref_number == ref_number)
             )
@@ -384,3 +388,43 @@ class BookingRepository:
                 f"[BookingRepository] Failed to delete booking {ref_number}: {e}"
             )
             raise RepositoryException("Could not delete booking.") from e
+
+        
+    async def update_special_requests(
+        self, ref_number: str, guest_id: uuid.UUID, special_requests: str
+    ) -> Booking | None:
+        """
+        Atomically checks status and updates special requests if the booking is PENDING.
+        Eagerly loads relationships on the returned object to eliminate secondary query trips.
+        """
+        logger.info(f"[BookingRepository] Updating special requests for {ref_number}")
+        try:
+            # Atomic Update: Filters by ID, Owner, AND the permissible status simultaneously
+            stmt = (
+                update(Booking)
+                .where(
+                    Booking.ref_number == ref_number,
+                    Booking.guest_id == guest_id,
+                    Booking.status == "PENDING"  # Moves business rule constraint directly into the SQL engine
+                )
+                .values(special_requests=special_requests)
+                .returning(Booking)  # Returns the entire updated ORM entity
+                .options(
+                    joinedload(Booking.guest),
+                    joinedload(Booking.property),
+                    selectinload(Booking.booking_rooms)
+                    .joinedload(BookingRoom.room_unit)
+                    .options(
+                        joinedload(Rooms.room_type),
+                        selectinload(Rooms.system_amenities)
+                    )
+                )
+            )
+            
+            result = await self.db.execute(stmt)
+            # Returns the updated object with relationships populated, or None if the criteria failed
+            return result.scalars().first()
+            
+        except SQLAlchemyError as e:
+            logger.error(f"[BookingRepository] Failed to update special requests for {ref_number}: {e}")
+            raise RepositoryException("Could not update special requests.") from e

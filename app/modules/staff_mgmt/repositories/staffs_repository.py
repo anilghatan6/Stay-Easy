@@ -155,7 +155,13 @@ class StaffRepository:
                 return None
 
             for field, value in update_data.items():
-                setattr(staff, field, value)
+                if field == "photos" and isinstance(value, dict):
+                    if staff.photos is None:
+                        staff.photos = {}
+                    for k, v in value.items():
+                        staff.photos[k] = v
+                else:
+                    setattr(staff, field, value)
             
             return staff
 

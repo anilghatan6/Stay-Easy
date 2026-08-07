@@ -408,10 +408,12 @@ class RoomRepository:
             # 1. Handle nested 'photos' safely if present
             if "photos" in payload and payload["photos"]:
                 photos_data = payload["photos"]
+                if room.photos is None:
+                    room.photos = {}
                 if "cover" in photos_data:
-                    room.cover = photos_data["cover"]
+                    room.photos["cover"] = photos_data["cover"]
                 if "gallery" in photos_data:
-                    room.gallery = photos_data["gallery"]
+                    room.photos["gallery"] = photos_data["gallery"]
 
             # 2. Update all other attributes dynamically, avoiding 'photos'
             for key, value in payload.items():

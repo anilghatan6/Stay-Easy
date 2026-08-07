@@ -80,7 +80,13 @@ class PropertyRepository:
                 raise PropertyNotFoundException("Property not found or access denied")
 
             for field, value in update_data.items():
-                setattr(property_obj, field, value)
+                if field == "photos" and isinstance(value, dict):
+                    if property_obj.photos is None:
+                        property_obj.photos = {}
+                    for k, v in value.items():
+                        property_obj.photos[k] = v
+                else:
+                    setattr(property_obj, field, value)
 
             await self.db.commit()
             await self.db.refresh(property_obj)

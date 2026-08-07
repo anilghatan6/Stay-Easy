@@ -19,7 +19,6 @@ router = APIRouter(
     ],
 )
 
-
 @router.post(
     "/forgot-password",
     response_model=StandardResponse,

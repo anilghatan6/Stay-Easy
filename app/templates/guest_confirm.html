@@ -18,17 +18,25 @@
                 <table role="presentation" width="650" cellspacing="0" cellpadding="0"
                     style="background-color: #ffffff; border: 1px solid #dcdcdc; border-radius: 4px; overflow: hidden; width: 100%; max-width: 650px;">
 
+                    <!-- 0. StayEasy Top Branding Header -->
+                    <tr style="background-color: #381d66;">
+                        <td style="padding: 14px 30px; border-bottom: 1px solid #573398;">
+                            <span
+                                style="font-size: 18px; font-weight: bold; color: #ffffff; letter-spacing: 0.5px;">StayEasy</span>
+                        </td>
+                    </tr>
+
                     <!-- 1. Purple Header Banner -->
                     <tr>
                         <td style="background-color: #4c2a85; color: #ffffff; padding: 24px 30px;">
                             <h2 style="margin: 0 0 10px 0; font-size: 22px; font-weight: normal; color: #ffffff;">
-                                Booking confirmation</h2>
-                            <p style="margin: 0 0 12px 0; font-size: 16px; font-weight: bold; color: #ffffff;">
+                                Booking confirmation
+                            </h2>
+                            <p style="margin: 0 0 6px 0; font-size: 16px; font-weight: bold; color: #ffffff;">
                                 Booking No. {{ ref_number }}
                             </p>
-                            <p style="margin: 0; font-size: 13px; color: #dcd0f0;">
-                                The booking was made on the official website <strong style="color: #ffffff;">{{
-                                    property_name }}</strong>
+                            <p style="margin: 0; font-size: 12px; color: #dcd0f0;">
+                                Booked on {{ booking_created_at }}
                             </p>
                         </td>
                     </tr>
@@ -39,26 +47,12 @@
 
                             <!-- 2. Manage Booking Section -->
                             <div style="margin-bottom: 24px;">
-                                <h3
-                                    style="margin: 0 0 6px 0; font-size: 13px; text-transform: uppercase; color: #222222; font-weight: bold;">
-                                    MANAGE BOOKING</h3>
-                                <p style="margin: 0 0 10px 0; font-size: 11px; color: #666666;">Unless it contradicts
-                                    your rate plan terms, you can:</p>
-
-                                <div style="font-size: 12px; line-height: 1.8; color: #0066cc;">
-                                    <a href="#" style="color: #0066cc; text-decoration: underline;">Change dates</a><br>
-                                    <a href="#" style="color: #0066cc; text-decoration: underline;">Change room</a><br>
-                                    <a href="#" style="color: #0066cc; text-decoration: underline;">Change contact
-                                        details</a><br>
-                                    <a href="#" style="color: #0066cc; text-decoration: underline;">Cancel booking</a>
-                                </div>
-
-                                <p style="margin: 14px 0 0 0; font-size: 13px; color: #333333;">
+                                <p style="margin: 0; font-size: 13px; color: #333333;">
                                     <strong>Booking number:</strong> {{ ref_number }}
                                 </p>
                             </div>
 
-                            <!-- 3. Property Information & Header Logo -->
+                            <!-- 3. Property Information & Brand Logo -->
                             <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
                                 style="margin-bottom: 20px;">
                                 <tr>
@@ -87,12 +81,15 @@
                                         </p>
                                         {% endif %}
                                     </td>
-                                    <td align="right" style="vertical-align: top; width: 120px;">
-                                        <!-- Brand Symbol / Badge -->
-                                        <div
-                                            style="background-color: #4c2a85; color: #ffffff; width: 80px; height: 80px; border-radius: 50%; text-align: center; line-height: 80px; font-size: 24px; font-weight: bold;">
-                                            SE
-                                        </div>
+                                    <!-- Brand Logo Column -->
+                                    <td align="right" style="vertical-align: top; width: 130px;">
+                                        {% if brand_logo_url %}
+                                        <img src="{{ brand_logo_url }}" alt="{{ property_name }}"
+                                            style="max-width: 120px; max-height: 80px; width: auto; height: auto; object-fit: contain; display: block; border: 0;">
+                                        {% else %}
+                                        <div style="font-size: 16px; font-weight: bold; color: #4c2a85;">{{
+                                            property_name }}</div>
+                                        {% endif %}
                                     </td>
                                 </tr>
                             </table>
@@ -114,6 +111,8 @@
                                         <th style="padding: 10px; font-weight: bold; border-right: 1px solid #633ba3;">
                                             Departure</th>
                                         <th style="padding: 10px; font-weight: bold; border-right: 1px solid #633ba3;">
+                                            Nights</th>
+                                        <th style="padding: 10px; font-weight: bold; border-right: 1px solid #633ba3;">
                                             Guests</th>
                                         <th style="padding: 10px; font-weight: bold;">Rooms</th>
                                     </tr>
@@ -132,6 +131,10 @@
                                         </td>
                                         <td
                                             style="padding: 12px 10px; border-right: 1px solid #e0d8ee; vertical-align: top;">
+                                            <strong>{{ nights }}</strong> night{% if nights != 1 %}s{% endif %}
+                                        </td>
+                                        <td
+                                            style="padding: 12px 10px; border-right: 1px solid #e0d8ee; vertical-align: top;">
                                             {{ adults }} Adult{% if adults > 1 %}s{% endif %}{% if children and children
                                             > 0 %}, {{ children }} Child{% if children > 1 %}ren{% endif %}{% endif %}
                                         </td>
@@ -144,10 +147,11 @@
 
                             <!-- Add to Calendar Links -->
                             <p style="margin: 0 0 24px 0; font-size: 12px; color: #0066cc;">
-                                📅 <a href="#" style="color: #0066cc; text-decoration: underline;">Add to Outlook / iCal
-                                    Calendar</a> &nbsp;&nbsp;
-                                📅 <a href="#" style="color: #0066cc; text-decoration: underline;">Add to Google
-                                    Calendar</a>
+                                📅 <a
+                                    href="https://calendar.google.com/calendar/render?action=TEMPLATE&amp;text=Stay+at+{{ property_name|urlencode }}&amp;dates={{ checkin_gcal }}/{{ checkout_gcal }}&amp;details=Booking+Ref:+{{ ref_number }}&amp;location={{ property_address|urlencode }}"
+                                    target="_blank" style="color: #0066cc; text-decoration: underline;">
+                                    Add to Google Calendar
+                                </a>
                             </p>
 
                             <!-- 5. Customer Information Box -->
@@ -183,18 +187,25 @@
                                             style="color: #0066cc; text-decoration: underline;">{{ property_email }}</a>
                                     </td>
                                 </tr>
+                                <!-- Comments / Special Notes Row -->
                                 <tr>
                                     <td
-                                        style="padding: 10px; background-color: #fafafa; border-right: 1px solid #dcdcdc; color: #555555;">
-                                        Subscribed to emails</td>
-                                    <td style="padding: 10px; color: #222222;">Yes</td>
+                                        style="padding: 10px; background-color: #fafafa; border-right: 1px solid #dcdcdc; color: #555555; vertical-align: top;">
+                                        Special Notes / Comments</td>
+                                    <td style="padding: 10px; color: #222222; vertical-align: top;">
+                                        {% if special_requests %}
+                                        {{ special_requests }}
+                                        {% else %}
+                                        None
+                                        {% endif %}
+                                    </td>
                                 </tr>
                             </table>
 
                             <!-- Dotted Divider -->
                             <div style="border-top: 1px dashed #cccccc; margin: 24px 0;"></div>
 
-                            <!-- 6. Booking Cost Table -->
+                            <!-- 6. Booking Cost & Room Details Table -->
                             <h3 style="margin: 0 0 12px 0; font-size: 15px; color: #222222; font-weight: bold;">Booking
                                 cost</h3>
 
@@ -210,12 +221,46 @@
                                         {{ currency }} {{ room.base_rate }}
                                     </td>
                                 </tr>
-                                <tr style="border-bottom: 1px solid #eee;">
-                                    <td style="padding: 8px 10px; color: #555555;">Accommodation</td>
-                                    <td align="right" style="padding: 8px 10px; color: #333333;">{{ adults }} guest(s)
+
+                                <!-- Room Details (Cover Photo, Amenities & Cancellation Policy) -->
+                                <tr style="border-bottom: 1px solid #dcdcdc;">
+                                    <td colspan="2"
+                                        style="padding: 12px 10px; color: #555555; background-color: #ffffff;">
+                                        {% if room.cover_photo %}
+                                        <div style="margin-bottom: 10px;">
+                                            <img src="{{ room.cover_photo }}" alt="{{ room.room_name }}"
+                                                style="max-width: 140px; max-height: 90px; border-radius: 4px; object-fit: cover;">
+                                        </div>
+                                        {% endif %}
+
+                                        {% if room.room_amenities %}
+                                        <div
+                                            style="font-size: 12px; color: #555555; line-height: 1.4; margin-bottom: 8px;">
+                                            <strong>Amenities:</strong> {{ room.room_amenities|join(", ") }}
+                                        </div>
+                                        {% endif %}
+
+                                        <!-- Cancellation Policy per Room -->
+                                        {% if room.cancellation_title or room.cancellation_description %}
+                                        <div
+                                            style="font-size: 12px; color: #444444; line-height: 1.4; background-color: #fafafa; padding: 8px 10px; border-left: 3px solid #4c2a85; border-radius: 2px; margin-top: 8px;">
+                                            <strong style="color: #4c2a85;">Cancellation Policy{% if
+                                                room.cancellation_title %} ({{ room.cancellation_title }}){% endif
+                                                %}:</strong><br>
+                                            <span style="color: #555555;">{{ room.cancellation_description or "Standard
+                                                hotel cancellation policy applies." }}</span>
+                                        </div>
+                                        {% endif %}
                                     </td>
                                 </tr>
                                 {% endfor %}
+
+                                <!-- Subtotal Row -->
+                                <tr style="border-bottom: 1px solid #eee; background-color: #fafafa;">
+                                    <td style="padding: 8px 10px; font-weight: bold; color: #333333;">Subtotal</td>
+                                    <td align="right" style="padding: 8px 10px; font-weight: bold; color: #333333;">{{
+                                        currency }} {{ subtotal }}</td>
+                                </tr>
 
                                 {% if special_offer_discount and special_offer_discount != "0.00" %}
                                 <tr style="border-bottom: 1px solid #eee;">
@@ -254,24 +299,10 @@
                                 </tr>
                             </table>
 
-                            <!-- 7. Rate Plan Description -->
-                            <div style="margin-bottom: 24px;">
-                                <h3
-                                    style="margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; color: #222222; font-weight: bold;">
-                                    RATE PLAN DESCRIPTION</h3>
-                                <p style="margin: 0 0 6px 0; font-size: 13px; color: #333333; font-weight: bold;">
-                                    🛎️ Standard Booking Plan
-                                </p>
-                                <p style="margin: 0 0 12px 0; font-size: 12px; color: #666666;">
-                                    Free cancellation terms apply according to hotel policy. Contact property for
-                                    modifications.
-                                </p>
-                            </div>
-
                             <!-- Dotted Divider -->
                             <div style="border-top: 1px dashed #cccccc; margin: 24px 0;"></div>
 
-                            <!-- 8. Location Section -->
+                            <!-- 7. Location Section -->
                             <div style="margin-bottom: 10px;">
                                 <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #222222; font-weight: bold;">
                                     Location {{ property_name }}
@@ -298,7 +329,7 @@
                         </td>
                     </tr>
 
-                    <!-- 9. Purple Footer Banner -->
+                    <!-- 8. Purple Footer Banner -->
                     <tr>
                         <td style="background-color: #4c2a85; color: #ffffff; padding: 20px 30px; text-align: center;">
                             <p style="margin: 0 0 6px 0; font-size: 13px; font-weight: bold; color: #ffffff;">

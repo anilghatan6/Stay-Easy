@@ -20,6 +20,10 @@ class ApplyDiscountRequest(BaseModel):
     code: str = Field(..., min_length=1, max_length=50)
 
 
+class UpdateSpecialRequest(BaseModel):
+    special_requests: str = Field(..., max_length=1000)
+
+
 class PaymentIntentRequest(BaseModel):
     payment_gateway: str = Field(..., max_length=20)
     return_url: Optional[str] = Field(None, max_length=255)
@@ -114,6 +118,7 @@ class BookingReservationResponse(BaseModel):
     rooms: list[RoomReservationDetail]
     total_amount: float
     subtotal: float = 0.0
+    special_requests: Optional[str] = None
     special_offer_applied: list[AppliedSpecialOffer] = Field(default_factory=list)
     special_offer_discount: float = 0.0
     coupon_code: Optional[str] = None
@@ -135,6 +140,7 @@ class BookingListItemResponse(BaseModel):
     number_of_children: int
     checkin_date: date
     checkout_date: date
+    special_requests: Optional[str] = None
     currency: Optional[str]
     total_amount: Decimal
     created_at: datetime
