@@ -136,15 +136,16 @@ class SearchService:
             all_candidates.sort(key=lambda x: (-x["match_score"], x["total_price"]))
 
             # --- PAGINATION CALCULATIONS ---
-            total_count = len(all_candidates)
 
             # Slice the valid results according to skip & limit parameters
             paginated_candidates = all_candidates[skip : skip + limit]
-            has_more = skip + len(paginated_candidates) < total_count
 
             enriched_properties = await self._attach_property_details(
                 results=paginated_candidates
             )
+            total_count = len(enriched_properties)
+            has_more = skip + len(paginated_candidates) < total_count
+
 
             response =  {
                 "data": {
