@@ -11,6 +11,7 @@ class Token(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str
+    must_change_password:bool
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str

@@ -11,6 +11,7 @@ from app.modules.auth.services.password_reset_services import PasswordResetServi
 from app.config.database_config import get_db
 from app.config.redis_config import get_redis_client
 from app.modules.auth.services.otp_service import OTPService
+from app.modules.auth.services.password_reset_services import PasswordResetService
 
 
 def get_guest_auth_service() -> AuthService:
@@ -24,39 +25,18 @@ def get_guest_repository(db=Depends(get_db)) -> GuestRepository:
     return GuestRepository(db)
 
 
-def get_otp_service(redis_client=Depends(get_redis_client)) -> OTPService:
-    return OTPService(redis_client)
-
-
-def get_guest_service(
-    guest_repository: GuestRepository = Depends(get_guest_repository),
-    auth_service: AuthService = Depends(get_guest_auth_service),
-    otp_service: OTPService = Depends(get_otp_service),
-    background_tasks: BackgroundTasks = BackgroundTasks,
-) -> GuestService:
-    return GuestService(guest_repository, auth_service, otp_service, background_tasks)
-
-
-# --- User Dependencies ---
-
-
 def get_user_repository(db=Depends(get_db)) -> UserRepository:
     return UserRepository(db)
 
-
-def get_user_service(
-    user_repository: UserRepository = Depends(get_user_repository),
-    auth_service: AuthService = Depends(get_guest_auth_service),
-    otp_service: OTPService = Depends(get_otp_service),
-    background_tasks: BackgroundTasks = BackgroundTasks,
-) -> UserService:
-    return UserService(user_repository, auth_service, otp_service, background_tasks)
+def get_otp_service(redis_client=Depends(get_redis_client)) -> OTPService:
+    return OTPService(redis_client)
 
 
 def get_password_reset_repository(
     db=Depends(get_db),
 ) -> PasswordResetRepository:
     return PasswordResetRepository(db)
+
 
 
 def get_password_reset_service(
@@ -73,3 +53,42 @@ def get_password_reset_service(
         guest_repo=guest_repo,
         auth_service=auth_service,
     )
+
+def get_guest_service(
+  
+    guest_repository: GuestRepository = Depends(get_guest_repository),
+    auth_service: AuthService = Depends(get_guest_auth_service),
+    otp_service: OTPService = Depends(get_otp_service),
+    background_tasks: BackgroundTasks = BackgroundTasks,
+    password_reset_service: PasswordResetService = Depends(get_password_reset_service),
+) -> GuestService:
+    return GuestService(
+        guest_repository=guest_repository,
+        auth_service=auth_service,
+        otp_service=otp_service,
+        background_tasks=background_tasks,
+        password_reset_service=password_reset_service,
+    )
+
+
+# --- User Dependencies ---
+
+
+
+def get_user_service(
+ 
+    user_repository: UserRepository = Depends(get_user_repository),
+    auth_service: AuthService = Depends(get_guest_auth_service),
+    otp_service: OTPService = Depends(get_otp_service),
+    background_tasks: BackgroundTasks = BackgroundTasks,
+    password_reset_service: PasswordResetService = Depends(get_password_reset_service),
+) -> UserService:
+    return UserService(
+        user_repository=user_repository,
+        auth_service=auth_service,
+        otp_service=otp_service,
+        background_tasks=background_tasks,
+        password_reset_service=password_reset_service,
+    )
+
+

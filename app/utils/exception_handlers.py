@@ -43,7 +43,7 @@ _VALIDATION_MESSAGES: dict[str, Callable[[str, dict], str]] = {
 def _format_validation_error(error: dict) -> str:
     """Converts a single Pydantic v2 error dict into a clean user-facing string."""
     loc = error.get("loc", ())
-    field = str(loc[-1]).replace("_", " ").title() if len(loc) > 1 else "Input"
+    field = str(loc[-1]).replace("_", " ").title() if len(loc) > 1 else ""
     error_type = error.get("type", "")
     ctx = error.get("ctx", {})
 

@@ -6,7 +6,10 @@ from app.modules.auth.schemas.password_reset_schema import (
     ChangePasswordRequest,
 )
 from app.modules.auth.dependencies import get_password_reset_service
-from app.middlewares.auth_middlewares import CurrentGuest, CurrentUser
+from app.middlewares.auth_middlewares import (
+    CurrentUserChangePassword,
+    CurrentGuestChangePassword,
+)
 from app.utils.schemas import StandardResponse
 from app.middlewares.rate_limiter import RateLimiter, bypass_global_limit
 
@@ -18,6 +21,7 @@ router = APIRouter(
         Depends(RateLimiter(max_requests=5, window_seconds=60, scope="password_reset")),
     ],
 )
+
 
 @router.post(
     "/forgot-password",
@@ -38,20 +42,20 @@ async def forgot_password(
     )
 
 
-@router.post(
-    "/reset-password",
-    response_model=StandardResponse,
-    status_code=status.HTTP_200_OK,
-)
-async def reset_password(
-    payload: ResetPasswordRequest,
-    password_reset_service: PasswordResetService = Depends(get_password_reset_service),
-):
-    await password_reset_service.reset_password(payload.token, payload.new_password)
-    return StandardResponse(
-        success=True,
-        data="Password reset successfully.You can now log in with your new password.",
-    )
+# @router.post(
+#     "/reset-password",
+#     response_model=StandardResponse,
+#     status_code=status.HTTP_200_OK,
+# )
+# async def reset_password(
+#     payload: ResetPasswordRequest,
+#     password_reset_service: PasswordResetService = Depends(get_password_reset_service),
+# ):
+#     await password_reset_service.reset_password(payload.token, payload.new_password)
+#     return StandardResponse(
+#         success=True,
+#         data="Password reset successfully.You can now log in with your new password.",
+#     )
 
 
 @router.post(
@@ -61,7 +65,7 @@ async def reset_password(
 )
 async def change_guest_password(
     payload: ChangePasswordRequest,
-    current_guest: CurrentGuest,
+    current_guest: CurrentGuestChangePassword,
     password_reset_service: PasswordResetService = Depends(get_password_reset_service),
 ):
     await password_reset_service.change_password(
@@ -80,7 +84,7 @@ async def change_guest_password(
 )
 async def change_user_password(
     payload: ChangePasswordRequest,
-    current_user: CurrentUser,
+    current_user: CurrentUserChangePassword,
     password_reset_service: PasswordResetService = Depends(get_password_reset_service),
 ):
     await password_reset_service.change_password(

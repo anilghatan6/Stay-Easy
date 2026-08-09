@@ -30,6 +30,7 @@ class Guest(Base):
     nationality: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )

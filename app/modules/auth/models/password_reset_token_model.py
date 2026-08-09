@@ -10,6 +10,7 @@ from app.modules.auth.models.users_model import User
 from app.modules.auth.models.guests_model import Guest
 
 
+
 class PasswordResetToken(Base):
     __tablename__ = "password_reset_tokens"
     __table_args__ = (
@@ -31,13 +32,17 @@ class PasswordResetToken(Base):
         UUID(as_uuid=True), ForeignKey("guests.id", ondelete="CASCADE"), nullable=True, index=True
     )
 
-    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    # Hash of the temp password itself — never store it in plaintext, even here.
+    # Used to detect whether a login attempt's password matches an active temp password.
+    temp_password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
 
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
 
+    # Set the instant the temp password is successfully used to log in.
+    # Once set, this temp password can never be used again — enforces one-time use.
     used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
@@ -46,5 +51,9 @@ class PasswordResetToken(Base):
 
     @property
     def account_id(self) -> uuid.UUID:
-        """Convenience accessor — returns whichever owner ID is actually set."""
         return self.user_id if self.user_id is not None else self.guest_id
+
+    @property
+    def is_valid(self) -> bool:
+        """True only if unused AND not expired — the one-time, 15-minute window."""
+        return self.used_at is None and self.expires_at > datetime.now(UTC)

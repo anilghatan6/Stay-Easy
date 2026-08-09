@@ -4,6 +4,8 @@ from app.modules.auth.models.users_model import User
 from app.modules.auth.services.auth_services import AuthService
 from app.modules.auth.services.otp_service import OTPService
 from app.utils.mail_services import send_verification_email
+from app.modules.auth.services.password_reset_services import PasswordResetService
+
 
 from app.utils.exceptions import (
     ServiceException,
@@ -15,7 +17,11 @@ from app.utils.exceptions import (
     AccountActiveException,
     InvalidOTPException,
     UnauthorizedException,
+    TempPasswordExpiredError,
+    TempPasswordAlreadyUsedError,
+    InvalidPasswordException,
 )
+
 from app.utils.logging import LoggerFactory
 import uuid
 
@@ -29,11 +35,15 @@ class UserService:
         auth_service: AuthService,
         otp_service: OTPService,
         background_tasks: BackgroundTasks,
+        password_reset_service: PasswordResetService,
+
     ):
         self.user_repository = user_repository
         self.auth_service = auth_service
         self.otp_service = otp_service
         self.background_tasks = background_tasks
+        self.password_reset_service = password_reset_service
+
 
     async def register_user(self, user_data: dict) -> User:
         """
@@ -167,13 +177,17 @@ class UserService:
                     "Account not verified. Please verify your email."
                 )
 
+            if user.must_change_password:
+                await self.password_reset_service.validate_and_consume_temp_password(user_id=user.id)
+
             token_data = {"sub": str(user.id), "role": str(user.role).lower()}
             return {
                 "access_token": self.auth_service.create_access_token(token_data),
                 "refresh_token": self.auth_service.create_refresh_token(token_data),
                 "token_type": "bearer",
+                "must_change_password": user.must_change_password,
             }
-        except (UserNotFoundException, AccountInactiveException):
+        except (UserNotFoundException, AccountInactiveException,InvalidPasswordException,TempPasswordExpiredError, TempPasswordAlreadyUsedError):
             raise
         except Exception as e:
             logger.error(f"[UserService] Error in login_user: {str(e)}")

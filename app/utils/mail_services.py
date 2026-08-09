@@ -81,32 +81,38 @@ async def send_verification_email(to_email: str, verification_code: str) -> None
         raise ServiceException(str(e))
 
 
-async def send_password_reset_email(to_email: str, username: str, token: str) -> None:
-    reset_url = f"{os.getenv('FRONTEND_URL')}/reset-password?token={token}"
-
+async def send_password_reset_email(
+    to_email: str, username: str, temp_password: str
+) -> None:
     template = templates.env.get_template("password_reset.html")
-    html_content = template.render(reset_url=reset_url, username=username)
+    expiry_minutes = os.getenv("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES", "15")
+    html_content = template.render(username=username, temp_password=temp_password, expiry_minutes=expiry_minutes)
+
 
     plain_text = f"""Hi {username},
 
-    You requested to reset your password. Click the link below to set a new password:
+You requested to reset your password. Your temporary password is:
 
-    {reset_url}
+{temp_password}
 
-    This link will expire in {os.getenv("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES")} minutes.
+Please log in using this temporary password, then change it immediately from your account settings.
 
-    If you didn't request this, you can safely ignore this email.
+This temporary password will expire in {expiry_minutes} minutes.
 
-    Best regards,
-    ServerIQ Team
-    """
+If you didn't request this, please contact support immediately — someone may be trying to access your account.
+
+Best regards,
+ServerIQ Team
+"""
     try:
         await send_transactional_email(
-            to_email, "ServerIQ - Reset Your Password", html_content or plain_text
+            to_email, "ServerIQ - Your Temporary Password", html_content or plain_text
         )
     except Exception as e:
         logger.error(f"Error sending password reset email: {str(e)}")
-        raise ServiceException(str(e))
+        raise ServiceException(
+            f"Could not send password reset email to {to_email}"
+        ) from e
 
 
 async def send_booking_confirmed_guest_email(

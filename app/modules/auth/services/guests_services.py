@@ -1,6 +1,8 @@
 from fastapi import BackgroundTasks
 
 from app.modules.auth.repositories.guests_repo import GuestRepository
+
+from app.modules.auth.services.password_reset_services import PasswordResetService
 from app.modules.auth.models.guests_model import Guest
 from app.modules.auth.services.auth_services import AuthService
 from app.utils.exceptions import (
@@ -12,6 +14,9 @@ from app.utils.exceptions import (
     InvalidOTPException,
     AccountActiveException,
     UnauthorizedException,
+    TempPasswordExpiredError,
+    TempPasswordAlreadyUsedError,
+    InvalidPasswordException,
 )
 from app.utils.logging import LoggerFactory
 from app.modules.auth.services.otp_service import OTPService
@@ -27,11 +32,13 @@ class GuestService:
         auth_service: AuthService,
         otp_service: OTPService,
         background_tasks: BackgroundTasks,
+        password_reset_service: PasswordResetService,
     ):
         self.guest_repository = guest_repository
         self.auth_service = auth_service
         self.otp_service = otp_service
         self.background_tasks = background_tasks
+        self.password_reset_service = password_reset_service
 
     async def register_guest(self, guest_data: dict) -> Guest:
         """
@@ -66,7 +73,9 @@ class GuestService:
         guest.full_name = new_data["full_name"]
         guest.phone = new_data.get("phone")
         guest.nationality = new_data.get("nationality")
-        guest.hashed_password = self.auth_service.get_password_hash(new_data["password"])
+        guest.hashed_password = self.auth_service.get_password_hash(
+            new_data["password"]
+        )
 
         updated_guest = await self.guest_repository.update_guest(guest)
         await self._send_verification_otp(updated_guest.email)
@@ -109,11 +118,7 @@ class GuestService:
             guest.is_active = True
             await self.guest_repository.update_guest(guest)
 
-           
-            return {
-               "status":"success",
-               "message":"Account Verified Successfully"
-            }
+            return {"status": "success", "message": "Account Verified Successfully"}
         except (UserNotFoundException, InvalidOTPException):
             raise
         except Exception as e:
@@ -163,13 +168,19 @@ class GuestService:
                     "Account not verified. Please verify your email."
                 )
 
+            if guest.must_change_password:
+                await self.password_reset_service.validate_and_consume_temp_password(guest_id=guest.id) 
+                # must_change_password stays True until they actually set a new password —
+                # the frontend should redirect to a "set new password" screen based on this flag
+
             token_data = {"sub": str(guest.id), "role": "guest"}
             return {
                 "access_token": self.auth_service.create_access_token(token_data),
                 "refresh_token": self.auth_service.create_refresh_token(token_data),
                 "token_type": "bearer",
+                "must_change_password": guest.must_change_password,
             }
-        except (UserNotFoundException, ServiceException, AccountInactiveException):
+        except (UserNotFoundException, ServiceException, AccountInactiveException,InvalidPasswordException,TempPasswordExpiredError, TempPasswordAlreadyUsedError):
             raise
         except Exception as e:
             logger.error(f"[GuestService] Error in login_guest: {str(e)}")

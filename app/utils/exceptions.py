@@ -411,3 +411,15 @@ class InvalidAccountTypeException(AppBaseException):
         super().__init__(
             user_message=user_message, internal_detail=user_message, status_code=400
         )
+
+class TempPasswordAlreadyUsedError(AppBaseException):
+    def __init__(self, user_message: str):
+        super().__init__(
+            user_message=user_message, internal_detail=user_message, status_code=400
+        )
+
+class TempPasswordExpiredError(AppBaseException):
+    def __init__(self, user_message: str):
+        super().__init__(
+            user_message=user_message, internal_detail=user_message, status_code=400
+        )

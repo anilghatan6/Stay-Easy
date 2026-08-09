@@ -1,5 +1,7 @@
 import hashlib
 import secrets
+import string
+import uuid
 from datetime import datetime, timedelta, UTC
 from app.modules.auth.repositories.password_reset_repository import (
     PasswordResetRepository,
@@ -15,6 +17,9 @@ from app.utils.exceptions import (
     InvalidResetTokenException,
     InvalidPasswordException,
     InvalidAccountTypeException,
+    TempPasswordAlreadyUsedError,
+    TempPasswordExpiredError
+
 )
 from app.modules.auth.models import Guest, User
 from app.utils.logging import LoggerFactory
@@ -31,6 +36,7 @@ def generate_reset_token() -> str:
 def hash_reset_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
+
 class PasswordResetService:
     def __init__(
         self,
@@ -46,14 +52,12 @@ class PasswordResetService:
         self.guest_repo = guest_repo
         self.auth_service = auth_service
 
+    def _generate_temp_password(self, length: int = 8) -> str:
+        """Generates a secure temporary password."""
+        alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+        return "".join(secrets.choice(alphabet) for _ in range(length))
+
     async def request_password_reset(self, email: str) -> None:
-        """
-        Looks up the email across both User and Guest tables, issues a reset
-        token for whichever one matches, and sends the email. Always returns
-        the same generic outcome regardless of whether an account was found —
-        callers should never learn from the response whether an email exists
-        in the system (prevents account enumeration).
-        """
         try:
             user = await self.password_reset_repo.find_user_by_email(email)
             guest = None
@@ -67,35 +71,44 @@ class PasswordResetService:
                 )
                 return  # deliberately silent — do not leak account existence
 
-            token = generate_reset_token()
-            token_hash = hash_reset_token(token)
+            temp_password = self._generate_temp_password(8)
+            # hashed_password = self.auth_service.get_password_hash(temp_password)
+            temp_password_hash = self.auth_service.get_password_hash(temp_password)  # same hash, stored for token lookup
             expires_at = datetime.now(UTC) + timedelta(
-                minutes=int(os.getenv("RESET_TOKEN_EXPIRE_MINUTES", 15))
+                minutes=int(os.getenv("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES", "15"))
             )
 
             if user is not None:
                 await self.password_reset_repo.delete_existing_tokens(user_id=user.id)
+                await self.password_reset_repo.update_user_password(user, temp_password_hash)
+                user.must_change_password = True
                 await self.password_reset_repo.create_token(
-                    token_hash=token_hash, expires_at=expires_at, user_id=user.id
+                    temp_password_hash=temp_password_hash,
+                    expires_at=expires_at,
+                    user_id=user.id,
                 )
                 await self.db.commit()
-
                 recipient_email = user.email
                 recipient_name = user.full_name
 
             else:
                 await self.password_reset_repo.delete_existing_tokens(guest_id=guest.id)
+                await self.password_reset_repo.update_guest_password(guest, temp_password_hash)
+                guest.must_change_password = True
                 await self.password_reset_repo.create_token(
-                    token_hash=token_hash, expires_at=expires_at, guest_id=guest.id
+                    temp_password_hash=temp_password_hash,
+                    expires_at=expires_at,
+                    guest_id=guest.id,
                 )
                 await self.db.commit()
-
                 recipient_email = guest.email
                 recipient_name = guest.full_name
 
             try:
                 await send_password_reset_email(
-                    to_email=recipient_email, username=recipient_name, token=token
+                    to_email=recipient_email,
+                    username=recipient_name,
+                    temp_password=temp_password,
                 )
             except EmailDeliveryError as e:
                 # Token was created successfully — email failure shouldn't be
@@ -170,7 +183,9 @@ class PasswordResetService:
 
     async def _verify_password(self, account: User | Guest, plain_password: str):
         try:
-            if not self.auth_service.verify_password(plain_password, account.hashed_password):
+            if not self.auth_service.verify_password(
+                plain_password, account.hashed_password
+            ):
                 raise InvalidPasswordException("Current Password is incorrect")
             return True
 
@@ -186,16 +201,18 @@ class PasswordResetService:
         self, account: User | Guest, current_password: str, new_password: str, role: str
     ) -> None:
         try:
-            await self._verify_password(account,current_password)
+            await self._verify_password(account, current_password)
             hashed_new_password = self.auth_service.get_password_hash(new_password)
             if role == "guest":
                 await self.password_reset_repo.update_guest_password(
                     account, hashed_new_password
                 )
+                account.must_change_password = False
             elif role == "user":
                 await self.password_reset_repo.update_user_password(
                     account, hashed_new_password
                 )
+                account.must_change_password = False
 
             else:
                 raise InvalidAccountTypeException("Invalid account type provided.")
@@ -214,3 +231,30 @@ class PasswordResetService:
                 f"[PasswordResetService] Unexpected error changing password: {e}"
             )
             raise ServiceException("Could not change password. Please try again.")
+
+    async def validate_and_consume_temp_password(
+        self, user_id: uuid.UUID | None = None, guest_id: uuid.UUID | None = None
+    ) -> None:
+        """
+        Called during login, AFTER password hash verification succeeds,
+        ONLY when the account's must_change_password flag is True.
+        Raises a specific exception if the temp password is expired or
+        already used — otherwise consumes the token (one-time use enforced).
+        """
+        token = await self.password_reset_repo.get_latest_token(user_id=user_id, guest_id=guest_id)
+
+        if token.used_at is not None:
+            logger.warning(f"[PasswordResetService] Rejected reuse of already-used temp password token {token.id}")
+            raise TempPasswordAlreadyUsedError(
+                "This temporary password has already been used. Please request a new one."
+            )
+
+        if token.expires_at <= datetime.now(UTC):
+            logger.warning(f"[PasswordResetService] Rejected expired temp password token {token.id}")
+            raise TempPasswordExpiredError(
+                "This temporary password has expired. Please request a new one."
+            )
+
+        # Valid — consume it now, so it can never be used again
+        await self.password_reset_repo.mark_token_used(token)
+        await self.db.commit()
