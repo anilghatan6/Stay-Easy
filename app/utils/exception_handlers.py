@@ -74,7 +74,7 @@ async def handle_app_exception(request: Request, exc: AppBaseException):
         )
     else:
         # Keep traceback for server errors (5xx) or other anomalies
-        logger.info(
+        logger.error(
             "[%s] %s | path=%s\n%s",
             exc.__class__.__name__,
             exc.internal_detail,

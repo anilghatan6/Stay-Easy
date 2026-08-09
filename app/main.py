@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 import redis.asyncio as aioredis
 
 from fastapi import FastAPI, Depends
-from app.config.database_config import engine,Base
+from app.config.database_config import engine, Base
 from app.modules.auth.models import *
 from app.modules.auth.routers.guests_router import router as guest_router
 from app.modules.auth.routers.users_router import router as user_router
@@ -63,7 +63,7 @@ global_limiter = RateLimiter(max_requests=150, window_seconds=60, scope="global"
 
 app = FastAPI(
     lifespan=lifespan,
-    title="StayEasy API",
+    title="ServerIQ API",
     version="1.0.0",
     root_path="/api/v1",
     dependencies=[Depends(global_limiter)],
@@ -92,7 +92,7 @@ app.include_router(booking_router)
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to the Easy Booking System API"}
+    return {"message": "Welcome to the ServerIQ API"}
 
 
 @app.get("/health")

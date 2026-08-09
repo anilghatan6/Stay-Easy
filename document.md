@@ -1,8 +1,8 @@
-# StayEasy API — Project Documentation
+# ServerIQ API — Project Documentation
 
 ## 1. Project Overview
 
-**StayEasy API** is a multi-tenant property-management & booking backend built with **FastAPI**. It powers two broad use cases:
+**ServerIQ API** is a multi-tenant property-management & booking backend built with **FastAPI**. It powers two broad use cases:
 
 - A **Property Management System (PMS)** where admins/tenants manage properties, rooms (room types, bed types), special offers, discount codes, staff, and image uploads.
 - A **Guest-facing booking flow** where guests register, search properties, create reservations, apply discounts/coupons, and pay through multiple payment gateways.
@@ -16,7 +16,7 @@ Router (HTTP) → Dependency (injection) → Service (business logic) → Reposi
 Key characteristics:
 
 - **API prefix:** `/api/v1` (set via `root_path` in the FastAPI app)
-- **App title/version:** `StayEasy API` v `1.0.0`
+- **App title/version:** `ServerIQ API` v `1.0.0`
 - **Python:** >= 3.12, managed with `uv`
 - **Database:** PostgreSQL (async SQLAlchemy 2.0); SQLite + `aiosqlite` for tests
 - **Cache/Session store:** Redis (OTP storage, search caching, booking soft-locks, forex rate cache)
@@ -108,7 +108,7 @@ flowchart LR
         A[Admin / Tenant App]
     end
 
-    subgraph StayEasy API
+    subgraph ServerIQ API
         direction LR
         G -->|REST /api/v1| ROUTER[FastAPI Routers]
         A -->|REST /api/v1| ROUTER

@@ -17,32 +17,40 @@
             body {
                 background-color: #f4f4f6 !important;
             }
+
             .bg-main {
                 background-color: #ffffff !important;
                 background-image: linear-gradient(#ffffff, #ffffff) !important;
             }
+
             .bg-purple {
                 background-color: #4c2a85 !important;
                 background-image: linear-gradient(#4c2a85, #4c2a85) !important;
             }
+
             .bg-dark-purple {
                 background-color: #381d66 !important;
                 background-image: linear-gradient(#381d66, #381d66) !important;
             }
+
             .bg-light-purple {
                 background-color: #f7f5fb !important;
                 background-image: linear-gradient(#f7f5fb, #f7f5fb) !important;
             }
+
             .bg-card {
                 background-color: #fafafa !important;
                 background-image: linear-gradient(#fafafa, #fafafa) !important;
             }
+
             .text-white {
                 color: #ffffff !important;
             }
+
             .text-dark {
                 color: #333333 !important;
             }
+
             .text-purple {
                 color: #4c2a85 !important;
             }
@@ -50,28 +58,36 @@
     </style>
 </head>
 
-<body style="margin: 0; padding: 0; font-family: Arial, Helvetica, sans-serif; background-color: #f4f4f6; background-image: linear-gradient(#f4f4f6, #f4f4f6); color: #333333;">
+<body
+    style="margin: 0; padding: 0; font-family: Arial, Helvetica, sans-serif; background-color: #f4f4f6; background-image: linear-gradient(#f4f4f6, #f4f4f6); color: #333333;">
 
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f4f4f6; background-image: linear-gradient(#f4f4f6, #f4f4f6); padding: 20px 0;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+        style="background-color: #f4f4f6; background-image: linear-gradient(#f4f4f6, #f4f4f6); padding: 20px 0;">
         <tr>
             <td align="center">
                 <!-- Main Container -->
-                <table role="presentation" width="650" cellspacing="0" cellpadding="0" class="bg-main" style="background-color: #ffffff; background-image: linear-gradient(#ffffff, #ffffff); border: 1px solid #dcdcdc; border-radius: 4px; overflow: hidden; width: 100%; max-width: 650px;">
+                <table role="presentation" width="650" cellspacing="0" cellpadding="0" class="bg-main"
+                    style="background-color: #ffffff; background-image: linear-gradient(#ffffff, #ffffff); border: 1px solid #dcdcdc; border-radius: 4px; overflow: hidden; width: 100%; max-width: 650px;">
 
-                    <!-- 0. StayEasy Top Branding Header -->
-                    <tr class="bg-dark-purple" style="background-color: #381d66; background-image: linear-gradient(#381d66, #381d66);">
+                    <!-- 0. ServerIQ Top Branding Header -->
+                    <tr class="bg-dark-purple"
+                        style="background-color: #381d66; background-image: linear-gradient(#381d66, #381d66);">
                         <td style="padding: 14px 30px; border-bottom: 1px solid #573398;">
-                            <span class="text-white" style="font-size: 18px; font-weight: bold; color: #ffffff; letter-spacing: 0.5px;">StayEasy</span>
+                            <span class="text-white"
+                                style="font-size: 18px; font-weight: bold; color: #ffffff; letter-spacing: 0.5px;">ServerIQ</span>
                         </td>
                     </tr>
 
                     <!-- 1. Purple Header Banner -->
                     <tr>
-                        <td class="bg-purple" style="background-color: #4c2a85; background-image: linear-gradient(#4c2a85, #4c2a85); color: #ffffff; padding: 24px 30px;">
-                            <h2 class="text-white" style="margin: 0 0 10px 0; font-size: 22px; font-weight: normal; color: #ffffff;">
+                        <td class="bg-purple"
+                            style="background-color: #4c2a85; background-image: linear-gradient(#4c2a85, #4c2a85); color: #ffffff; padding: 24px 30px;">
+                            <h2 class="text-white"
+                                style="margin: 0 0 10px 0; font-size: 22px; font-weight: normal; color: #ffffff;">
                                 Booking confirmation
                             </h2>
-                            <p class="text-white" style="margin: 0 0 6px 0; font-size: 16px; font-weight: bold; color: #ffffff;">
+                            <p class="text-white"
+                                style="margin: 0 0 6px 0; font-size: 16px; font-weight: bold; color: #ffffff;">
                                 Booking No. {{ ref_number }}
                             </p>
                             <p style="margin: 0; font-size: 12px; color: #dcd0f0;">
@@ -92,32 +108,44 @@
                             </div>
 
                             <!-- 3. Property Information & Brand Logo -->
-                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 20px;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+                                style="margin-bottom: 20px;">
                                 <tr>
                                     <td style="vertical-align: top;">
-                                        <h2 class="text-purple" style="margin: 0 0 10px 0; font-size: 18px; color: #4c2a85; font-weight: bold;">
+                                        <h2 class="text-purple"
+                                            style="margin: 0 0 10px 0; font-size: 18px; color: #4c2a85; font-weight: bold;">
                                             {{ property_name }}
                                         </h2>
-                                        <p class="text-dark" style="margin: 0 0 6px 0; font-size: 13px; color: #333333; line-height: 1.4;">
-                                            <strong>Address:</strong> {{ property_address }}{% if property_city %}, {{ property_city }}{% endif %}{% if property_state %}, {{ property_state }}{% endif %}{% if property_country %}, {{ property_country }}{% endif %}{% if property_zip_code %} ({{ property_zip_code }}){% endif %}
+                                        <p class="text-dark"
+                                            style="margin: 0 0 6px 0; font-size: 13px; color: #333333; line-height: 1.4;">
+                                            <strong>Address:</strong> {{ property_address }}{% if property_city %}, {{
+                                            property_city }}{% endif %}{% if property_state %}, {{ property_state }}{%
+                                            endif %}{% if property_country %}, {{ property_country }}{% endif %}{% if
+                                            property_zip_code %} ({{ property_zip_code }}){% endif %}
                                         </p>
                                         {% if property_phone_number %}
-                                        <p class="text-dark" style="margin: 0 0 6px 0; font-size: 13px; color: #333333;">
+                                        <p class="text-dark"
+                                            style="margin: 0 0 6px 0; font-size: 13px; color: #333333;">
                                             <strong>Phone:</strong> {{ property_phone_number }}
                                         </p>
                                         {% endif %}
                                         {% if property_email %}
                                         <p class="text-dark" style="margin: 0; font-size: 13px; color: #333333;">
-                                            <strong>Email:</strong> <a href="mailto:{{ property_email }}" style="color: #0066cc; text-decoration: underline;">{{ property_email }}</a>
+                                            <strong>Email:</strong> <a href="mailto:{{ property_email }}"
+                                                style="color: #0066cc; text-decoration: underline;">{{ property_email
+                                                }}</a>
                                         </p>
                                         {% endif %}
                                     </td>
                                     <!-- Brand Logo Column -->
                                     <td align="right" style="vertical-align: top; width: 130px;">
                                         {% if brand_logo_url %}
-                                            <img src="{{ brand_logo_url }}" alt="{{ property_name }}" style="max-width: 120px; max-height: 80px; width: auto; height: auto; object-fit: contain; display: block; border: 0;">
+                                        <img src="{{ brand_logo_url }}" alt="{{ property_name }}"
+                                            style="max-width: 120px; max-height: 80px; width: auto; height: auto; object-fit: contain; display: block; border: 0;">
                                         {% else %}
-                                            <div class="text-purple" style="font-size: 16px; font-weight: bold; color: #4c2a85;">{{ property_name }}</div>
+                                        <div class="text-purple"
+                                            style="font-size: 16px; font-weight: bold; color: #4c2a85;">{{ property_name
+                                            }}</div>
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -127,33 +155,51 @@
                             <div style="border-top: 1px dashed #cccccc; margin: 24px 0;"></div>
 
                             <!-- 4. Booking Details Table -->
-                            <h3 class="text-dark" style="margin: 0 0 12px 0; font-size: 15px; color: #222222; font-weight: bold;">Booking details</h3>
+                            <h3 class="text-dark"
+                                style="margin: 0 0 12px 0; font-size: 15px; color: #222222; font-weight: bold;">Booking
+                                details</h3>
 
-                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border: 1px solid #4c2a85; border-collapse: collapse; margin-bottom: 12px;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+                                style="border: 1px solid #4c2a85; border-collapse: collapse; margin-bottom: 12px;">
                                 <thead>
-                                    <tr class="bg-purple" style="background-color: #4c2a85; background-image: linear-gradient(#4c2a85, #4c2a85); color: #ffffff; text-align: left; font-size: 12px;">
-                                        <th class="text-white" style="padding: 10px; font-weight: bold; border-right: 1px solid #633ba3;">Arrival</th>
-                                        <th class="text-white" style="padding: 10px; font-weight: bold; border-right: 1px solid #633ba3;">Departure</th>
-                                        <th class="text-white" style="padding: 10px; font-weight: bold; border-right: 1px solid #633ba3;">Nights</th>
-                                        <th class="text-white" style="padding: 10px; font-weight: bold; border-right: 1px solid #633ba3;">Guests</th>
+                                    <tr class="bg-purple"
+                                        style="background-color: #4c2a85; background-image: linear-gradient(#4c2a85, #4c2a85); color: #ffffff; text-align: left; font-size: 12px;">
+                                        <th class="text-white"
+                                            style="padding: 10px; font-weight: bold; border-right: 1px solid #633ba3;">
+                                            Arrival</th>
+                                        <th class="text-white"
+                                            style="padding: 10px; font-weight: bold; border-right: 1px solid #633ba3;">
+                                            Departure</th>
+                                        <th class="text-white"
+                                            style="padding: 10px; font-weight: bold; border-right: 1px solid #633ba3;">
+                                            Nights</th>
+                                        <th class="text-white"
+                                            style="padding: 10px; font-weight: bold; border-right: 1px solid #633ba3;">
+                                            Guests</th>
                                         <th class="text-white" style="padding: 10px; font-weight: bold;">Rooms</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr class="bg-light-purple" style="background-color: #f7f5fb; background-image: linear-gradient(#f7f5fb, #f7f5fb); font-size: 13px; color: #333333;">
-                                        <td class="text-dark" style="padding: 12px 10px; border-right: 1px solid #e0d8ee; vertical-align: top;">
+                                    <tr class="bg-light-purple"
+                                        style="background-color: #f7f5fb; background-image: linear-gradient(#f7f5fb, #f7f5fb); font-size: 13px; color: #333333;">
+                                        <td class="text-dark"
+                                            style="padding: 12px 10px; border-right: 1px solid #e0d8ee; vertical-align: top;">
                                             <strong>{{ checkin_date }}</strong><br>
                                             <span style="font-size: 11px; color: #666666;">after 12:00</span>
                                         </td>
-                                        <td class="text-dark" style="padding: 12px 10px; border-right: 1px solid #e0d8ee; vertical-align: top;">
+                                        <td class="text-dark"
+                                            style="padding: 12px 10px; border-right: 1px solid #e0d8ee; vertical-align: top;">
                                             <strong>{{ checkout_date }}</strong><br>
                                             <span style="font-size: 11px; color: #666666;">till 12:00</span>
                                         </td>
-                                        <td class="text-dark" style="padding: 12px 10px; border-right: 1px solid #e0d8ee; vertical-align: top;">
+                                        <td class="text-dark"
+                                            style="padding: 12px 10px; border-right: 1px solid #e0d8ee; vertical-align: top;">
                                             <strong>{{ nights }}</strong> night{% if nights != 1 %}s{% endif %}
                                         </td>
-                                        <td class="text-dark" style="padding: 12px 10px; border-right: 1px solid #e0d8ee; vertical-align: top;">
-                                            {{ adults }} Adult{% if adults > 1 %}s{% endif %}{% if children and children > 0 %}, {{ children }} Child{% if children > 1 %}ren{% endif %}{% endif %}
+                                        <td class="text-dark"
+                                            style="padding: 12px 10px; border-right: 1px solid #e0d8ee; vertical-align: top;">
+                                            {{ adults }} Adult{% if adults > 1 %}s{% endif %}{% if children and children
+                                            > 0 %}, {{ children }} Child{% if children > 1 %}ren{% endif %}{% endif %}
                                         </td>
                                         <td class="text-dark" style="padding: 12px 10px; vertical-align: top;">
                                             {{ rooms|length }}
@@ -164,37 +210,58 @@
 
                             <!-- Add to Calendar Links -->
                             <p style="margin: 0 0 24px 0; font-size: 12px; color: #0066cc;">
-                                📅 <a href="https://calendar.google.com/calendar/render?action=TEMPLATE&amp;text=Stay+at+{{ property_name|urlencode }}&amp;dates={{ checkin_gcal }}/{{ checkout_gcal }}&amp;details=Booking+Ref:+{{ ref_number }}&amp;location={{ property_address|urlencode }}" target="_blank" style="color: #0066cc; text-decoration: underline;">Add to Google Calendar</a>
+                                📅 <a
+                                    href="https://calendar.google.com/calendar/render?action=TEMPLATE&amp;text=Stay+at+{{ property_name|urlencode }}&amp;dates={{ checkin_gcal }}/{{ checkout_gcal }}&amp;details=Booking+Ref:+{{ ref_number }}&amp;location={{ property_address|urlencode }}"
+                                    target="_blank" style="color: #0066cc; text-decoration: underline;">Add to Google
+                                    Calendar</a>
                             </p>
 
                             <!-- 5. Customer Information Box -->
-                            <h3 class="text-dark" style="margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; color: #222222; font-weight: bold;">CUSTOMER INFORMATION</h3>
+                            <h3 class="text-dark"
+                                style="margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; color: #222222; font-weight: bold;">
+                                CUSTOMER INFORMATION</h3>
 
-                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border: 1px solid #dcdcdc; border-collapse: collapse; margin-bottom: 24px; font-size: 13px;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+                                style="border: 1px solid #dcdcdc; border-collapse: collapse; margin-bottom: 24px; font-size: 13px;">
                                 <tr>
-                                    <td width="30%" class="bg-card" style="padding: 10px; background-color: #fafafa; background-image: linear-gradient(#fafafa, #fafafa); border-bottom: 1px solid #dcdcdc; border-right: 1px solid #dcdcdc; color: #555555;">Full name</td>
-                                    <td width="70%" class="bg-main" style="padding: 10px; background-color: #ffffff; background-image: linear-gradient(#ffffff, #ffffff); border-bottom: 1px solid #dcdcdc; font-weight: bold; color: #222222;">{{ guest_name }}</td>
+                                    <td width="30%" class="bg-card"
+                                        style="padding: 10px; background-color: #fafafa; background-image: linear-gradient(#fafafa, #fafafa); border-bottom: 1px solid #dcdcdc; border-right: 1px solid #dcdcdc; color: #555555;">
+                                        Full name</td>
+                                    <td width="70%" class="bg-main"
+                                        style="padding: 10px; background-color: #ffffff; background-image: linear-gradient(#ffffff, #ffffff); border-bottom: 1px solid #dcdcdc; font-weight: bold; color: #222222;">
+                                        {{ guest_name }}</td>
                                 </tr>
                                 {% if property_phone_number %}
                                 <tr>
-                                    <td class="bg-card" style="padding: 10px; background-color: #fafafa; background-image: linear-gradient(#fafafa, #fafafa); border-bottom: 1px solid #dcdcdc; border-right: 1px solid #dcdcdc; color: #555555;">Phone</td>
-                                    <td class="bg-main" style="padding: 10px; background-color: #ffffff; background-image: linear-gradient(#ffffff, #ffffff); border-bottom: 1px solid #dcdcdc; color: #222222;">{{ property_phone_number }}</td>
+                                    <td class="bg-card"
+                                        style="padding: 10px; background-color: #fafafa; background-image: linear-gradient(#fafafa, #fafafa); border-bottom: 1px solid #dcdcdc; border-right: 1px solid #dcdcdc; color: #555555;">
+                                        Phone</td>
+                                    <td class="bg-main"
+                                        style="padding: 10px; background-color: #ffffff; background-image: linear-gradient(#ffffff, #ffffff); border-bottom: 1px solid #dcdcdc; color: #222222;">
+                                        {{ property_phone_number }}</td>
                                 </tr>
                                 {% endif %}
                                 <tr>
-                                    <td class="bg-card" style="padding: 10px; background-color: #fafafa; background-image: linear-gradient(#fafafa, #fafafa); border-bottom: 1px solid #dcdcdc; border-right: 1px solid #dcdcdc; color: #555555;">Email</td>
-                                    <td class="bg-main" style="padding: 10px; background-color: #ffffff; background-image: linear-gradient(#ffffff, #ffffff); border-bottom: 1px solid #dcdcdc; color: #0066cc;">
-                                        <a href="mailto:{{ property_email }}" style="color: #0066cc; text-decoration: underline;">{{ property_email }}</a>
+                                    <td class="bg-card"
+                                        style="padding: 10px; background-color: #fafafa; background-image: linear-gradient(#fafafa, #fafafa); border-bottom: 1px solid #dcdcdc; border-right: 1px solid #dcdcdc; color: #555555;">
+                                        Email</td>
+                                    <td class="bg-main"
+                                        style="padding: 10px; background-color: #ffffff; background-image: linear-gradient(#ffffff, #ffffff); border-bottom: 1px solid #dcdcdc; color: #0066cc;">
+                                        <a href="mailto:{{ property_email }}"
+                                            style="color: #0066cc; text-decoration: underline;">{{ property_email }}</a>
                                     </td>
                                 </tr>
                                 <!-- Comments / Special Notes Row -->
                                 <tr>
-                                    <td class="bg-card" style="padding: 10px; background-color: #fafafa; background-image: linear-gradient(#fafafa, #fafafa); border-right: 1px solid #dcdcdc; color: #555555; vertical-align: top;">Special Notes / Comments</td>
-                                    <td class="bg-main" style="padding: 10px; background-color: #ffffff; background-image: linear-gradient(#ffffff, #ffffff); color: #222222; vertical-align: top;">
+                                    <td class="bg-card"
+                                        style="padding: 10px; background-color: #fafafa; background-image: linear-gradient(#fafafa, #fafafa); border-right: 1px solid #dcdcdc; color: #555555; vertical-align: top;">
+                                        Special Notes / Comments</td>
+                                    <td class="bg-main"
+                                        style="padding: 10px; background-color: #ffffff; background-image: linear-gradient(#ffffff, #ffffff); color: #222222; vertical-align: top;">
                                         {% if special_requests %}
-                                            {{ special_requests }}
+                                        {{ special_requests }}
                                         {% else %}
-                                            None
+                                        None
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -204,40 +271,52 @@
                             <div style="border-top: 1px dashed #cccccc; margin: 24px 0;"></div>
 
                             <!-- 6. Booking Cost & Room Details Table -->
-                            <h3 class="text-dark" style="margin: 0 0 12px 0; font-size: 15px; color: #222222; font-weight: bold;">Booking cost</h3>
+                            <h3 class="text-dark"
+                                style="margin: 0 0 12px 0; font-size: 15px; color: #222222; font-weight: bold;">Booking
+                                cost</h3>
 
-                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border: 1px solid #dcdcdc; border-collapse: collapse; margin-bottom: 24px; font-size: 13px;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+                                style="border: 1px solid #dcdcdc; border-collapse: collapse; margin-bottom: 24px; font-size: 13px;">
                                 {% for room in rooms %}
                                 <!-- Room Title Bar -->
-                                <tr class="bg-light-purple" style="background-color: #f7f5fb; background-image: linear-gradient(#f7f5fb, #f7f5fb); border-bottom: 1px solid #dcdcdc;">
+                                <tr class="bg-light-purple"
+                                    style="background-color: #f7f5fb; background-image: linear-gradient(#f7f5fb, #f7f5fb); border-bottom: 1px solid #dcdcdc;">
                                     <td class="text-purple" style="padding: 10px; font-weight: bold; color: #4c2a85;">
                                         No.{{ loop.index }}: {{ room.room_name }} ({{ room.room_type }})
                                     </td>
-                                    <td align="right" class="text-purple" style="padding: 10px; font-weight: bold; color: #4c2a85;">
+                                    <td align="right" class="text-purple"
+                                        style="padding: 10px; font-weight: bold; color: #4c2a85;">
                                         {{ currency }} {{ room.base_rate }}
                                     </td>
                                 </tr>
-                                
+
                                 <!-- Room Details (Cover Photo, Amenities & Cancellation Policy) -->
                                 <tr style="border-bottom: 1px solid #dcdcdc;">
-                                    <td colspan="2" class="bg-main" style="padding: 12px 10px; color: #555555; background-color: #ffffff; background-image: linear-gradient(#ffffff, #ffffff);">
+                                    <td colspan="2" class="bg-main"
+                                        style="padding: 12px 10px; color: #555555; background-color: #ffffff; background-image: linear-gradient(#ffffff, #ffffff);">
                                         {% if room.cover_photo %}
                                         <div style="margin-bottom: 10px;">
-                                            <img src="{{ room.cover_photo }}" alt="{{ room.room_name }}" style="max-width: 140px; max-height: 90px; border-radius: 4px; object-fit: cover;">
+                                            <img src="{{ room.cover_photo }}" alt="{{ room.room_name }}"
+                                                style="max-width: 140px; max-height: 90px; border-radius: 4px; object-fit: cover;">
                                         </div>
                                         {% endif %}
-                                        
+
                                         {% if room.room_amenities %}
-                                        <div style="font-size: 12px; color: #555555; line-height: 1.4; margin-bottom: 8px;">
+                                        <div
+                                            style="font-size: 12px; color: #555555; line-height: 1.4; margin-bottom: 8px;">
                                             <strong>Amenities:</strong> {{ room.room_amenities|join(", ") }}
                                         </div>
                                         {% endif %}
 
                                         <!-- Cancellation Policy per Room -->
                                         {% if room.cancellation_title or room.cancellation_description %}
-                                        <div class="bg-card" style="font-size: 12px; color: #444444; line-height: 1.4; background-color: #fafafa; background-image: linear-gradient(#fafafa, #fafafa); padding: 8px 10px; border-left: 3px solid #4c2a85; border-radius: 2px; margin-top: 8px;">
-                                            <strong class="text-purple" style="color: #4c2a85;">Cancellation Policy{% if room.cancellation_title %} ({{ room.cancellation_title }}){% endif %}:</strong><br>
-                                            <span style="color: #555555;">{{ room.cancellation_description or "Standard hotel cancellation policy applies." }}</span>
+                                        <div class="bg-card"
+                                            style="font-size: 12px; color: #444444; line-height: 1.4; background-color: #fafafa; background-image: linear-gradient(#fafafa, #fafafa); padding: 8px 10px; border-left: 3px solid #4c2a85; border-radius: 2px; margin-top: 8px;">
+                                            <strong class="text-purple" style="color: #4c2a85;">Cancellation Policy{% if
+                                                room.cancellation_title %} ({{ room.cancellation_title }}){% endif
+                                                %}:</strong><br>
+                                            <span style="color: #555555;">{{ room.cancellation_description or "Standard
+                                                hotel cancellation policy applies." }}</span>
                                         </div>
                                         {% endif %}
                                     </td>
@@ -245,39 +324,54 @@
                                 {% endfor %}
 
                                 <!-- Subtotal Row -->
-                                <tr class="bg-card" style="border-bottom: 1px solid #eee; background-color: #fafafa; background-image: linear-gradient(#fafafa, #fafafa);">
-                                    <td class="text-dark" style="padding: 8px 10px; font-weight: bold; color: #333333;">Subtotal</td>
-                                    <td align="right" class="text-dark" style="padding: 8px 10px; font-weight: bold; color: #333333;">{{ currency }} {{ subtotal }}</td>
+                                <tr class="bg-card"
+                                    style="border-bottom: 1px solid #eee; background-color: #fafafa; background-image: linear-gradient(#fafafa, #fafafa);">
+                                    <td class="text-dark" style="padding: 8px 10px; font-weight: bold; color: #333333;">
+                                        Subtotal</td>
+                                    <td align="right" class="text-dark"
+                                        style="padding: 8px 10px; font-weight: bold; color: #333333;">{{ currency }} {{
+                                        subtotal }}</td>
                                 </tr>
 
                                 {% if special_offer_discount and special_offer_discount != "0.00" %}
-                                <tr class="bg-main" style="border-bottom: 1px solid #eee; background-color: #ffffff; background-image: linear-gradient(#ffffff, #ffffff);">
+                                <tr class="bg-main"
+                                    style="border-bottom: 1px solid #eee; background-color: #ffffff; background-image: linear-gradient(#ffffff, #ffffff);">
                                     <td style="padding: 8px 10px; color: #d9534f;">Special Offer Discount</td>
-                                    <td align="right" style="padding: 8px 10px; color: #d9534f;">- {{ currency }} {{ special_offer_discount }}</td>
+                                    <td align="right" style="padding: 8px 10px; color: #d9534f;">- {{ currency }} {{
+                                        special_offer_discount }}</td>
                                 </tr>
                                 {% endif %}
 
                                 {% if coupon_discount and coupon_discount != "0.00" %}
-                                <tr class="bg-main" style="border-bottom: 1px solid #eee; background-color: #ffffff; background-image: linear-gradient(#ffffff, #ffffff);">
-                                    <td style="padding: 8px 10px; color: #d9534f;">Coupon Discount {% if coupon_code %}({{ coupon_code }}){% endif %}</td>
-                                    <td align="right" style="padding: 8px 10px; color: #d9534f;">- {{ currency }} {{ coupon_discount }}</td>
+                                <tr class="bg-main"
+                                    style="border-bottom: 1px solid #eee; background-color: #ffffff; background-image: linear-gradient(#ffffff, #ffffff);">
+                                    <td style="padding: 8px 10px; color: #d9534f;">Coupon Discount {% if coupon_code
+                                        %}({{ coupon_code }}){% endif %}</td>
+                                    <td align="right" style="padding: 8px 10px; color: #d9534f;">- {{ currency }} {{
+                                        coupon_discount }}</td>
                                 </tr>
                                 {% endif %}
 
-                                <tr class="bg-main" style="border-bottom: 1px solid #eee; background-color: #ffffff; background-image: linear-gradient(#ffffff, #ffffff);">
+                                <tr class="bg-main"
+                                    style="border-bottom: 1px solid #eee; background-color: #ffffff; background-image: linear-gradient(#ffffff, #ffffff);">
                                     <td style="padding: 8px 10px; color: #555555;">Taxes and fees</td>
-                                    <td align="right" class="text-dark" style="padding: 8px 10px; color: #333333;">Included</td>
+                                    <td align="right" class="text-dark" style="padding: 8px 10px; color: #333333;">
+                                        Included</td>
                                 </tr>
 
                                 <!-- Total Cost Row (Purple Bar) -->
-                                <tr class="bg-purple" style="background-color: #4c2a85; background-image: linear-gradient(#4c2a85, #4c2a85); color: #ffffff; font-weight: bold; font-size: 14px;">
+                                <tr class="bg-purple"
+                                    style="background-color: #4c2a85; background-image: linear-gradient(#4c2a85, #4c2a85); color: #ffffff; font-weight: bold; font-size: 14px;">
                                     <td class="text-white" style="padding: 12px 10px;">Total cost</td>
-                                    <td align="right" class="text-white" style="padding: 12px 10px;">{{ currency }} {{ total_amount }}</td>
+                                    <td align="right" class="text-white" style="padding: 12px 10px;">{{ currency }} {{
+                                        total_amount }}</td>
                                 </tr>
 
-                                <tr class="bg-card" style="background-color: #fafafa; background-image: linear-gradient(#fafafa, #fafafa);">
+                                <tr class="bg-card"
+                                    style="background-color: #fafafa; background-image: linear-gradient(#fafafa, #fafafa);">
                                     <td style="padding: 10px; color: #555555;">Payment method</td>
-                                    <td align="right" class="text-dark" style="padding: 10px; color: #333333;">Online Confirmation / Guaranteed</td>
+                                    <td align="right" class="text-dark" style="padding: 10px; color: #333333;">Online
+                                        Confirmation / Guaranteed</td>
                                 </tr>
                             </table>
 
@@ -286,19 +380,45 @@
 
                             <!-- 7. Location Section -->
                             <div style="margin-bottom: 10px;">
-                                <h3 class="text-dark" style="margin: 0 0 10px 0; font-size: 15px; color: #222222; font-weight: bold;">
+                                <h3 class="text-dark"
+                                    style="margin: 0 0 10px 0; font-size: 15px; color: #222222; font-weight: bold;">
                                     Location {{ property_name }}
                                 </h3>
-                                <p class="text-dark" style="margin: 0 0 12px 0; font-size: 13px; color: #333333; line-height: 1.4;">
-                                    <strong>Address:</strong> {{ property_address }}{% if property_city %}, {{ property_city }}{% endif %}{% if property_country %}, {{ property_country }}{% endif %}
+                                <p class="text-dark"
+                                    style="margin: 0 0 12px 0; font-size: 13px; color: #333333; line-height: 1.4;">
+                                    <strong>Address:</strong> {{ property_address }}{% if property_city %}, {{
+                                    property_city }}{% endif %}{% if property_country %}, {{ property_country }}{% endif
+                                    %}
                                 </p>
 
                                 <!-- Map CTA Button -->
-                                <table role="presentation" cellspacing="0" cellpadding="0" style="margin-top: 12px;">
+                                <!-- <table role="presentation" cellspacing="0" cellpadding="0" style="margin-top: 12px;">
                                     <tr>
                                         <td class="bg-purple" style="background-color: #4c2a85; background-image: linear-gradient(#4c2a85, #4c2a85); border-radius: 4px; padding: 10px 18px;">
                                             <a href="{{ map_url }}" target="_blank" class="text-white" style="color: #ffffff; text-decoration: none; font-size: 13px; font-weight: bold; display: inline-block;">
                                                 📍 View Location on Google Maps
+                                            </a>
+                                        </td>
+                                    </tr>
+                                </table> -->
+                                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                                    <tr>
+                                        <td>
+                                            <a href="{{ map_url }}" target="_blank"
+                                                style="text-decoration: none; display: block;">
+                                                {% if static_map_url %}
+                                                <img src="{{ static_map_url }}"
+                                                    alt="Map location for {{ property_name }}" width="100%"
+                                                    style="width: 100%; max-width: 590px; height: auto; border: 2px solid #4c2a85; border-radius: 4px; display: block; box-sizing: border-box;">
+                                                {% elif latitude and longitude %}
+                                                <img src="https://maps.googleapis.com/maps/api/staticmap?center={{ latitude }},{{ longitude }}&zoom=15&size=600x250&markers=color:red%7C{{ latitude }},{{ longitude }}&key=YOUR_GOOGLE_MAPS_API_KEY"
+                                                    alt="Map location for {{ property_name }}" width="100%"
+                                                    style="width: 100%; max-width: 590px; height: auto; border: 2px solid #4c2a85; border-radius: 4px; display: block; box-sizing: border-box;">
+                                                {% else %}
+                                                <img src="https://maps.googleapis.com/maps/api/staticmap?center={{ property_address|urlencode }}&zoom=15&size=600x250&markers=color:red%7C{{ property_address|urlencode }}&key=YOUR_GOOGLE_MAPS_API_KEY"
+                                                    alt="Map location for {{ property_name }}" width="100%"
+                                                    style="width: 100%; max-width: 590px; height: auto; border: 2px solid #4c2a85; border-radius: 4px; display: block; box-sizing: border-box;">
+                                                {% endif %}
                                             </a>
                                         </td>
                                     </tr>
@@ -310,15 +430,17 @@
 
                     <!-- 8. Purple Footer Banner -->
                     <tr>
-                        <td class="bg-purple" style="background-color: #4c2a85; background-image: linear-gradient(#4c2a85, #4c2a85); color: #ffffff; padding: 20px 30px; text-align: center;">
-                            <p class="text-white" style="margin: 0 0 6px 0; font-size: 13px; font-weight: bold; color: #ffffff;">
+                        <td class="bg-purple"
+                            style="background-color: #4c2a85; background-image: linear-gradient(#4c2a85, #4c2a85); color: #ffffff; padding: 20px 30px; text-align: center;">
+                            <p class="text-white"
+                                style="margin: 0 0 6px 0; font-size: 13px; font-weight: bold; color: #ffffff;">
                                 © 2026 {{ property_name }}
                             </p>
                             <p style="margin: 0 0 10px 0; font-size: 11px; color: #dcd0f0;">
                                 {{ property_address }}{% if property_city %}, {{ property_city }}{% endif %}
                             </p>
                             <p style="margin: 0; font-size: 10px; color: #b8a3de;">
-                                The message was automatically generated by StayEasy.
+                                The message was automatically generated by ServerIQ.
                             </p>
                         </td>
                     </tr>

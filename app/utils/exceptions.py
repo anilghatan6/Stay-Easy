@@ -7,9 +7,9 @@ class AppBaseException(Exception):
         self, user_message: str, internal_detail: str = None, status_code: int = 500
     ):
         self.user_message = user_message  # shown to API consumer
-        self.internal_detail = internal_detail  # only logged internally
+        self.internal_detail = internal_detail or self.user_message
         self.status_code = status_code
-        super().__init__(internal_detail or user_message)
+        super().__init__(internal_detail)
 
 
 class RepositoryException(AppBaseException):

@@ -60,10 +60,10 @@ async def send_verification_email(to_email: str, verification_code: str) -> None
         <html>
         <body>
             <h1>Verify Your Email Address</h1>
-            <p>Thank you for registering with StayEasy. Please use the code below to verify your email address:</p>
+            <p>Thank you for registering with ServerIQ. Please use the code below to verify your email address:</p>
             <p><strong>{verification_code}</strong></p>
             <p>This code will expire in 10 minutes.</p>
-            <p>If you did not register with StayEasy, please ignore this email.</p>
+            <p>If you did not register with ServerIQ, please ignore this email.</p>
         </body>
         </html>
         """
@@ -73,7 +73,7 @@ async def send_verification_email(to_email: str, verification_code: str) -> None
 
         await send_transactional_email(
             to_email,
-            "StayEasy - Verify Your Email Address",
+            "ServerIQ - Verify Your Email Address",
             html_content or plain_content,
         )
     except Exception as e:
@@ -98,11 +98,11 @@ async def send_password_reset_email(to_email: str, username: str, token: str) ->
     If you didn't request this, you can safely ignore this email.
 
     Best regards,
-    StayEasy Team
+    ServerIQ Team
     """
     try:
         await send_transactional_email(
-            to_email, "StayEasy - Reset Your Password", html_content or plain_text
+            to_email, "ServerIQ - Reset Your Password", html_content or plain_text
         )
     except Exception as e:
         logger.error(f"Error sending password reset email: {str(e)}")
@@ -121,6 +121,7 @@ async def send_booking_confirmed_guest_email(
     html_content = template.render(
         guest_name=guest_name,
         ref_number=booking.ref_number,
+        guest_email=to_email,
         nights=nights,
         booking_created_at=booking_created_at,
         property_name=property_obj.name,
@@ -134,8 +135,8 @@ async def send_booking_confirmed_guest_email(
         brand_logo_url=property_obj.brand_logo_url,
         checkin_date=booking.checkin_date.strftime("%B %d, %Y"),
         checkout_date=booking.checkout_date.strftime("%B %d, %Y"),
-        checkin_gcal = booking.checkin_date.strftime('%Y%m%dT%H%M%SZ'),
-        checkout_gcal = booking.checkout_date.strftime('%Y%m%dT%H%M%SZ'),
+        checkin_gcal=booking.checkin_date.strftime("%Y%m%dT%H%M%SZ"),
+        checkout_gcal=booking.checkout_date.strftime("%Y%m%dT%H%M%SZ"),
         adults=booking.number_of_adults,
         children=booking.number_of_children,
         rooms=[
@@ -144,15 +145,19 @@ async def send_booking_confirmed_guest_email(
                 "room_type": r.room_type.room_type_name,
                 "base_rate": f"{r.base_rate:.2f}",
                 "currency": property_obj.currency,
-                "cancellation_title":r.cancellation_title,
-                "cancellation_description":r.cancellation_description,
+                "cancellation_title": r.cancellation_title,
+                "cancellation_description": r.cancellation_description,
                 "cover_photo": (r.photos or {}).get("cover") if r.photos else None,
                 "room_amenities": [
                     # 1. Pull human-readable names from the loaded Amenity relationship objects
                     *[amenity.name for amenity in (r.system_amenities or [])],
                     # 2. Flatten and extract names from your inline JSONB custom amenities array
-                    *[custom.get("name") for custom in (r.custom_amenities or []) if "name" in custom]
-                ]
+                    *[
+                        custom.get("name")
+                        for custom in (r.custom_amenities or [])
+                        if "name" in custom
+                    ],
+                ],
             }
             for r in room_units
         ],
@@ -170,7 +175,7 @@ async def send_booking_confirmed_guest_email(
 
     await send_transactional_email(
         to_email=to_email,
-        subject=f"Booking Confirmed - {booking.ref_number} | StayEasy",
+        subject=f"Booking Confirmed - {booking.ref_number} | ServerIQ",
         html_content=html_content or plain_text,
     )
 
@@ -210,6 +215,7 @@ async def send_booking_confirmed_owner_email(
         html_content=html_content,
     )
 
+
 async def send_staff_welcome_email(
     to_email: str,
     full_name: str,
@@ -230,7 +236,7 @@ async def send_staff_welcome_email(
     )
 
     plain_text = (
-        f"Welcome to StayEasy, {full_name}!\n\n"
+        f"Welcome to ServerIQ, {full_name}!\n\n"
         f"Your staff account at {property_name} has been created.\n"
         f"Role: {job_role}\n"
         f"Email: {to_email}\n"
