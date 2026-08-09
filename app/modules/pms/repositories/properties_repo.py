@@ -400,7 +400,7 @@ class PropertyRepository:
         Fetches the full Amenity records belonging specifically to this property's array.
         """
         logger.info(
-            f"[PropertyRepository] Resolving amenities for property: {amenity_ids}"
+            "[PropertyRepository] Resolving amenities for property"
         )
         try:
             if not amenity_ids:
