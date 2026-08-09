@@ -110,7 +110,12 @@ async def send_password_reset_email(to_email: str, username: str, token: str) ->
 
 
 async def send_booking_confirmed_guest_email(
-    to_email: str, guest_name: str, booking, property_obj, room_units: list
+    to_email: str,
+    guest_name: str,
+    guest_phone_number: str,
+    booking,
+    property_obj,
+    room_units: list,
 ) -> None:
     template = templates.env.get_template("booking_confirmed_guest.html")
     map_url = f"https://www.google.com/maps?q={property_obj.latitude},{property_obj.longitude}"
@@ -122,6 +127,7 @@ async def send_booking_confirmed_guest_email(
         guest_name=guest_name,
         ref_number=booking.ref_number,
         guest_email=to_email,
+        guest_phone_number=guest_phone_number,
         nights=nights,
         booking_created_at=booking_created_at,
         property_name=property_obj.name,
@@ -168,6 +174,8 @@ async def send_booking_confirmed_guest_email(
         coupon_discount=f"{booking.coupon_discount:.2f}",
         total_amount=f"{booking.total_amount:.2f}",
         map_url=map_url,
+        latitude=property_obj.latitude,
+        longitude=property_obj.longitude,
         special_requests=booking.special_requests,
     )
 

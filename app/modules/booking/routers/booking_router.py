@@ -105,8 +105,8 @@ async def create_payment_intent(
 async def confirm_payment(
     ref_number: str,
     body: ConfirmPaymentRequest,
-    background_tasks: BackgroundTasks,
     guest: CurrentGuest,
+    background_tasks: BackgroundTasks,
     booking_service: Annotated[BookingService, Depends(get_booking_service)],
 ):
     result = await booking_service.confirm_payment(
@@ -114,9 +114,8 @@ async def confirm_payment(
         ref_number=ref_number,
         gateway_payload=body.gateway_payload,
         guest_id=guest.id,
+        background_tasks=background_tasks,
     )
-    if result.get("status") == "CONFIRMED":
-        background_tasks.add_task(booking_service.send_confirmation_emails, ref_number)
     payment_data = ConfirmPaymentResponse(**result)
     filtered_data = payment_data.model_dump(exclude_none=True)
 

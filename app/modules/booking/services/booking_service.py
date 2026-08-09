@@ -9,6 +9,7 @@ from typing import Optional
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fastapi import BackgroundTasks
 from app.config.database_config import AsyncSessionLocal
 
 from app.modules.booking.repositories.booking_repository import BookingRepository
@@ -343,6 +344,7 @@ class BookingService:
         ref_number: str,
         gateway_payload: dict,
         guest_id: uuid.UUID,
+        background_tasks: BackgroundTasks
     ) -> dict:
         reserved = await self.idempotency_repo.try_reserve(idempotency_key)
         if not reserved:
@@ -408,6 +410,7 @@ class BookingService:
                 "ref_number": booking.ref_number,
             }
             await self.idempotency_repo.save_result(idempotency_key, response)
+            background_tasks.add_task(self.send_confirmation_emails, ref_number)
             return response
 
         except (RedisException, RepositoryException):
@@ -690,6 +693,7 @@ class BookingService:
                 await send_booking_confirmed_guest_email(
                     to_email=guest.email,
                     guest_name=guest.full_name,
+                    guest_phone_number=guest.phone,
                     booking=booking,
                     property_obj=property_obj,
                     room_units=room_units,
