@@ -5,13 +5,12 @@ import cloudinary.uploader
 import cloudinary.api
 from abc import ABC, abstractmethod
 from pathlib import Path
-from dotenv import load_dotenv
-import os
+
+from app.config.settings_config import settings
 from datetime import datetime, timezone, timedelta
 from app.utils.logging import LoggerFactory
 from app.utils.exceptions import ImageStorageException
 
-load_dotenv()
 
 logger = LoggerFactory.get_logger(__name__)
 
@@ -72,9 +71,9 @@ class LocalImageStorage(ImageStorageStrategy):
 class CloudinaryImageStorage(ImageStorageStrategy):
     def __init__(self):
         cloudinary.config(
-            cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
-            api_key=os.getenv("CLOUDINARY_API_KEY"),
-            api_secret=os.getenv("CLOUDINARY_API_SECRET"),
+            cloud_name=settings.CLOUDINARY_CLOUD_NAME,
+            api_key=settings.CLOUDINARY_API_KEY,
+            api_secret=settings.CLOUDINARY_API_SECRET,
             secure=True,
         )
     
@@ -242,7 +241,7 @@ class StorageFactory:
         """
         Returns the appropriate storage strategy based on the provider string.
         """
-        provider = os.getenv("IMAGE_STORAGE_PROVIDER")
+        provider = settings.IMAGE_STORAGE_PROVIDER
         provider_clean = provider.strip().lower()
         
         if provider_clean == "local":

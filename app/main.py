@@ -1,8 +1,9 @@
-from dotenv import load_dotenv
 
 import asyncio
 from contextlib import asynccontextmanager
 import redis.asyncio as aioredis
+from asgi_correlation_id import CorrelationIdMiddleware
+
 
 from fastapi import FastAPI, Depends
 from app.config.database_config import engine, Base
@@ -36,9 +37,10 @@ from app.middlewares.rate_limiter import RateLimiter
 from app.config.redis_config import redis_pool
 from app.utils.logging import LoggerFactory
 
-load_dotenv()
 
-logger = LoggerFactory.get_logger(__name__)
+
+logger = LoggerFactory.get_logger("main")
+logger.info("Initializing FastAPI Application...")
 
 
 @asynccontextmanager
@@ -73,6 +75,9 @@ app = FastAPI(
 register_exception_handlers(app)
 
 configure_cors(app)
+
+# Wrap the FastAPI app with the middleware
+app.add_middleware(CorrelationIdMiddleware)
 
 # ── Inner layer: Routes ──
 app.include_router(guest_router)

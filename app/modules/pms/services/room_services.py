@@ -69,10 +69,10 @@ class RoomService:
                 urls_to_promote.extend(gallery_urls)
 
                 if urls_to_promote:
-                    promoted_urls = await self.image_service.promote_room_temp_images(
+                    promoted_urls = await self.image_service.promote_temp_images(
                         urls=urls_to_promote,
-                        property_id=str(property_id),
-                        real_room_id=str(real_room_id),
+                        entity_folder="rooms",
+                        real_entity_id=str(real_room_id),
                     )
                     promoted_iter = iter(promoted_urls)
                     if cover_url:

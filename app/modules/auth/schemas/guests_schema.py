@@ -8,7 +8,7 @@ import uuid
 class GuestBase(BaseModel):
     full_name: Annotated[str, Field(..., min_length=2, max_length=50, title="Full Name", description="Full name of the guest")]
     email: EmailStr
-    phone: Annotated[Optional[str], Field(default=None, min_length=10, max_length=15, title="Phone", description="Phone number of the guest")]
+    phone: Annotated[Optional[str], Field(default=None, min_length=10, max_length=10, title="Phone", description="Phone number of the guest")]
     nationality: Annotated[
         Optional[str], Field(default=None, min_length=2, max_length=50, title="Nationality", description="Nationality of the guest")
     ]
@@ -20,6 +20,8 @@ class GuestBase(BaseModel):
             return None
         if not v.isdigit():
             raise ValueError("Phone number must contain only digits")
+        if len(v) != 10:
+            raise ValueError("Phone number must be exactly 10 digits long")
         return v
 
     @field_validator("nationality")

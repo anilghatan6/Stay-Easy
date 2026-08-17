@@ -2,17 +2,15 @@ import httpx
 from app.utils.logging import LoggerFactory
 from app.utils.exceptions import ServiceException
 from fastapi.templating import Jinja2Templates
+from app.config.settings_config import settings
 
-from dotenv import load_dotenv
-import os
 
-load_dotenv()
 
 logger = LoggerFactory.get_logger(__name__)
 templates = Jinja2Templates(directory="app/templates")
 
-RESEND_API_KEY = os.getenv("RESEND_API_KEY")
-SENDER_EMAIL = os.getenv("SENDER_EMAIL")
+RESEND_API_KEY = settings.RESEND_API_KEY
+SENDER_EMAIL = settings.SENDER_EMAIL
 
 
 async def send_transactional_email(
@@ -85,7 +83,7 @@ async def send_password_reset_email(
     to_email: str, username: str, temp_password: str
 ) -> None:
     template = templates.env.get_template("password_reset.html")
-    expiry_minutes = os.getenv("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES", "15")
+    expiry_minutes = settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
     html_content = template.render(username=username, temp_password=temp_password, expiry_minutes=expiry_minutes)
 
 
@@ -236,7 +234,7 @@ async def send_staff_welcome_email(
     job_role: str,
     temp_password: str,
     property_name: str,
-    login_url: str = os.getenv("FRONTEND_LOGIN_URL"),
+    login_url: str = settings.FRONTEND_LOGIN_URL,
 ) -> None:
     template = templates.env.get_template("staff_welcome.html")
 

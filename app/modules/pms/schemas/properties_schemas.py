@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, date
+from zoneinfo import ZoneInfo
 from decimal import Decimal
 from typing import Any, List, Optional
 from typing_extensions import Self
@@ -13,11 +14,9 @@ from pydantic import (
 )
 
 from app.modules.pms.models.properties_model import PropertyType
-import os
-from dotenv import load_dotenv
+from app.config.settings_config import settings
 
-load_dotenv()
-CLOUDINARY_BASE = os.getenv("CLOUDINARY_BASE")
+CLOUDINARY_BASE = settings.CLOUDINARY_BASE
 
 class TimestampSchema(BaseModel):
     created_at: datetime
@@ -60,7 +59,7 @@ class GeneralPropertyInfo(BaseModel):
     )
     number_of_floors: int = Field(
         default=1,
-        ge=0,
+        gt=0,
         le=1000,
         title="Number of Floors",
         description="Number of floors in the property",
@@ -102,6 +101,22 @@ class GeneralPropertyInfo(BaseModel):
     def pre_strip_email(cls, value: str) -> str:
         if isinstance(value, str):
             return value.strip()
+        return value
+
+    @field_validator("year_built", mode="after")
+    @classmethod
+    def validate_year_built(cls, value: Optional[int]) -> Optional[int]:
+        if value is None:
+            return None
+            
+        # Get current year in Nepal timezone (Asia/Kathmandu)
+        nepal_tz = ZoneInfo("Asia/Kathmandu")
+        current_year = datetime.now(nepal_tz).year
+        max_allowed_year = current_year
+
+        if value < 1800 or value > max_allowed_year:
+            raise ValueError(f"Year built must be between 1800 and {max_allowed_year}.")
+            
         return value
 
 
@@ -307,17 +322,6 @@ class Propertylocalization(BaseModel):
         description="Always allow check in and check out of the property",
     )
 
-    # @field_validator("timezone", mode="before")
-    # @classmethod
-    # def validate_timezone(cls, value: str) -> str:
-    #     try:
-    #         ZoneInfo(value)
-    #         return value
-    #     except Exception:
-    #         raise ValueError(
-    #             f"'{value}' is not a valid IANA timezone name (e.g., 'Asia/Kathmandu')"
-    #         )
-
     @model_validator(mode="after")
     def validate_check_in_out_time(self) -> Self:
         always_allow = self.always_allow_check_in_out
@@ -386,6 +390,14 @@ class PropertyPhotos(BaseModel):
     gallery: List[str] = Field(default_factory=list)
 
 
+
+class CreatePropertyRequest(BaseModel):
+    general_information: GeneralPropertyInfo
+    location: Location
+    photos_and_amenities: PropertyPhotosAndAmenities = Field(default_factory=PropertyPhotosAndAmenities)
+    localization: Propertylocalization = Field(default_factory=Propertylocalization)
+    brand_visual: Optional[BrandVisual] = None
+
 # --- Base Property Schema for Data Output ---
 class PropertyResponse(BaseModel):
     # Enable Pydantic to read directly from SQLAlchemy models ORM attributes
@@ -412,7 +424,7 @@ class PropertyResponse(BaseModel):
     check_in_grace_period: int = Field(default=0, ge=0)
     check_out_grace_period: int = Field(default=0, ge=0)
     always_allow_check_in_out: bool = False
-    number_of_floors: int = Field(default=1, ge=0)
+    number_of_floors: int = Field(default=1, gt=0)
     total_rooms: int = Field(default=1, ge=1)
     year_built: Optional[int] = Field(None, ge=1800, le=2100)
 
@@ -538,7 +550,7 @@ class UpdatePropertyInfo(BaseModel):
     )
     number_of_floors: Optional[int] = Field(
         None,
-        ge=0,
+        gt=0,
         le=1000,
         title="Number of Floors",
         description="Number of floors in the property",
@@ -702,3 +714,19 @@ class UpdatePropertyInfo(BaseModel):
                     "Check in time and check out time must be None when always allow check in and check out is On"
                 )
         return self
+
+    @field_validator("year_built", mode="after")
+    @classmethod
+    def validate_year_built(cls, value: Optional[int]) -> Optional[int]:
+        if value is None:
+            return None
+            
+        # Get current year in Nepal timezone (Asia/Kathmandu)
+        nepal_tz = ZoneInfo("Asia/Kathmandu")
+        current_year = datetime.now(nepal_tz).year
+        max_allowed_year = current_year
+
+        if value < 1800 or value > max_allowed_year:
+            raise ValueError(f"Year built must be between 1800 and {max_allowed_year}.")
+            
+        return value

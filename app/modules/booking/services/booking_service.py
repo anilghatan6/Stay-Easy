@@ -2,12 +2,12 @@ import uuid
 import math
 import secrets
 import asyncio
-import os
+
 from datetime import date, datetime, timezone, timedelta
 from decimal import Decimal
 from typing import Optional
-from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.config.settings_config import settings
 
 from fastapi import BackgroundTasks
 from app.config.database_config import AsyncSessionLocal
@@ -34,6 +34,7 @@ from app.utils.exceptions import (
     PaymentGatewayError,
     ServiceBusyError,
     UrlValidationException,
+    InvalidReturnUrl,
 )
 from app.modules.booking.models.booking_model import PaymentGateway as PGEnum
 
@@ -42,12 +43,11 @@ from app.utils.mail_services import (
     send_booking_confirmed_owner_email,
 )
 from app.utils.logging import LoggerFactory
-from app.utils.url_validation import validate_khalti_return_url
+from app.utils.url_validation import resolve_khalti_return_url
 
-load_dotenv()
 
 logger = LoggerFactory.get_logger(__name__)
-SOFT_LOCK_TTL_SECONDS = int(os.getenv("SOFT_LOCK_TTL_SECONDS"))
+SOFT_LOCK_TTL_SECONDS = settings.SOFT_LOCK_TTL_SECONDS
 
 
 class BookingService:
@@ -461,7 +461,7 @@ class BookingService:
                         "Return url is required for Khalti payments"
                     )
                 try:
-                    return_url = validate_khalti_return_url(return_url)
+                    return_url = resolve_khalti_return_url(return_url)
                 except ValueError as e:
                     raise UrlValidationException(str(e))
 
@@ -500,6 +500,7 @@ class BookingService:
             ServiceException,
             BookingException,
             UrlValidationException,
+            InvalidReturnUrl,
         ):
             await self.db.rollback()
             raise

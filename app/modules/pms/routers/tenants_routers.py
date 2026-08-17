@@ -12,7 +12,7 @@ from app.utils.schemas import StandardResponse
 router = APIRouter(prefix="/tenants", tags=["Tenants"])
 
 
-@router.get("/", response_model=StandardResponse[TenantResponseSchema], status_code=status.HTTP_200_OK)
+@router.get("", response_model=StandardResponse[TenantResponseSchema], status_code=status.HTTP_200_OK)
 async def get_tenant(
     current_user: CurrentUser,
     tenant_service: TenantService = Depends(get_tenant_service),
@@ -24,7 +24,7 @@ async def get_tenant(
 
 
 @router.post(
-    "/", response_model=StandardResponse[TenantResponseSchema], status_code=status.HTTP_201_CREATED
+    "", response_model=StandardResponse[TenantResponseSchema], status_code=status.HTTP_201_CREATED
 )
 async def create_tenant(
     tenant: TenantCreateSchema,
@@ -38,7 +38,7 @@ async def create_tenant(
     return {"success": True, "data": new_tenant}
 
 
-@router.patch("/", response_model=StandardResponse[TenantResponseSchema])
+@router.patch("", response_model=StandardResponse[TenantResponseSchema])
 async def update_tenant(
     tenant_data: TenantUpdateSchema,
     current_user: CurrentUser,
@@ -52,7 +52,7 @@ async def update_tenant(
     return {"success": True, "data": updated_tenant}
 
 
-@router.delete("/", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_tenant(
     current_user: CurrentUser,
     tenant_service: TenantService = Depends(get_tenant_service),

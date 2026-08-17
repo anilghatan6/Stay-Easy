@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, status, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, Query, status, HTTPException, BackgroundTasks, Request
 from typing import Annotated
 from datetime import datetime, timezone
 from app.middlewares.auth_middlewares import CurrentGuest
@@ -80,13 +80,15 @@ async def create_booking(
 async def create_payment_intent(
     ref_number: str,
     body: PaymentIntentRequest,
+    request: Request,
     guest: CurrentGuest,
     booking_service: Annotated[BookingService, Depends(get_booking_service)],
 ):
+    origin = request.headers.get("origin")
     result = await booking_service.create_payment_intent(
         ref_number=ref_number,
         payment_gateway=body.payment_gateway,
-        return_url=body.return_url,
+        return_url=origin,
         guest_id=guest.id,
     )
     return StandardResponse(data=PaymentIntentResponse(**result))

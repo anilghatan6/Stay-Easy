@@ -5,11 +5,9 @@ from typing import Optional, List
 from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 
 from app.modules.staff_mgmt.models.staffs_model import JobRole, StaffStatus
-import os
-from dotenv import load_dotenv
+from app.config.settings_config import settings
 
-load_dotenv()
-CLOUDINARY_BASE = os.getenv("CLOUDINARY_BASE")
+CLOUDINARY_BASE = settings.CLOUDINARY_BASE
 
 
 

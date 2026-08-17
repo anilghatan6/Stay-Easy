@@ -8,7 +8,7 @@ import uuid
 class UserBase(BaseModel):
     full_name: Annotated[str, Field(..., min_length=2, max_length=50, title="Full Name", description="Full name of the user")]
     email: EmailStr
-    phone: Annotated[Optional[str], Field(default=None, min_length=10, max_length=15, title="Phone", description="Phone number of the user")]
+    phone: Annotated[Optional[str], Field(default=None, min_length=10, max_length=10, title="Phone", description="Phone number of the user")]
 
     @field_validator("phone")
     @classmethod
@@ -17,6 +17,8 @@ class UserBase(BaseModel):
             return None
         if not v.isdigit():
             raise ValueError("Phone number must contain only digits")
+        if len(v) != 10:
+            raise ValueError("Phone number must be exactly 10 digits long")
         return v
 
     @field_validator("full_name", mode="before")

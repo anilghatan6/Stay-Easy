@@ -2,10 +2,7 @@ from redis.asyncio import Redis
 import secrets
 from app.utils.logging import LoggerFactory
 from app.utils.exceptions import ServiceException
-from dotenv import load_dotenv
-import os
-
-load_dotenv()
+from app.config.settings_config import settings
 
 logger = LoggerFactory.get_logger(__name__)
 
@@ -13,7 +10,7 @@ logger = LoggerFactory.get_logger(__name__)
 class OTPService:
     def __init__(self, redis_client: Redis):
         self.redis = redis_client
-        self.ttl = int(os.getenv("OTP_EXPIRATION_SECONDS"))
+        self.ttl = settings.OTP_EXPIRATION_SECONDS
 
     def _generate_key(self, email: str) -> str:
         """Standardizes the Redis key format for multi-tenant safety."""

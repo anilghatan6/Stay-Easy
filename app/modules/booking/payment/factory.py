@@ -3,7 +3,7 @@ from app.modules.booking.payment.base_strategy import PaymentStrategy
 from app.modules.booking.payment.dummy_strategy import DummyPaymentStrategy
 from app.utils.exceptions import UnsupportedGatewayError
 from app.utils.logging import LoggerFactory
-import os 
+from app.config.settings_config import settings
 from app.config.redis_config import get_redis_client
 logger = LoggerFactory.get_logger(__name__)
 
@@ -22,8 +22,8 @@ class PaymentServiceFactory:
         self._stripe_api_key = stripe_api_key
         self._razorpay_key_id = razorpay_key_id
         self._razorpay_key_secret = razorpay_key_secret
-        self._khalti_secret_key= os.getenv("KHALTI_SECRET_KEY")
-        self._khalti_website_url= os.getenv("KHALTI_WEBSITE_URL")
+        self._khalti_secret_key= settings.KHALTI_SECRET_KEY
+        self._khalti_website_url= settings.KHALTI_WEBSITE_URL
         self._redis_client = get_redis_client()
 
     def get_strategy(self, gateway: str) -> PaymentStrategy:

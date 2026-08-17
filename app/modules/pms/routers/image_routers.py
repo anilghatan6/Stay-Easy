@@ -21,12 +21,12 @@ router = APIRouter(
 
 
 @router.post(
-    "/{property_id}/images",
+    "/images",
     status_code=status.HTTP_201_CREATED,
     response_model=StandardResponse[List[str]],
 )
 async def upload_images(
-    property_id: uuid.UUID,
+    
     user: CurrentUser,
     files: List[UploadFile] = File(...),
     image_service: ImageService = Depends(get_image_service),
@@ -52,9 +52,10 @@ async def upload_images(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"File '{file.filename}' is invalid. Only valid image media files are accepted.",
             )
+    fake_property_id=str(uuid.uuid4())
 
     uploaded_image_urls = await image_service.upload_property_images(
-        folder_name=f"temp/{user.tenant_id}/properties/{property_id}", files=files
+        folder_name=f"temp/{user.tenant_id}/properties/{fake_property_id}", files=files
     )
 
     return {"success": True, "data": uploaded_image_urls}
@@ -101,10 +102,9 @@ async def upload_room_images(
     return {"success": True, "data": uploaded_image_urls}
 
 
-@router.post("/{property_id}/image")
+@router.post("/image")
 async def upload_image_property(
     user: CurrentUser,
-    property_id: uuid.UUID = Path(...),
     image: UploadFile = File(...),
     image_service: ImageService = Depends(get_image_service),
 ):
@@ -120,8 +120,9 @@ async def upload_image_property(
             detail=f"File '{image.filename}' is invalid. Only valid image media files are accepted.",
         )
 
+    fake_property_id= str(uuid.uuid4())
     uploaded_image_url = await image_service._process_and_upload_single(
-        folder_name=f"temp/{user.tenant_id}/properties/{property_id}", file=image
+        folder_name=f"temp/{user.tenant_id}/properties/{fake_property_id}", file=image
     )
 
     return {"success": True, "data": uploaded_image_url}

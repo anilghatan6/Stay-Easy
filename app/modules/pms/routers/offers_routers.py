@@ -18,7 +18,7 @@ router = APIRouter(
 
 
 @router.post(
-    "/",
+    "",
     response_model=StandardResponse[List[SpecialOfferResponse]],
     status_code=status.HTTP_201_CREATED,
 )
@@ -46,7 +46,7 @@ async def bulk_create_special_offers(
 
 
 @router.get(
-    "/",
+    "",
     response_model=StandardResponse[List[SpecialOfferResponse]],
     status_code=status.HTTP_200_OK,
 )

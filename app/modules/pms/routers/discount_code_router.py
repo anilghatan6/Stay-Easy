@@ -8,7 +8,7 @@ from app.modules.pms.dependencies import get_discount_code_service
 
 router = APIRouter(prefix="/properties/{property_id}/discount-codes", tags=["Discount Codes"])
 
-@router.post("/", response_model=StandardResponse[DiscountCodeResponse], status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=StandardResponse[DiscountCodeResponse], status_code=status.HTTP_201_CREATED)
 async def create_discount_code(
     user: CurrentUser,
     property_id: uuid.UUID,
@@ -28,7 +28,7 @@ async def create_discount_code(
         "data":created_discount
     }
 
-@router.get("/",response_model=StandardResponse[list[DiscountCodeResponse]],status_code=status.HTTP_200_OK)
+@router.get("",response_model=StandardResponse[list[DiscountCodeResponse]],status_code=status.HTTP_200_OK)
 async def get_all_discount_codes(
     user:CurrentUser,
     property_id:uuid.UUID,

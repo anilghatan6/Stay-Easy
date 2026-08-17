@@ -3,10 +3,8 @@ from decimal import Decimal
 from app.modules.booking.payment.base_strategy import PaymentStrategy
 from app.utils.exceptions import PaymentGatewayError
 from app.utils.logging import LoggerFactory
-from dotenv import load_dotenv
 from typing import Optional
 
-load_dotenv()
 logger = LoggerFactory.get_logger(__name__)
 
 

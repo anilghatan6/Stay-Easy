@@ -1,13 +1,13 @@
 import redis.asyncio as aioredis
 from typing import AsyncGenerator
-from dotenv import load_dotenv
-import os
+from app.config.settings_config import settings
 
-load_dotenv()
+
+
 
 # Create a global connection pool
 redis_pool = aioredis.ConnectionPool.from_url(
-    os.getenv("REDIS_URL"),
+    settings.REDIS_URL,
     decode_responses=True,  # Automatically decodes byte responses to Python strings
     health_check_interval=30,  # Pings Redis every 30s to evict dead sockets
     retry_on_timeout=True,  # Automatically retries safe commands if a timeout occurs

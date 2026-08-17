@@ -1,4 +1,3 @@
-import os
 from redis.asyncio import Redis as AsyncRedis
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.booking.repositories.booking_repository import BookingRepository
@@ -16,14 +15,14 @@ from app.modules.booking.services.booking_service import BookingService
 from fastapi import Depends
 from app.config.database_config import get_db
 from app.config.redis_config import get_redis_client
-
+from app.config.settings_config import settings
 
 
 def get_payment_service_factory() -> PaymentServiceFactory:
     return PaymentServiceFactory(
-        stripe_api_key=os.getenv("STRIPE_SECRET_KEY", ""),
-        razorpay_key_id=os.getenv("RAZORPAY_KEY_ID", ""),
-        razorpay_key_secret=os.getenv("RAZORPAY_KEY_SECRET", ""),
+        stripe_api_key=settings.STRIPE_SECRET_KEY,
+        razorpay_key_id=settings.RAZORPAY_KEY_ID,
+        razorpay_key_secret=settings.RAZORPAY_KEY_SECRET,
     )
 
 

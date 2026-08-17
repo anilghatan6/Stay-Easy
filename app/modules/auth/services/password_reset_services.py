@@ -23,8 +23,8 @@ from app.utils.exceptions import (
 )
 from app.modules.auth.models import Guest, User
 from app.utils.logging import LoggerFactory
+from app.config.settings_config import settings
 
-import os
 
 logger = LoggerFactory.get_logger(__name__)
 
@@ -75,7 +75,7 @@ class PasswordResetService:
             # hashed_password = self.auth_service.get_password_hash(temp_password)
             temp_password_hash = self.auth_service.get_password_hash(temp_password)  # same hash, stored for token lookup
             expires_at = datetime.now(UTC) + timedelta(
-                minutes=int(os.getenv("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES", "15"))
+                minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
             )
 
             if user is not None:

@@ -72,9 +72,10 @@ class StaffService:
             if not urls_to_promote:
                 return photos_data
 
-            promoted_urls = await self.image_service.promote_staff_temp_images(
+            promoted_urls = await self.image_service.promote_temp_images(
                 urls=urls_to_promote,
-                staff_id=str(staff_id),
+                entity_folder="staffs",
+                real_entity_id=str(staff_id),
             )
 
             for key, promoted_url in zip(keys_with_urls, promoted_urls):

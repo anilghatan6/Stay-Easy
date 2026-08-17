@@ -1,7 +1,6 @@
 import jwt
-from dotenv import load_dotenv
-import os
-load_dotenv()
+from app.config.settings_config import settings
+
 
 def decode_jwt_unsafe(token: str) -> dict | None:
     """
@@ -13,8 +12,8 @@ def decode_jwt_unsafe(token: str) -> dict | None:
     try:
         return jwt.decode(
             token,
-            os.getenv("SECRET_KEY"),
-            algorithms=[os.getenv("ALGORITHM")],
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
             options={"verify_exp": False},
         )
     except jwt.InvalidTokenError:

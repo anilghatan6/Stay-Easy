@@ -11,21 +11,19 @@ from app.modules.auth.models import *
 from app.modules.pms.models import *
 from app.modules.booking.models import *
 from app.config.database_config import Base
-import os
-from dotenv import load_dotenv
+from app.config.settings_config import settings
 import sys
 
 # Force the use of the SelectorEventLoop on Windows
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-load_dotenv()
 
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
-config.set_main_option("sqlalchemy.url", os.getenv("DATABASE_URL"))
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

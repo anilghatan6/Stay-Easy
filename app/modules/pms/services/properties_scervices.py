@@ -1,5 +1,7 @@
 import uuid
 
+from app.modules.pms.models import Property
+
 from app.modules.pms.repositories.properties_repo import PropertyRepository
 from app.modules.pms.schemas.properties_schemas import (
     GeneralPropertyInfo,
@@ -18,7 +20,8 @@ from app.modules.pms.schemas.properties_schemas import (
     SystemAmenitiesListResponse,
     PropertyBookingsResponse,
     UpdatePropertyInfo,
-    SpecificPropertyResponse
+    SpecificPropertyResponse,
+    CreatePropertyRequest
 )
 from app.utils.exceptions import (
     PropertyAlreadyExistsException,
@@ -43,68 +46,200 @@ class PropertyService:
         self.property_repo = property_repo
         self.image_service = image_service
 
-    async def create_general_information(
-        self, payload: GeneralPropertyInfo, tenant_id: uuid.UUID
-    ) -> GeneralPropertyInfoResponse:
-        logger.info("[PropertyService] creating general information about the property")
-        payload_dict = payload.model_dump()
+    async def _promote_property_images_if_any(
+        self, photos_data: dict,  property_id: uuid.UUID
+    ) -> dict:
+        try:
+            cover_url = photos_data.get("cover")
+            gallery_urls = photos_data.get("gallery", [])
+
+            urls_to_promote = []
+            if cover_url:
+                urls_to_promote.append(cover_url)
+            urls_to_promote.extend(gallery_urls)
+
+            if not urls_to_promote:
+                return photos_data
+
+            promoted_urls = await self.image_service.promote_temp_images(
+                urls=urls_to_promote,
+                entity_folder="properties",
+                real_entity_id=str(property_id),
+            )
+
+            promoted_iter = iter(promoted_urls)
+            if cover_url:
+                photos_data["cover"] = next(promoted_iter)
+            photos_data["gallery"] = [next(promoted_iter) for _ in gallery_urls]
+
+            return photos_data
+
+        except ImageStorageException:
+            raise
+        except Exception as e:
+            logger.error(f"[PropertyService] Error promoting property images: {str(e)}")
+            raise ServiceException(str(e))
+
+    async def create_property(
+        self,
+        tenant_id:uuid.UUID,
+        payload:CreatePropertyRequest
+    )->PropertyResponse:
+        logger.info(f"[PropertyService] creating property for tenant_id:{tenant_id}")
         try:
             property_obj = await self.property_repo.get_property_by_name(
-                payload_dict["name"], tenant_id
+                payload.general_information.name, tenant_id
             )
             if property_obj:
                 logger.warning(
-                    f"Property with name {payload_dict['name']} already exists"
+                    f"Property with name {payload.general_information.name} already exists"
                 )
                 raise PropertyAlreadyExistsException(
-                    f"Property with name {payload_dict['name']} already exists"
+                    f"Property with name {payload.general_information.name} already exists"
                 )
+            
+            property_id = str(uuid.uuid4())
 
-            response = await self.property_repo.create_general_information(
-                payload_dict, tenant_id
+            # Photos and amenities
+            photos_and_amenities:dict = await self._validate_photos_and_amenities(
+                payload.photos_and_amenities.model_dump(),
+                property_id
             )
+            flat_data = {
+                "id": property_id,
+                # General information
+                "name": payload.general_information.name,
+                "type": payload.general_information.type,
+                "description": payload.general_information.description,
+                "total_rooms": payload.general_information.total_rooms,
+                "year_built": payload.general_information.year_built,
+                "number_of_floors": payload.general_information.number_of_floors,
+                "phone_number": payload.general_information.phone_number,
+                "email": payload.general_information.email,
 
-            return GeneralPropertyInfoResponse.model_validate(response)
+                # Location
+                "country": payload.location.country,
+                "state": payload.location.state,
+                "city": payload.location.city,
+                "zip_code": payload.location.zip_code,
+                "address": payload.location.address,
+                "latitude": payload.location.latitude,
+                "longitude": payload.location.longitude,
 
-        except (PropertyAlreadyExistsException, RepositoryException):
+                # Photos and amenities
+                "photos": photos_and_amenities.get("photos"),
+                "system_amenity_ids": photos_and_amenities.get("system_amenity_ids"),
+                "custom_amenities": photos_and_amenities.get("custom_amenities"),
+
+                # Localization
+                "currency": payload.localization.currency,
+                "timezone": payload.localization.timezone,
+                "language": payload.localization.language,
+                "check_in_time": payload.localization.check_in_time,
+                "check_out_time": payload.localization.check_out_time,
+                "check_in_grace_period": payload.localization.check_in_grace_period,
+                "check_out_grace_period": payload.localization.check_out_grace_period,
+                "always_allow_check_in_out": payload.localization.always_allow_check_in_out,
+            }
+
+            # Brand visual is optional — only include fields if provided
+            if payload.brand_visual is not None:
+                if payload.brand_visual.brand_logo_url:
+                    promoted_logo_url = await self.image_service.promote_temp_images(
+                        urls=[payload.brand_visual.brand_logo_url],
+                        entity_folder="properties",
+                        real_entity_id=property_id,
+                    )
+                    flat_data["brand_logo_url"] = promoted_logo_url[0]
+                else:
+                    flat_data["brand_logo_url"] = None
+                flat_data["brand_color"] = payload.brand_visual.brand_color
+
+            property_obj = await self.property_repo.create_property_full(tenant_id, flat_data)
+            # return PropertyResponse.model_validate(property_obj)
+            return await self._to_property_response(property_obj)
+            
+        except (PropertyAlreadyExistsException,
+            PropertyNotFoundException,
+            RepositoryException,
+            AmenityNotFoundException,
+            ResourceConflictException,
+            ImageStorageException,
+        ):
             raise
         except Exception as e:
-            logger.error(
-                f"[PropertyService] Error creating general information: {str(e)}"
-            )
+            logger.error(f"[PropertyService] Error creating property: {str(e)}")
             raise ServiceException(
-                internal_detail=f"Failed to create general information of property :{str(e)}"
+                internal_detail=f"Failed to create property: {str(e)}"
             )
 
-    async def create_location(
-        self, property_id: uuid.UUID, payload: Location, tenant_id: uuid.UUID
-    ) -> LocationResponse:
-        logger.info(f"[PropertyService] creating location for property {property_id}")
-        payload_dict = payload.model_dump()
-        try:
-            property_obj = await self.property_repo.create_location(
-                property_id, tenant_id, payload_dict
-            )
-            return LocationResponse.model_validate(property_obj)
-        except (PropertyNotFoundException, RepositoryException):
-            raise
-        except Exception as e:
-            logger.error(f"[PropertyService] Error updating location: {str(e)}")
-            raise ServiceException(
-                internal_detail=f"Failed to update location for property: {str(e)}"
-            )
-
-    async def create_photos_and_amenities(
-        self,
-        property_id: uuid.UUID,
-        payload: PropertyPhotosAndAmenities,
-        tenant_id: uuid.UUID,
-    ) -> PropertyPhotosAndAmenitiesResponse:
-        logger.info(
-            f"[PropertyService] creating photos and amenities for property {property_id}"
+    async def _to_property_response(self, property_obj: Property) -> PropertyResponse:
+        system_amenities = await self.property_repo.resolve_amenities_for_property(
+            property_obj.system_amenity_ids or []
         )
-        payload_dict = payload.model_dump()
+        property_obj.system_amenities = system_amenities
 
+        return PropertyResponse.model_validate(property_obj)
+
+    # async def create_general_information(
+    #     self, payload: GeneralPropertyInfo, tenant_id: uuid.UUID
+    # ) -> GeneralPropertyInfoResponse:
+    #     logger.info("[PropertyService] creating general information about the property")
+    #     payload_dict = payload.model_dump()
+    #     try:
+    #         property_obj = await self.property_repo.get_property_by_name(
+    #             payload_dict["name"], tenant_id
+    #         )
+    #         if property_obj:
+    #             logger.warning(
+    #                 f"Property with name {payload_dict['name']} already exists"
+    #             )
+    #             raise PropertyAlreadyExistsException(
+    #                 f"Property with name {payload_dict['name']} already exists"
+    #             )
+
+    #         response = await self.property_repo.create_general_information(
+    #             payload_dict, tenant_id
+    #         )
+
+    #         return GeneralPropertyInfoResponse.model_validate(response)
+
+    #     except (PropertyAlreadyExistsException, RepositoryException):
+    #         raise
+    #     except Exception as e:
+    #         logger.error(
+    #             f"[PropertyService] Error creating general information: {str(e)}"
+    #         )
+    #         raise ServiceException(
+    #             internal_detail=f"Failed to create general information of property :{str(e)}"
+    #         )
+
+    # async def create_location(
+    #     self, property_id: uuid.UUID, payload: Location, tenant_id: uuid.UUID
+    # ) -> LocationResponse:
+    #     logger.info(f"[PropertyService] creating location for property {property_id}")
+    #     payload_dict = payload.model_dump()
+    #     try:
+    #         property_obj = await self.property_repo.create_location(
+    #             property_id, tenant_id, payload_dict
+    #         )
+    #         return LocationResponse.model_validate(property_obj)
+    #     except (PropertyNotFoundException, RepositoryException):
+    #         raise
+    #     except Exception as e:
+    #         logger.error(f"[PropertyService] Error updating location: {str(e)}")
+    #         raise ServiceException(
+    #             internal_detail=f"Failed to update location for property: {str(e)}"
+    #         )
+
+    async def _validate_photos_and_amenities(
+        self,
+        payload_dict: dict,
+        property_id: uuid.UUID
+    ) -> dict:
+        logger.info(
+            f"[PropertyService] validating photos and amenities"
+        )
         try:
             amenities_data = payload_dict.get("amenities", {})
             system_ids = amenities_data.get("system_amenity_ids", [])
@@ -141,57 +276,18 @@ class PropertyService:
                     f"These custom amenity names already exist as system amenities: {conflict_str}"
                 )
 
-            # ── Rule 4: Custom amenity name must not already exist on the property ─
-            existing_property = await self.property_repo.get_property_by_id(
-                property_id, tenant_id
-            )
-            if not existing_property:
-                raise PropertyNotFoundException("Property not found or access denied")
-
-            existing_custom = existing_property.custom_amenities or []
-            existing_custom_names = {item["name"].lower() for item in existing_custom}
-
-            already_exists = [
-                c["name"]
-                for c in custom_amenities
-                if c["name"].lower() in existing_custom_names
-            ]
-            if already_exists:
-                conflict_str = ", ".join(already_exists)
-                raise ResourceConflictException(
-                    f"These custom amenities already exist for this property: {conflict_str}"
-                )
-
             # ── All checks passed — promote temp images → permanent paths ──────
             photos_data = payload_dict.get("photos", {})
-            cover_url: str | None = photos_data.get("cover")
-            gallery_urls: list[str] = photos_data.get("gallery", [])
-
-            # Collect all non-None URLs for batch promotion
-            all_urls_to_promote = []
-            if cover_url:
-                all_urls_to_promote.append(cover_url)
-            all_urls_to_promote.extend(gallery_urls)
-
-            if all_urls_to_promote:
-                promoted_urls = await self.image_service.promote_temp_images(
-                    urls=all_urls_to_promote,
-                    property_id=str(property_id),
-                    tenant_id=str(tenant_id),
-                )
-                # Reassemble the photos dict with promoted URLs (preserving order)
-                promoted_iter = iter(promoted_urls)
-                if cover_url:
-                    payload_dict["photos"]["cover"] = next(promoted_iter)
-                payload_dict["photos"]["gallery"] = [
-                    next(promoted_iter) for _ in gallery_urls
-                ]
-
-            # ── Persist to DB with permanent URLs ────────────────────────────
-            property_obj = await self.property_repo.create_photos_and_amenities(
-                property_id, tenant_id, payload_dict
+            promoted_photos = await self._promote_property_images_if_any(
+                photos_data, property_id
             )
-            return PropertyPhotosAndAmenitiesResponse.model_validate(property_obj)
+            payload_dict["photos"] = promoted_photos
+
+            return {
+                "photos": payload_dict["photos"],
+                "system_amenity_ids": system_ids,
+                "custom_amenities": custom_amenities,
+            }
 
         except (
             PropertyNotFoundException,
@@ -209,48 +305,48 @@ class PropertyService:
                 internal_detail=f"Failed to update photos and amenities for property: {str(e)}"
             )
 
-    async def create_localization(
-        self,
-        property_id: uuid.UUID,
-        payload: Propertylocalization,
-        tenant_id: uuid.UUID,
-    ) -> PropertylocalizationResponse:
-        logger.info(
-            f"[PropertyService] creating localization for property {property_id}"
-        )
-        payload_dict = payload.model_dump()
-        try:
-            property_obj = await self.property_repo.create_localization(
-                property_id, tenant_id, payload_dict
-            )
-            return PropertylocalizationResponse.model_validate(property_obj)
-        except (PropertyNotFoundException, RepositoryException):
-            raise
-        except Exception as e:
-            logger.error(f"[PropertyService] Error updating localization: {str(e)}")
-            raise ServiceException(
-                internal_detail=f"Failed to update localization for property: {str(e)}"
-            )
+    # async def create_localization(
+    #     self,
+    #     property_id: uuid.UUID,
+    #     payload: Propertylocalization,
+    #     tenant_id: uuid.UUID,
+    # ) -> PropertylocalizationResponse:
+    #     logger.info(
+    #         f"[PropertyService] creating localization for property {property_id}"
+    #     )
+    #     payload_dict = payload.model_dump()
+    #     try:
+    #         property_obj = await self.property_repo.create_localization(
+    #             property_id, tenant_id, payload_dict
+    #         )
+    #         return PropertylocalizationResponse.model_validate(property_obj)
+    #     except (PropertyNotFoundException, RepositoryException):
+    #         raise
+    #     except Exception as e:
+    #         logger.error(f"[PropertyService] Error updating localization: {str(e)}")
+    #         raise ServiceException(
+    #             internal_detail=f"Failed to update localization for property: {str(e)}"
+    #         )
 
-    async def create_brand_visual(
-        self, property_id: uuid.UUID, payload: BrandVisual, tenant_id: uuid.UUID
-    ) -> BrandVisualResponse:
-        logger.info(
-            f"[PropertyService] creating brand visual for property {property_id}"
-        )
-        payload_dict = payload.model_dump()
-        try:
-            property_obj = await self.property_repo.create_brand_visual(
-                property_id, tenant_id, payload_dict
-            )
-            return BrandVisualResponse.model_validate(property_obj)
-        except (PropertyNotFoundException, RepositoryException):
-            raise
-        except Exception as e:
-            logger.error(f"[PropertyService] Error updating brand visual: {str(e)}")
-            raise ServiceException(
-                internal_detail=f"Failed to update brand visual for property: {str(e)}"
-            )
+    # async def create_brand_visual(
+    #     self, property_id: uuid.UUID, payload: BrandVisual, tenant_id: uuid.UUID
+    # ) -> BrandVisualResponse:
+    #     logger.info(
+    #         f"[PropertyService] creating brand visual for property {property_id}"
+    #     )
+    #     payload_dict = payload.model_dump()
+    #     try:
+    #         property_obj = await self.property_repo.create_brand_visual(
+    #             property_id, tenant_id, payload_dict
+    #         )
+    #         return BrandVisualResponse.model_validate(property_obj)
+    #     except (PropertyNotFoundException, RepositoryException):
+    #         raise
+    #     except Exception as e:
+    #         logger.error(f"[PropertyService] Error updating brand visual: {str(e)}")
+    #         raise ServiceException(
+    #             internal_detail=f"Failed to update brand visual for property: {str(e)}"
+    #         )
 
     async def get_tenant_properties_list(
         self, tenant_id: uuid.UUID, skip: int = 0, limit: int = 100
@@ -635,8 +731,8 @@ class PropertyService:
             if urls_to_promote:
                 promoted_urls = await self.image_service.promote_temp_images(
                     urls=urls_to_promote,
-                    property_id=str(property_id),
-                    tenant_id=str(tenant_id),
+                    entity_folder="properties",
+                    entity_id=str(property_id)
                 )
                 promoted_map = dict(zip(urls_to_promote, promoted_urls))
 

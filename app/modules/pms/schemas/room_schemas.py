@@ -6,11 +6,9 @@ from typing import List, Optional, Dict
 from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator
 
 from app.modules.pms.models.rooms_model import CancellationPolicy, RoomStatus
-import os
-from dotenv import load_dotenv
+from app.config.settings_config import settings
 
-load_dotenv()
-CLOUDINARY_BASE = os.getenv("CLOUDINARY_BASE")
+CLOUDINARY_BASE = settings.CLOUDINARY_BASE
 
 # MAX_IMAGE_PER_ROOM = 10
 

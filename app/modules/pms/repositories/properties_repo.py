@@ -114,6 +114,40 @@ class PropertyRepository:
             logger.error(f"[PropertyRepository] Error getting property by id: {str(e)}")
             raise RepositoryException(internal_detail=str(e))
 
+    async def create_property_full(
+        self,
+        tenant_id: uuid.UUID,
+        property_data: dict,
+    ) -> Property:
+        """
+        Creates a Property row from a fully-assembled flat dict (general info +
+        location + localization + photos/amenities + optional brand visual).
+        property_data['id'] is expected to already be a pre-generated UUID —
+        set by the service BEFORE calling this, since image promotion needs
+        the real property_id to exist before the row itself is inserted.
+        """
+        logger.info(f"[PropertyRepository] Creating full property for tenant: {tenant_id}")
+        try:
+            new_property = Property(
+                tenant_id=tenant_id,
+                **property_data,
+            )
+            self.db.add(new_property)
+            await self.db.commit()
+            await self.db.refresh(new_property)
+            return new_property
+
+        except IntegrityError as e:
+            await self.db.rollback()
+            logger.error(f"[PropertyRepository] Integrity error creating property: {str(e)}")
+            raise RepositoryException(
+                internal_detail=f"Database consistency failure: {str(e)}"
+            )
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"[PropertyRepository] Error creating property: {str(e)}")
+            raise RepositoryException(internal_detail=str(e))
+
     async def get_property_by_name(
         self, property_name: str, tenant_id: uuid.UUID
     ) -> Property | None:

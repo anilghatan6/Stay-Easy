@@ -1,17 +1,10 @@
-import os
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
+from app.config.settings_config import settings
 
-load_dotenv()
 
 def configure_cors(app: FastAPI) -> None:
-    allowed_origins = [
-        origin.strip()
-        for origin in os.getenv("ALLOWED_ORIGINS", "").split(",")
-        if origin.strip()
-    ]
+    allowed_origins = settings.ALLOWED_ORIGINS
     app.state.allowed_origins = allowed_origins
     app.add_middleware(
         CORSMiddleware,
