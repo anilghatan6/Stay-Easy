@@ -11,6 +11,7 @@ redis_pool = aioredis.ConnectionPool.from_url(
     decode_responses=True,  # Automatically decodes byte responses to Python strings
     health_check_interval=30,  # Pings Redis every 30s to evict dead sockets
     retry_on_timeout=True,  # Automatically retries safe commands if a timeout occurs
+    max_connections=20,
 )
 
 
