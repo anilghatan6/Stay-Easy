@@ -137,13 +137,14 @@ class SearchService:
 
             # --- PAGINATION CALCULATIONS ---
 
+
             # Slice the valid results according to skip & limit parameters
             paginated_candidates = all_candidates[skip : skip + limit]
 
             enriched_properties = await self._attach_property_details(
                 results=paginated_candidates
             )
-            total_count = len(enriched_properties)
+            total_count = len(all_candidates)
             has_more = skip + len(paginated_candidates) < total_count
 
 
