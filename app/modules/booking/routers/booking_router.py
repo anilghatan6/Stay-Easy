@@ -84,7 +84,7 @@ async def create_payment_intent(
     guest: CurrentGuest,
     booking_service: Annotated[BookingService, Depends(get_booking_service)],
 ):
-    origin = request.headers.get("origin")
+    origin = request.headers.get("host")
     result = await booking_service.create_payment_intent(
         ref_number=ref_number,
         payment_gateway=body.payment_gateway,
