@@ -43,7 +43,7 @@ from app.utils.mail_services import (
     send_booking_confirmed_owner_email,
 )
 from app.utils.logging import LoggerFactory
-from app.utils.url_validation import resolve_khalti_return_url
+from app.utils.url_validation import validate_khalti_return_url
 
 
 logger = LoggerFactory.get_logger(__name__)
@@ -461,7 +461,7 @@ class BookingService:
                         "Return url is required for Khalti payments"
                     )
                 try:
-                    return_url = resolve_khalti_return_url(return_url)
+                    return_url = validate_khalti_return_url(return_url)
                 except ValueError as e:
                     raise UrlValidationException(str(e))
 
