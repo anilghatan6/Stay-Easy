@@ -26,7 +26,7 @@ class UpdateSpecialRequest(BaseModel):
 
 class PaymentIntentRequest(BaseModel):
     payment_gateway: str = Field(..., max_length=20)
-    return_url: Optional[str] = Field(None, max_length=255)
+    return_url: Optional[str] = Field(None, max_length=1000)
 
     @field_validator("payment_gateway", mode="before")
     @classmethod

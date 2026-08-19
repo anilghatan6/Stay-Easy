@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     RAZORPAY_KEY_ID: str
     RAZORPAY_KEY_SECRET: str
     KHALTI_SECRET_KEY: str
-    KHALTI_RETURN_URL: Annotated[List[str], NoDecode]
+    KHALTI_RETURN_URL: str
     KHALTI_WEBSITE_URL: str
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
@@ -54,12 +54,12 @@ class Settings(BaseSettings):
             return [item.strip().rstrip("/") for item in v.split(",") if item.strip()]
         return v
 
-    @field_validator("KHALTI_RETURN_URL", mode="before")
-    @classmethod
-    def split_comma_separated(cls, v):
-        if isinstance(v, str):
-            return [item.strip().rstrip("/") for item in v.split(",") if item.strip()]
-        return v
+    # @field_validator("KHALTI_RETURN_URL", mode="before")
+    # @classmethod
+    # def split_comma_separated(cls, v):
+    #     if isinstance(v, str):
+    #         return [item.strip().rstrip("/") for item in v.split(",") if item.strip()]
+    #     return v
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -1,9 +1,18 @@
-from fastapi import APIRouter, Depends, Query, status, HTTPException, BackgroundTasks, Request
-from typing import Annotated
 from datetime import datetime, timezone
+from typing import Annotated
+
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    status,
+)
+
 from app.middlewares.auth_middlewares import CurrentGuest
+from app.middlewares.rate_limiter import RateLimiter, bypass_global_limit
 from app.modules.booking.dependencies import get_booking_service
-from app.modules.booking.services.booking_service import BookingService
 from app.modules.booking.schemas.booking_schema import (
     ApplyDiscountRequest,
     BookingCreateRequest,
@@ -15,9 +24,9 @@ from app.modules.booking.schemas.booking_schema import (
     PaymentIntentResponse,
     UpdateSpecialRequest,
 )
-from app.utils.schemas import StandardResponse
+from app.modules.booking.services.booking_service import BookingService
 from app.utils.exceptions import BookingException
-from app.middlewares.rate_limiter import RateLimiter, bypass_global_limit
+from app.utils.schemas import StandardResponse
 
 router = APIRouter(
     prefix="/bookings",
@@ -80,15 +89,14 @@ async def create_booking(
 async def create_payment_intent(
     ref_number: str,
     body: PaymentIntentRequest,
-    request: Request,
     guest: CurrentGuest,
     booking_service: Annotated[BookingService, Depends(get_booking_service)],
 ):
-    origin = request.headers.get("host")
+    # origin = request.headers.get("origin")
     result = await booking_service.create_payment_intent(
         ref_number=ref_number,
         payment_gateway=body.payment_gateway,
-        return_url=origin,
+        return_url=body.return_url,
         guest_id=guest.id,
     )
     return StandardResponse(data=PaymentIntentResponse(**result))
@@ -170,7 +178,8 @@ async def update_special_requests(
         special_requests=body.special_requests,
     )
     return result
-    
+
+
 @router.get("/me")
 async def get_my_bookings(
     guest: CurrentGuest,
