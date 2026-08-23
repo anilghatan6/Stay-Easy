@@ -29,6 +29,12 @@ from app.modules.booking.routers.booking_router import router as booking_router
 
 from app.modules.staff_mgmt.models import *
 from app.modules.staff_mgmt.routers.staffs_router import router as staff_router
+
+from app.modules.house_keeping.models import *
+from app.modules.house_keeping.routers.task_router import router as task_router
+
+from app.modules.house_keeping.models import *
+from app.modules.booking.routers.favorites_router import router as favorites_router
 from app.middlewares.cors import configure_cors
 from app.utils.exception_handlers import register_exception_handlers
 from app.utils.expiry_loop import _expire_stale_bookings_loop
@@ -48,6 +54,7 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     app.state.redis_client = aioredis.Redis(connection_pool=redis_pool)
+    logger.info("Redis client initialized")
 
     stop_event = asyncio.Event()
     expiry_task = asyncio.create_task(_expire_stale_bookings_loop(stop_event))
@@ -90,9 +97,11 @@ app.include_router(room_router)
 app.include_router(offer_router)
 app.include_router(discount_code_router)
 app.include_router(staff_router)
+app.include_router(task_router)
 app.include_router(image_router)
 app.include_router(search_router)
 app.include_router(booking_router)
+app.include_router(favorites_router)
 
 
 @app.get("/")

@@ -220,8 +220,8 @@ class PhotoCollection(BaseModel):
         if len(self.gallery) > 5:
             raise ValueError("You can't upload more than 5 images.")
         
-        if not self.cover:
-            raise ValueError("There must be exactly one cover photo.")
+        # if not self.cover:
+        #     raise ValueError("There must be exactly one cover photo.")
         return self
 
 

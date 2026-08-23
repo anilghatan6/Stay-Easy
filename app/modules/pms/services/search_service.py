@@ -147,7 +147,6 @@ class SearchService:
             total_count = len(all_candidates)
             has_more = skip + len(paginated_candidates) < total_count
 
-
             response =  {
                 "data": {
                     "adults": adults,

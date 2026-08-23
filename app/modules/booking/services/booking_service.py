@@ -1,50 +1,45 @@
-import uuid
+import asyncio
 import math
 import secrets
-import asyncio
-
-from datetime import date, datetime, timezone, timedelta
+import uuid
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.config.settings_config import settings
 
 from fastapi import BackgroundTasks
-from app.config.database_config import AsyncSessionLocal
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config.database_config import AsyncSessionLocal
+from app.config.settings_config import settings
+from app.modules.booking.models.booking_model import PaymentGateway as PGEnum
 from app.modules.booking.repositories.booking_repository import BookingRepository
 from app.modules.booking.repositories.idempotency_repository import (
     IdempotencyRepository,
 )
-from app.modules.pms.repositories.room_repo import RoomRepository
-from app.modules.pms.repositories.properties_repo import PropertyRepository
-from app.modules.pms.repositories.offers_repo import SpecialOfferRepository
-from app.modules.pms.repositories.discount_code_repo import DiscountCodeRepository
-
 from app.modules.booking.services.payment_service import PaymentService
-
+from app.modules.pms.repositories.discount_code_repo import DiscountCodeRepository
+from app.modules.pms.repositories.offers_repo import SpecialOfferRepository
+from app.modules.pms.repositories.properties_repo import PropertyRepository
+from app.modules.pms.repositories.room_repo import RoomRepository
 from app.utils.exceptions import (
+    BookingException,
     InvalidDateException,
-    RoomsUnavailableError,
-    ServiceException,
+    InvalidReturnUrl,
+    PaymentGatewayError,
     RedisException,
     RepositoryException,
-    BookingException,
-    UnsupportedGatewayError,
-    PaymentGatewayError,
+    RoomsUnavailableError,
     ServiceBusyError,
+    ServiceException,
+    UnsupportedGatewayError,
     UrlValidationException,
-    InvalidReturnUrl,
 )
-from app.modules.booking.models.booking_model import PaymentGateway as PGEnum
-
+from app.utils.logging import LoggerFactory
 from app.utils.mail_services import (
     send_booking_confirmed_guest_email,
     send_booking_confirmed_owner_email,
 )
-from app.utils.logging import LoggerFactory
 from app.utils.url_validation import validate_khalti_return_url
-
 
 logger = LoggerFactory.get_logger(__name__)
 SOFT_LOCK_TTL_SECONDS = settings.SOFT_LOCK_TTL_SECONDS
@@ -344,7 +339,7 @@ class BookingService:
         ref_number: str,
         gateway_payload: dict,
         guest_id: uuid.UUID,
-        background_tasks: BackgroundTasks
+        background_tasks: BackgroundTasks,
     ) -> dict:
         reserved = await self.idempotency_repo.try_reserve(idempotency_key)
         if not reserved:
@@ -376,7 +371,7 @@ class BookingService:
 
             # Verify with the gateway BEFORE touching status
             payment_verified = await self.payment_service.verify(
-                booking.payment_gateway, ref_number, gateway_payload
+                str(booking.payment_gateway), ref_number, gateway_payload
             )
             if not payment_verified:
                 await self.idempotency_repo.release(idempotency_key)
@@ -391,7 +386,7 @@ class BookingService:
                 # Lost the race to the expiry job
                 await self.db.commit()
                 await self.payment_service.refund(
-                    booking.payment_gateway, ref_number, gateway_payload
+                    str(booking.payment_gateway), ref_number, gateway_payload
                 )
                 response = {
                     "status": "EXPIRED_REFUNDED",
@@ -763,7 +758,7 @@ class BookingService:
             updated_booking = await self.booking_repo.update_special_requests(
                 ref_number, guest_id, special_requests
             )
-            
+
             # 2. If it returns None, either it doesn't exist OR it exists but isn't PENDING
             if updated_booking is None:
                 # Quick check to provide an accurate exception message to the user
@@ -785,5 +780,7 @@ class BookingService:
             raise
         except Exception as e:
             await self.db.rollback()
-            logger.error(f"[BookingService] Error updating special requests for {ref_number}: {e}")
+            logger.error(
+                f"[BookingService] Error updating special requests for {ref_number}: {e}"
+            )
             raise ServiceException("Could not update special requests.")
