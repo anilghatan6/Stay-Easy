@@ -1,3 +1,3 @@
-from .staffs_model import Staff, StaffProperty
+from .staffs_model import Staff, StaffProperty, ShiftType
 
-__all__ = ["Staff", "StaffProperty"]
+__all__ = ["Staff", "StaffProperty", "ShiftType"]

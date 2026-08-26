@@ -33,6 +33,7 @@ class TaskStatus(StrEnum):
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
     CANCELLED = "CANCELLED"
+    AWAITING_INSPECTION = "AWAITING_INSPECTION"
 
 
 class HousekeepingTask(Base, TimestampMixin):
@@ -64,7 +65,7 @@ class HousekeepingTask(Base, TimestampMixin):
     )
 
     status: Mapped[TaskStatus] = mapped_column(
-        SqlEnum(TaskStatus, native_enum=False, length=20),
+        SqlEnum(TaskStatus, native_enum=False, length=25),
         default=TaskStatus.PENDING,
         nullable=False,
         index=True,

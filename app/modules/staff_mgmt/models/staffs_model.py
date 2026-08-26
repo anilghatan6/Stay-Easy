@@ -28,6 +28,12 @@ class StaffStatus(StrEnum):
     ON_LEAVE = "ON_LEAVE"
 
 
+class ShiftType(StrEnum):
+    MORNING = "MORNING"
+    EVENING = "EVENING"
+    NIGHT = "NIGHT"
+
+
 class Staff(Base, TimestampMixin):
     __tablename__ = "staffs"
     __table_args__ = (
@@ -62,6 +68,13 @@ class Staff(Base, TimestampMixin):
     status: Mapped[StaffStatus] = mapped_column(
         SqlEnum(StaffStatus, native_enum=False, length=20),
         default=StaffStatus.ACTIVE,
+        nullable=False,
+        index=True,
+    )
+
+    shift: Mapped[ShiftType] = mapped_column(
+        SqlEnum(ShiftType, native_enum=False, length=10),
+        default=ShiftType.MORNING,
         nullable=False,
         index=True,
     )

@@ -12,6 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config.database_config import AsyncSessionLocal
 from app.config.settings_config import settings
 from app.modules.booking.models.booking_model import PaymentGateway as PGEnum
+from app.modules.booking.models.booking_model import (
+    MasterBookingStatus,
+    PaymentMethod,
+    PaymentStatus,
+)
 from app.modules.booking.repositories.booking_repository import BookingRepository
 from app.modules.booking.repositories.idempotency_repository import (
     IdempotencyRepository,
@@ -146,7 +151,7 @@ class BookingService:
         property_obj,
         rooms_data: list,
         nights: int,
-        soft_lock_expires_at: datetime,
+        soft_lock_expires_at: datetime | None,
         number_of_adults: int | None = None,
         number_of_children: int | None = None,
         special_offer_applied: list | None = None,
@@ -160,6 +165,31 @@ class BookingService:
             if hasattr(booking.payment_gateway, "value")
             else booking.payment_gateway
         )
+        payment_method = (
+            booking.payment_method.value
+            if hasattr(booking.payment_method, "value")
+            else booking.payment_method
+        )
+        payment_status = (
+            booking.payment_status.value
+            if hasattr(booking.payment_status, "value")
+            else booking.payment_status
+        )
+
+        # Calculate advance hints from property settings
+        min_advance_percentage = None
+        max_advance_percentage = None
+        min_advance_amount = None
+        max_advance_amount = None
+
+        if property_obj:
+            min_pct = getattr(property_obj, "min_advance_percentage", None) or 10
+            max_pct = getattr(property_obj, "max_advance_percentage", None) or 50
+            min_advance_percentage = min_pct
+            max_advance_percentage = max_pct
+            min_advance_amount = float(booking.total_amount * Decimal(min_pct) / Decimal(100))
+            max_advance_amount = float(booking.total_amount * Decimal(max_pct) / Decimal(100))
+
         return {
             "booking_id": booking.id,
             "ref_number": booking.ref_number,
@@ -178,6 +208,19 @@ class BookingService:
             "check_out": booking.checkout_date,
             "nights": nights,
             "payment_gateway": payment_gateway,
+            "payment_method": payment_method,
+            "payment_status": payment_status,
+            "amount_paid": float(booking.amount_paid),
+            "amount_due": float(booking.amount_due),
+            "advance_amount": (
+                float(booking.advance_amount)
+                if booking.advance_amount is not None
+                else None
+            ),
+            "min_advance_amount": min_advance_amount,
+            "max_advance_amount": max_advance_amount,
+            "min_advance_percentage": min_advance_percentage,
+            "max_advance_percentage": max_advance_percentage,
             "property": self._build_property_dict(property_obj),
             "rooms": rooms_data,
             "total_amount": float(booking.total_amount),
@@ -295,6 +338,7 @@ class BookingService:
             )
             await self.db.commit()
 
+            # All bookings start as PENDING with soft-lock
             await self.redis.set(
                 f"booking:softlock:{booking.id}", "pending", ex=SOFT_LOCK_TTL_SECONDS
             )
@@ -381,7 +425,24 @@ class BookingService:
                     "message": "Payment could not be verified. Booking not confirmed.",
                 }
 
-            confirmed = await self.booking_repo.try_confirm_booking(ref_number)
+            # Determine payment status and amounts based on payment method
+            if booking.payment_method == PaymentMethod.ADVANCE:
+                paid_amount = booking.advance_amount or booking.total_amount
+                remaining = booking.total_amount - paid_amount
+                new_payment_status = PaymentStatus.PARTIAL
+                new_amount_paid = paid_amount
+                new_amount_due = remaining if remaining > Decimal("0") else Decimal("0.00")
+            else:
+                new_payment_status = PaymentStatus.PAID
+                new_amount_paid = booking.total_amount
+                new_amount_due = Decimal("0.00")
+
+            confirmed = await self.booking_repo.try_confirm_booking(
+                ref_number,
+                payment_status=new_payment_status,
+                amount_paid=new_amount_paid,
+                amount_due=new_amount_due,
+            )
             if not confirmed:
                 # Lost the race to the expiry job
                 await self.db.commit()
@@ -421,18 +482,14 @@ class BookingService:
     async def create_payment_intent(
         self,
         ref_number: str,
-        payment_gateway: str,
+        payment_method: str,
+        payment_gateway: Optional[str] = None,
         return_url: Optional[str] = None,
         guest_id: Optional[uuid.UUID] = None,
+        advance_amount: Optional[float] = None,
+        background_tasks: Optional[BackgroundTasks] = None,
     ) -> dict:
         try:
-            try:
-                PGEnum(payment_gateway.upper())
-            except ValueError:
-                raise UnsupportedGatewayError(
-                    internal_detail=f"Unsupported payment gateway: {payment_gateway}"
-                )
-
             booking = await self.booking_repo.get_by_ref(ref_number)
 
             if booking is None:
@@ -444,12 +501,97 @@ class BookingService:
                     "This booking has expired. Please search and reserve again."
                 )
             if booking.status == "CONFIRMED":
-                raise BookingException("This booking has already been paid for.")
+                raise BookingException("This booking has already been confirmed.")
             if booking.status != "PENDING":
                 raise BookingException(
                     f"Booking is in status {booking.status}, cannot proceed to payment"
                 )
 
+            payment_method_upper = payment_method.upper()
+
+            # Handle PAY_ON_ARRIVAL
+            if payment_method_upper == "PAY_ON_ARRIVAL":
+                property_obj = await self.property_repo.get_by_id(booking.property_id)
+                if not property_obj.allow_pay_on_arrival:
+                    raise BookingException(
+                        "This property does not accept pay-on-arrival payments"
+                    )
+
+                # Confirm booking immediately
+                await self.booking_repo.try_confirm_booking(
+                    ref_number=ref_number,
+                    payment_status=PaymentStatus.UNPAID,
+                    payment_method=PaymentMethod.PAY_ON_ARRIVAL,
+                    amount_paid=Decimal("0.00"),
+                    amount_due=booking.total_amount,
+                )
+                await self.db.commit()
+
+                # Clear soft-lock
+                await self.redis.delete(f"booking:softlock:{booking.id}")
+
+                # Send confirmation emails
+                if background_tasks:
+                    background_tasks.add_task(self.send_confirmation_emails, ref_number)
+
+                return {
+                    "status": "CONFIRMED",
+                    "amount": float(booking.total_amount),
+                    "currency": property_obj.currency,
+                    "payment_status": str(booking.payment_status),
+                    "amount_paid": float(booking.amount_paid),
+                    "amount_due": float(booking.amount_due),
+                    "message": "Booking confirmed. Payment due on arrival.",
+                    "ref_number": ref_number,
+                    "payment_method": "PAY_ON_ARRIVAL",
+                }
+
+            # For ONLINE and ADVANCE, gateway is required
+            if payment_gateway is None:
+                raise BookingException(
+                    "payment_gateway is required for ONLINE and ADVANCE payments"
+                )
+
+            try:
+                PGEnum(payment_gateway.upper())
+            except ValueError:
+                raise UnsupportedGatewayError(
+                    internal_detail=f"Unsupported payment gateway: {payment_gateway}"
+                )
+
+            # Handle ADVANCE
+            payment_amount = booking.total_amount
+            if payment_method_upper == "ADVANCE":
+                if advance_amount is None:
+                    raise BookingException(
+                        "advance_amount is required for ADVANCE payments"
+                    )
+                advance_decimal = Decimal(str(advance_amount))
+
+                # Get property-specific advance rules
+                property_for_advance = await self.property_repo.get_by_id(booking.property_id)
+                min_pct = getattr(property_for_advance, "min_advance_percentage", None) or 10
+                max_pct = getattr(property_for_advance, "max_advance_percentage", None) or 50
+
+                min_advance = (booking.total_amount * Decimal(min_pct) / Decimal(100)).quantize(
+                    Decimal("0.01")
+                )
+                max_advance = (booking.total_amount * Decimal(max_pct) / Decimal(100)).quantize(
+                    Decimal("0.01")
+                )
+                if advance_decimal < min_advance:
+                    raise BookingException(
+                        f"Advance amount must be at least {min_advance} ({min_pct}% of total)"
+                    )
+                if advance_decimal > max_advance:
+                    raise BookingException(
+                        f"Advance amount cannot exceed {max_advance} ({max_pct}% of total)"
+                    )
+                payment_amount = advance_decimal
+                await self.booking_repo.set_advance_amount(ref_number, advance_decimal)
+                await self.db.commit()
+
+            # Handle Khalti return URL validation
             if payment_gateway.upper() == "KHALTI":
                 if not return_url:
                     raise UrlValidationException(
@@ -460,6 +602,11 @@ class BookingService:
                 except ValueError as e:
                     raise UrlValidationException(str(e))
 
+            # Set payment method on booking
+            await self.booking_repo.set_payment_method(ref_number, payment_method_upper)
+            await self.db.commit()
+
+            # Set payment gateway
             updated_booking = await self.booking_repo.set_payment_gateway(
                 ref_number, payment_gateway
             )
@@ -476,7 +623,7 @@ class BookingService:
             intent_data = await self.payment_service.create_intent(
                 gateway=payment_gateway,
                 ref_number=ref_number,
-                amount=updated_booking.total_amount,
+                amount=payment_amount,
                 currency=currency,
                 return_url=return_url,
             )
@@ -484,7 +631,8 @@ class BookingService:
             return {
                 "ref_number": ref_number,
                 "payment_gateway": payment_gateway,
-                "amount": float(updated_booking.total_amount),
+                "payment_method": payment_method_upper,
+                "amount": float(payment_amount),
                 "currency": currency,
                 **intent_data,
             }
@@ -784,3 +932,132 @@ class BookingService:
                 f"[BookingService] Error updating special requests for {ref_number}: {e}"
             )
             raise ServiceException("Could not update special requests.")
+
+    async def pay_remaining_balance(
+        self,
+        ref_number: str,
+        guest_id: uuid.UUID,
+        payment_gateway: str,
+        gateway_payload: dict,
+        idempotency_key: str,
+        return_url: Optional[str] = None,
+        background_tasks: BackgroundTasks | None = None,
+    ) -> dict:
+        """
+        Allows a guest to pay the remaining balance on a CONFIRMED booking
+        that was made with ADVANCE or PAY_ON_ARRIVAL payment method.
+        """
+        try:
+            try:
+                PGEnum(payment_gateway.upper())
+            except ValueError:
+                raise UnsupportedGatewayError(
+                    internal_detail=f"Unsupported payment gateway: {payment_gateway}"
+                )
+
+            booking = await self.booking_repo.get_by_ref(ref_number)
+
+            if booking is None or booking.guest_id != guest_id:
+                raise BookingException("Booking not found")
+
+            if booking.status != MasterBookingStatus.CONFIRMED:
+                raise BookingException(
+                    "Only confirmed bookings can have remaining balance paid"
+                )
+
+            if booking.payment_status == PaymentStatus.PAID:
+                raise BookingException("Booking is already fully paid")
+
+            if booking.amount_due <= Decimal("0"):
+                raise BookingException("No remaining balance to pay")
+
+            # Verify payment with gateway
+            payment_verified = await self.payment_service.verify(
+                payment_gateway, ref_number, gateway_payload
+            )
+            if not payment_verified:
+                return {
+                    "status": "PAYMENT_NOT_VERIFIED",
+                    "message": "Payment could not be verified.",
+                }
+
+            # Mark as fully paid
+            await self.booking_repo.set_fully_paid(ref_number)
+            await self.db.commit()
+
+            return {
+                "status": "PAID",
+                "message": "Remaining balance paid successfully",
+                "booking_id": str(booking.id),
+                "ref_number": booking.ref_number,
+            }
+
+        except (UnsupportedGatewayError, BookingException):
+            raise
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(
+                f"[BookingService] Error paying remaining balance for {ref_number}: {e}"
+            )
+            raise ServiceException("Could not process payment. Please try again.")
+
+    async def record_staff_payment(
+        self,
+        ref_number: str,
+        amount: float,
+        payment_method_name: str,
+        notes: str | None = None,
+    ) -> dict:
+        """
+        Records a staff-collected payment (cash, card terminal, etc.) at check-in.
+        """
+        try:
+            booking = await self.booking_repo.get_by_ref(ref_number)
+
+            if booking is None:
+                raise BookingException("Booking not found")
+
+            if booking.status != MasterBookingStatus.CONFIRMED:
+                raise BookingException(
+                    "Only confirmed bookings can have payments recorded"
+                )
+
+            if booking.payment_status == PaymentStatus.PAID:
+                raise BookingException("Booking is already fully paid")
+
+            if amount <= 0:
+                raise BookingException("Payment amount must be positive")
+
+            if Decimal(str(amount)) > booking.amount_due:
+                raise BookingException(
+                    f"Payment amount ({amount}) exceeds remaining balance ({booking.amount_due})"
+                )
+
+            updated_booking = await self.booking_repo.record_staff_payment(
+                ref_number=ref_number,
+                amount=Decimal(str(amount)),
+                payment_method_name=payment_method_name,
+                notes=notes,
+            )
+
+            if updated_booking is None:
+                raise BookingException("Booking not found")
+
+            await self.db.commit()
+
+            return {
+                "success": True,
+                "message": f"Payment of {amount} recorded successfully",
+                "amount_paid": float(updated_booking.amount_paid),
+                "amount_due": float(updated_booking.amount_due),
+                "payment_status": updated_booking.payment_status.value,
+            }
+
+        except (BookingException, RepositoryException):
+            raise
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(
+                f"[BookingService] Error recording staff payment for {ref_number}: {e}"
+            )
+            raise ServiceException("Could not record payment. Please try again.")

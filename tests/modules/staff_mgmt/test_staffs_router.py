@@ -24,6 +24,7 @@ VALID_STAFF_PAYLOAD = {
     "monthly_salary": "50000.00",
     "joining_date": "2024-01-15",
     "status": "ACTIVE",
+    "shift": "MORNING",
 }
 
 

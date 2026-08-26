@@ -11,6 +11,9 @@ from fastapi.security import OAuth2PasswordBearer
 oauth2_scheme_guest = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 oauth2_scheme_user = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
+# Staff roles allowed to perform check-in/check-out operations
+STAFF_ROLES = {"admin","manager", "front_desk"}
+
 
 async def get_current_guest(
     token: str = Depends(oauth2_scheme_guest),
@@ -129,4 +132,39 @@ async def get_current_user_change_password(token: str = Depends(oauth2_scheme_us
 
 
 CurrentUserChangePassword = Annotated[User, Depends(get_current_user_change_password)]
+
+
+# =======================================================================================================================================
+# Staff Authentication — allows MANAGER and FRONT_DESK roles
+# =======================================================================================================================================
+
+
+async def get_current_staff(
+    token: str = Depends(oauth2_scheme_user),
+    user_service: UserService = Depends(get_user_service),
+) -> User:
+    payload = user_service.auth_service.verify_access_token(token)
+    if not payload or payload.get("role") not in STAFF_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to access this resource",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    user = await user_service.get_user_by_id(payload["user_id"])
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if user.must_change_password:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You must change your password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
+
+
+CurrentStaff = Annotated[User, Depends(get_current_staff)]
 

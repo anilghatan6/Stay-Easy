@@ -14,7 +14,7 @@ import pytest
 import pytest_asyncio
 from httpx import AsyncClient
 
-from app.modules.pms.services.image_services import ImageService
+from app.Images.image_services import ImageService
 
 PNG_BYTES = b"\x89PNG\r\n\x1a\n fake image bytes"
 

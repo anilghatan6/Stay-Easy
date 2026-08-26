@@ -20,7 +20,7 @@ from app.modules.pms.routers.room_routers import router as room_router
 from app.modules.pms.routers.tenants_routers import router as tenant_router
 from app.modules.pms.routers.offers_routers import router as offer_router
 
-from app.modules.pms.routers.image_routers import router as image_router
+from app.Images.image_routers import router as image_router
 from app.modules.pms.routers.discount_code_router import router as discount_code_router
 from app.modules.pms.routers.search_router import router as search_router
 
@@ -30,11 +30,23 @@ from app.modules.booking.routers.booking_router import router as booking_router
 from app.modules.staff_mgmt.models import *
 from app.modules.staff_mgmt.routers.staffs_router import router as staff_router
 
-from app.modules.house_keeping.models import *
-from app.modules.house_keeping.routers.task_router import router as task_router
+from app.modules.staff_operations.router import router as staff_operations_router
 
 from app.modules.house_keeping.models import *
+from app.modules.house_keeping.routers.task_router import router as task_router
+from app.modules.house_keeping.routers.task_router import rooms_router as housekeeping_rooms_router
+
 from app.modules.booking.routers.favorites_router import router as favorites_router
+
+from app.modules.pms.routers.review_router import router as review_router
+
+from app.modules.housekeeping_mobile.routers.task_router import router as mobile_task_router
+from app.modules.housekeeping_mobile.routers.schedule_router import router as mobile_schedule_router
+from app.modules.housekeeping_mobile.routers.maintenance_router import router as mobile_maintenance_router
+from app.modules.housekeeping_mobile.routers.swap_router import router as mobile_swap_router
+from app.modules.housekeeping_mobile.routers.leave_router import router as mobile_leave_router
+from app.modules.housekeeping_mobile.routers.history_router import router as mobile_history_router
+from app.modules.housekeeping_mobile.routers.cleaning_router import router as mobile_cleaning_router
 from app.middlewares.cors import configure_cors
 from app.utils.exception_handlers import register_exception_handlers
 from app.utils.expiry_loop import _expire_stale_bookings_loop
@@ -51,8 +63,8 @@ logger.info("Initializing FastAPI Application...")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # async with engine.begin() as conn:
+    #     await conn.run_sync(Base.metadata.create_all)
     app.state.redis_client = aioredis.Redis(connection_pool=redis_pool)
     logger.info("Redis client initialized")
 
@@ -98,10 +110,21 @@ app.include_router(offer_router)
 app.include_router(discount_code_router)
 app.include_router(staff_router)
 app.include_router(task_router)
+app.include_router(housekeeping_rooms_router)
 app.include_router(image_router)
 app.include_router(search_router)
 app.include_router(booking_router)
 app.include_router(favorites_router)
+app.include_router(staff_operations_router)
+app.include_router(review_router)
+
+app.include_router(mobile_task_router)
+app.include_router(mobile_schedule_router)
+app.include_router(mobile_maintenance_router)
+app.include_router(mobile_swap_router)
+app.include_router(mobile_leave_router)
+app.include_router(mobile_history_router)
+app.include_router(mobile_cleaning_router)
 
 
 @app.get("/")

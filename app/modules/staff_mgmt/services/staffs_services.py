@@ -4,7 +4,7 @@ import string
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.staff_mgmt.repositories.staffs_repository import StaffRepository
-from app.modules.pms.services.image_services import ImageService
+from app.Images.image_services import ImageService
 from app.modules.pms.repositories.properties_repo import PropertyRepository
 from app.modules.auth.repositories.users_repo import UserRepository
 from app.modules.auth.services.auth_services import AuthService

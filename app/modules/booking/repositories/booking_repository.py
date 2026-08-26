@@ -12,6 +12,8 @@ from app.modules.booking.models.booking_model import (
     BookingRoom,
     MasterBookingStatus,
     PaymentGateway as PGEnum,
+    PaymentMethod,
+    PaymentStatus,
 )
 from app.utils.exceptions import RepositoryException, UnsupportedGatewayError
 
@@ -53,6 +55,10 @@ class BookingRepository:
                 subtotal=subtotal,
                 special_offer_discount=special_offer_discount,
                 ref_number=ref_number,
+                payment_method=PaymentMethod.ONLINE,
+                payment_status=PaymentStatus.UNPAID,
+                amount_paid=Decimal("0.00"),
+                amount_due=total_amount,
             )
             self.db.add(booking)
             await self.db.flush()
@@ -89,7 +95,14 @@ class BookingRepository:
                 "Could not fetch booking details. Please try again."
             ) from e
 
-    async def try_confirm_booking(self, ref_number: str) -> bool:
+    async def try_confirm_booking(
+        self,
+        ref_number: str,
+        payment_status: PaymentStatus = PaymentStatus.PAID,
+        payment_method: PaymentMethod | None = None,
+        amount_paid: Decimal | None = None,
+        amount_due: Decimal | None = None,
+    ) -> bool:
         """
         Attempts to mark a booking CONFIRMED. Returns False if it's already
         EXPIRED (payment succeeded too late) — the guard against the
@@ -108,6 +121,13 @@ class BookingRepository:
                 return False
 
             booking.status = MasterBookingStatus.CONFIRMED
+            if payment_method is not None:
+                booking.payment_method = payment_method
+            booking.payment_status = payment_status
+            if amount_paid is not None:
+                booking.amount_paid = amount_paid
+            if amount_due is not None:
+                booking.amount_due = amount_due
             return True
 
         except SQLAlchemyError as e:
@@ -280,6 +300,33 @@ class BookingRepository:
             )
             raise RepositoryException("Could not update booking payment method.")
 
+    async def set_payment_method(self, ref_number: str, payment_method: str) -> Booking | None:
+        """
+        Sets the payment method on a booking.
+        """
+        logger.info(f"[BookingRepository] Setting payment method {payment_method} for {ref_number}")
+        try:
+            pm = PaymentMethod(payment_method.upper())
+
+            result = await self.db.execute(
+                select(Booking)
+                .where(Booking.ref_number == ref_number)
+                .with_for_update()
+            )
+            booking = result.scalar_one_or_none()
+
+            if booking is None:
+                return None
+
+            booking.payment_method = pm
+            return booking
+
+        except SQLAlchemyError as e:
+            logger.error(
+                f"[BookingRepository] Failed to set payment method for {ref_number}: {e}"
+            )
+            raise RepositoryException("Could not update booking payment method.")
+
     async def apply_coupon(
         self, ref_number: str, coupon_code: str, coupon_discount: Decimal
     ) -> Booking | None:
@@ -428,3 +475,108 @@ class BookingRepository:
         except SQLAlchemyError as e:
             logger.error(f"[BookingRepository] Failed to update special requests for {ref_number}: {e}")
             raise RepositoryException("Could not update special requests.") from e
+
+    async def record_staff_payment(
+        self,
+        ref_number: str,
+        amount: Decimal,
+        payment_method_name: str,
+        notes: str | None = None,
+    ) -> Booking | None:
+        """
+        Records a staff-collected payment (cash, card terminal, etc.) against a booking.
+        Updates amount_paid, amount_due, and payment_status atomically.
+        """
+        logger.info(
+            f"[BookingRepository] Recording staff payment of {amount} for {ref_number}"
+        )
+        try:
+            result = await self.db.execute(
+                select(Booking)
+                .where(Booking.ref_number == ref_number)
+                .with_for_update()
+            )
+            booking = result.scalar_one_or_none()
+
+            if booking is None:
+                return None
+
+            new_amount_paid = booking.amount_paid + Decimal(str(amount))
+            new_amount_due = booking.total_amount - new_amount_paid
+
+            if new_amount_due <= Decimal("0"):
+                new_amount_due = Decimal("0.00")
+                new_payment_status = PaymentStatus.PAID
+            elif new_amount_paid > Decimal("0"):
+                new_payment_status = PaymentStatus.PARTIAL
+            else:
+                new_payment_status = PaymentStatus.UNPAID
+
+            booking.amount_paid = new_amount_paid
+            booking.amount_due = new_amount_due
+            booking.payment_status = new_payment_status
+
+            return booking
+
+        except SQLAlchemyError as e:
+            logger.error(
+                f"[BookingRepository] Failed to record staff payment for {ref_number}: {e}"
+            )
+            raise RepositoryException("Could not record payment.")
+
+    async def set_advance_amount(
+        self, ref_number: str, advance_amount: Decimal
+    ) -> Booking | None:
+        """
+        Sets the advance amount on a booking before payment intent creation.
+        """
+        logger.info(
+            f"[BookingRepository] Setting advance amount {advance_amount} for {ref_number}"
+        )
+        try:
+            result = await self.db.execute(
+                select(Booking)
+                .where(Booking.ref_number == ref_number)
+                .with_for_update()
+            )
+            booking = result.scalar_one_or_none()
+
+            if booking is None:
+                return None
+
+            booking.advance_amount = advance_amount
+            return booking
+
+        except SQLAlchemyError as e:
+            logger.error(
+                f"[BookingRepository] Failed to set advance amount for {ref_number}: {e}"
+            )
+            raise RepositoryException("Could not update advance amount.")
+
+    async def set_fully_paid(self, ref_number: str) -> Booking | None:
+        """
+        Marks a booking as fully paid (payment_status=PAID, amount_due=0).
+        """
+        logger.info(f"[BookingRepository] Setting booking {ref_number} as fully paid")
+        try:
+            result = await self.db.execute(
+                select(Booking)
+                .where(Booking.ref_number == ref_number)
+                .with_for_update()
+            )
+            booking = result.scalar_one_or_none()
+
+            if booking is None:
+                return None
+
+            booking.payment_status = PaymentStatus.PAID
+            booking.amount_paid = booking.total_amount
+            booking.amount_due = Decimal("0.00")
+
+            return booking
+
+        except SQLAlchemyError as e:
+            logger.error(
+                f"[BookingRepository] Failed to set {ref_number} as fully paid: {e}"
+            )
+            raise RepositoryException("Could not update payment status.")

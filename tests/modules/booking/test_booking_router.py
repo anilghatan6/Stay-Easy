@@ -22,7 +22,8 @@ async def test_create_booking_unauthenticated(async_client: AsyncClient):
 @pytest.mark.asyncio
 async def test_payment_intent_unauthenticated(async_client: AsyncClient):
     resp = await async_client.post(
-        "/bookings/BK-FAKE/payment-intent", json={"payment_gateway": "DUMMY"}
+        "/bookings/BK-FAKE/payment-intent",
+        json={"payment_method": "ONLINE", "payment_gateway": "DUMMY"},
     )
     assert resp.status_code in (401, 403), resp.text
 
@@ -171,12 +172,13 @@ async def test_payment_intent_success(
     ref_number = bk_room_setup["bk_ref_number"]
     resp = await booking_guest_client.post(
         f"/bookings/{ref_number}/payment-intent",
-        json={"payment_gateway": "DUMMY"},
+        json={"payment_method": "ONLINE", "payment_gateway": "DUMMY"},
     )
     assert resp.status_code == 200, resp.text
     result = resp.json()["data"]
     assert result["ref_number"] == ref_number
     assert result["payment_gateway"] == "DUMMY"
+    assert result["payment_method"] == "ONLINE"
     assert result["amount"] == 600.0
     assert result["currency"] == "USD"
     assert result["payment_intent_id"] is not None
@@ -274,7 +276,7 @@ async def test_payment_intent_invalid_gateway(
     ref_number = bk_room_setup["bk_ref_number"]
     resp = await booking_guest_client.post(
         f"/bookings/{ref_number}/payment-intent",
-        json={"payment_gateway": "BITCOIN"},
+        json={"payment_method": "ONLINE", "payment_gateway": "BITCOIN"},
     )
     assert resp.status_code == 400, resp.text
     assert "Unsupported" in resp.json()["error"]
@@ -284,7 +286,7 @@ async def test_payment_intent_invalid_gateway(
 async def test_payment_intent_not_found(booking_guest_client: AsyncClient):
     resp = await booking_guest_client.post(
         "/bookings/BK-NONEXISTENT/payment-intent",
-        json={"payment_gateway": "DUMMY"},
+        json={"payment_method": "ONLINE", "payment_gateway": "DUMMY"},
     )
     assert resp.status_code == 400, resp.text
 
@@ -296,7 +298,7 @@ async def test_payment_intent_already_confirmed(
     ref_number = bk_room_setup["bk_ref_number"]
     resp = await booking_guest_client.post(
         f"/bookings/{ref_number}/payment-intent",
-        json={"payment_gateway": "DUMMY"},
+        json={"payment_method": "ONLINE", "payment_gateway": "DUMMY"},
     )
     assert resp.status_code == 400, resp.text
     assert "already been paid for" in resp.json()["error"].lower()

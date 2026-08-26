@@ -645,6 +645,22 @@ class UpdatePropertyInfo(BaseModel):
     always_allow_check_in_out: Optional[bool] = Field(
         None,
     )
+    allow_pay_on_arrival: Optional[bool] = Field(
+        None,
+        description="Allow guests to pay on arrival at the property",
+    )
+    min_advance_percentage: Optional[int] = Field(
+        None,
+        ge=1,
+        le=100,
+        description="Minimum advance payment percentage (1-100)",
+    )
+    max_advance_percentage: Optional[int] = Field(
+        None,
+        ge=1,
+        le=100,
+        description="Maximum advance payment percentage (1-100)",
+    )
     brand_logo_url: Optional[str] = Field(
         None,
         max_length=2048,

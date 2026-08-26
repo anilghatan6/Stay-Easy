@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Optional, List
 from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 
-from app.modules.staff_mgmt.models.staffs_model import JobRole, StaffStatus
+from app.modules.staff_mgmt.models.staffs_model import JobRole, StaffStatus, ShiftType
 from app.config.settings_config import settings
 
 CLOUDINARY_BASE = settings.CLOUDINARY_BASE
@@ -44,7 +44,8 @@ class CreateStaffRequest(BaseModel):
     job_role: JobRole=Field(...,title="Job Role")
     monthly_salary: Decimal = Field(...,title="Monthly Salary", gt=0, le = 10000000, decimal_places=2)
     joining_date: date=Field(...,title="Joining Date")
-    status: StaffStatus = StaffStatus.ACTIVE 
+    status: StaffStatus = StaffStatus.ACTIVE
+    shift: ShiftType = ShiftType.MORNING
     photos: Optional[StaffPhotos] = None
 
 
@@ -72,12 +73,12 @@ class UpdateStaffRequest(BaseModel):
     property_ids, if provided, REPLACES the full set of property assignments.
     """
     full_name: Optional[str] = Field(default=None, min_length=1, max_length=255,title="Full Name")
-    email: Optional[EmailStr] = Field(default=None,title="Email")
     phone_number: Optional[str] = Field(default=None, max_length=20,title="Phone Number")
     job_role: Optional[JobRole] = Field(default=None,title="Job Role")
     monthly_salary: Optional[Decimal] = Field(default=None,title="Monthly Salary", gt=0,le=100000000, decimal_places=2)
     joining_date: Optional[date] = Field(default=None,title="Joining Date")
     status: Optional[StaffStatus] = Field(default=None,title="Status")
+    shift: Optional[ShiftType] = Field(default=None,title="Shift")
     photos: Optional[StaffPhotos] = Field(default=None,title="Photos")
 
     @field_validator("phone_number")
@@ -108,6 +109,7 @@ class StaffResponse(BaseModel):
     monthly_salary: Decimal
     joining_date: date
     status: StaffStatus
+    shift: ShiftType
     photos: StaffPhotos
 
     model_config = ConfigDict(from_attributes=True)

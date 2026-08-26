@@ -582,6 +582,7 @@ class RoomRepository:
         room_ids: list[uuid.UUID],
         check_in: date,
         check_out: date,
+        exclude_booking_id: Optional[uuid.UUID] = None,
     ) -> list[uuid.UUID]:
         logger.info("[RoomRepository] Locking and checking rooms")
         if not room_ids:
@@ -608,6 +609,9 @@ class RoomRepository:
                     BookingRoom.room_unit_id.in_(locked_room_ids),
                 )
             )
+            if exclude_booking_id is not None:
+                overlapping_subq = overlapping_subq.where(Booking.id != exclude_booking_id)
+            
             result = await self.db.execute(overlapping_subq)
             already_booked = set(result.scalars().all())
 

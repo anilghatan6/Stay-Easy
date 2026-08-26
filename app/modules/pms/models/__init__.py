@@ -1,10 +1,10 @@
 from .tenants_model import Tenant
 from .properties_model import (
-Property,
-Amenity,
+    Property,
+    Amenity,
 )
 from .offers_model import (
-SpecialOffer
+    SpecialOffer
 )
 from .discount_code_model import (
     DiscountCode
@@ -14,15 +14,16 @@ from .rooms_model import (
     RoomType,
     BedType
 )
+from .review_model import Review
 
 __all__ = [
- "Tenant",
- "Property",
- "Amenity",
- "SpecialOffer",
- "DiscountCode",
- "Rooms",
- "RoomType",
- "BedType"
- 
+    "Tenant",
+    "Property",
+    "Amenity",
+    "SpecialOffer",
+    "DiscountCode",
+    "Rooms",
+    "RoomType",
+    "BedType",
+    "Review",
 ]

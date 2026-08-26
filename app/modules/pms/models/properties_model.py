@@ -87,6 +87,9 @@ class Property(Base, TimestampMixin):
         Integer, default=0, nullable=True
     )
     always_allow_check_in_out :Mapped[bool] = mapped_column(Boolean, default=False)
+    allow_pay_on_arrival: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    min_advance_percentage: Mapped[Optional[int]] = mapped_column(Integer, default=10, nullable=True)
+    max_advance_percentage: Mapped[Optional[int]] = mapped_column(Integer, default=50, nullable=True)
     number_of_floors: Mapped[int] = mapped_column(Integer, default=1, nullable=True)
     total_rooms: Mapped[int] = mapped_column(Integer, default=1, nullable=True)
     year_built: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -101,6 +104,12 @@ class Property(Base, TimestampMixin):
     brand_color:Mapped[str] = mapped_column(String(20), nullable=True)
     
     is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    average_rating: Mapped[Decimal] = mapped_column(
+        Numeric(3, 2), default=Decimal("0.00"), nullable=True
+    )
+
+    total_reviews: Mapped[int] = mapped_column(Integer, default=0, nullable=True)
 
     system_amenity_ids: Mapped[List[uuid.UUID]] = mapped_column(
         MutableList.as_mutable(ARRAY(UUID(as_uuid=True))), server_default="{}", nullable=True
@@ -127,6 +136,10 @@ class Property(Base, TimestampMixin):
    
     staff_assignments: Mapped[List["StaffProperty"]] = relationship(
         "StaffProperty", back_populates="property", cascade="all, delete-orphan", passive_deletes=True,
+    )
+
+    reviews: Mapped[List["Review"]] = relationship(
+        "Review", back_populates="property", cascade="all, delete-orphan", passive_deletes=True
     )
 
     

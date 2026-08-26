@@ -172,7 +172,11 @@ async def send_booking_confirmed_guest_email(
             for r in room_units
         ],
         currency=property_obj.currency,
+        payment_status=str(booking.payment_status).title(),
+        amount_paid=f"{booking.amount_paid:.2f}",
+        amount_due=f"{booking.amount_due:.2f}",
         subtotal=f"{booking.subtotal:.2f}",
+        payment_method=str(booking.payment_method).title(),
         special_offer_discount=f"{booking.special_offer_discount:.2f}",
         coupon_code=booking.coupon_code,
         coupon_discount=f"{booking.coupon_discount:.2f}",
@@ -218,6 +222,11 @@ async def send_booking_confirmed_owner_email(
         rooms=[{"room_name": r.room_name} for r in room_units],
         currency=property_obj.currency,
         total_amount=f"{booking.total_amount:.2f}",
+        payment_status=str(booking.payment_status).title(),
+        amount_paid=f"{booking.amount_paid:.2f}",
+        amount_due=f"{booking.amount_due:.2f}",
+        subtotal=f"{booking.subtotal:.2f}",
+        payment_method=str(booking.payment_method).title(),
         special_requests=booking.special_requests,
     )
 

@@ -1,6 +1,6 @@
 from enum import StrEnum
 import uuid
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional
 
@@ -9,6 +9,7 @@ from sqlalchemy import (
     String,
     Numeric,
     Date,
+    DateTime,
     CheckConstraint,
     Enum as SqlEnum,
     UUID,
@@ -31,8 +32,20 @@ class MasterBookingStatus(StrEnum):
 class PaymentGateway(StrEnum):
     STRIPE = "STRIPE"
     RAZORPAY = "RAZORPAY"
-    # DUMMY = "DUMMY"
+    DUMMY = "DUMMY"
     KHALTI = "KHALTI"
+
+
+class PaymentMethod(StrEnum):
+    ONLINE = "ONLINE"
+    ADVANCE = "ADVANCE"
+    PAY_ON_ARRIVAL = "PAY_ON_ARRIVAL"
+
+
+class PaymentStatus(StrEnum):
+    UNPAID = "UNPAID"
+    PARTIAL = "PARTIAL"
+    PAID = "PAID"
 
 
 class Booking(Base, TimestampMixin):
@@ -44,6 +57,8 @@ class Booking(Base, TimestampMixin):
             "checkout_date > checkin_date", name="chk_booking_dates_chronological"
         ),
         CheckConstraint("total_amount >= 0", name="chk_booking_total_positive"),
+        CheckConstraint("amount_due >= 0", name="chk_amount_due_positive"),
+        CheckConstraint("refund_due >= 0", name="chk_refund_due_positive"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -109,6 +124,41 @@ class Booking(Base, TimestampMixin):
     )
     special_requests: Mapped[Optional[str]] = mapped_column(
         String(1000), nullable=True
+    )
+
+    payment_method: Mapped[PaymentMethod] = mapped_column(
+        SqlEnum(PaymentMethod, native_enum=False, length=20),
+        default=PaymentMethod.ONLINE,
+        nullable=False,
+    )
+
+    payment_status: Mapped[PaymentStatus] = mapped_column(
+        SqlEnum(PaymentStatus, native_enum=False, length=20),
+        default=PaymentStatus.UNPAID,
+        nullable=False,
+    )
+
+    amount_paid: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=Decimal("0.00")
+    )
+
+    amount_due: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=Decimal("0.00")
+    )
+
+    advance_amount: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2), nullable=True, default=None
+    )
+    refund_due: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=Decimal("0.00")
+    )
+
+    checked_in_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
+
+    checked_out_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
     )
 
     # Relationships

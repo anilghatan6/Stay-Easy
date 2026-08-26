@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock
 from httpx import AsyncClient
 import pytest
 from app.main import app
-from app.modules.pms.services.image_services import ImageService
+from app.Images.image_services import ImageService
 
 CLOUDINARY_BASE = "https://res.cloudinary.com/drahdqd63/image/upload/"
 

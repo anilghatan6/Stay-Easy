@@ -29,7 +29,7 @@ from app.utils.exceptions import (
     ImageStorageException,
 )
 
-from app.modules.pms.services.image_services import ImageService
+from app.Images.image_services import ImageService
 from app.utils.logging import LoggerFactory
 from datetime import date
 logger = LoggerFactory.get_logger(__name__)

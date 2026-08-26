@@ -10,13 +10,16 @@ from app.modules.pms.repositories.room_repo import RoomRepository
 from app.modules.pms.repositories.offers_repo import SpecialOfferRepository
 from app.modules.pms.services.offers_services import SpecialOfferService
 
-from app.modules.pms.services.image_services import ImageService
-
+from app.Images.image_services import ImageService
 
 from app.modules.pms.repositories.discount_code_repo import DiscountCodeRepository
 from app.modules.pms.services.discount_code_service import DiscountCodeService
 
 from app.modules.pms.services.search_service import SearchService
+
+from app.modules.pms.repositories.review_repository import ReviewRepository
+from app.modules.pms.services.review_service import ReviewService
+
 from app.config.redis_config import get_redis_client
 
 from app.config.database_config import get_db
@@ -57,9 +60,16 @@ def get_discount_code_service(db=Depends(get_db)) -> DiscountCodeService:
 def get_search_service(
     db=Depends(get_db),
     redis_client=Depends(get_redis_client),
-    ) -> SearchService:
+) -> SearchService:
     return SearchService(
         property_repo=PropertyRepository(db=db),
         room_repo=RoomRepository(db=db),
         redis_client=redis_client,
+    )
+
+
+def get_review_service(db=Depends(get_db)) -> ReviewService:
+    return ReviewService(
+        db=db,
+        review_repo=ReviewRepository(db=db),
     )

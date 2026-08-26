@@ -10,7 +10,7 @@ from fastapi import (
     status,
 )
 
-from app.middlewares.auth_middlewares import CurrentGuest
+from app.middlewares.auth_middlewares import CurrentGuest , CurrentUser
 from app.middlewares.rate_limiter import RateLimiter, bypass_global_limit
 from app.modules.booking.dependencies import get_booking_service
 from app.modules.booking.schemas.booking_schema import (
@@ -20,8 +20,10 @@ from app.modules.booking.schemas.booking_schema import (
     ConfirmPaymentRequest,
     ConfirmPaymentResponse,
     PaginatedBookingsResponse,
+    PayRemainingRequest,
     PaymentIntentRequest,
     PaymentIntentResponse,
+    RecordStaffPaymentRequest,
     UpdateSpecialRequest,
 )
 from app.modules.booking.services.booking_service import BookingService
@@ -90,14 +92,17 @@ async def create_payment_intent(
     ref_number: str,
     body: PaymentIntentRequest,
     guest: CurrentGuest,
+    background_tasks: BackgroundTasks,
     booking_service: Annotated[BookingService, Depends(get_booking_service)],
 ):
-    # origin = request.headers.get("origin")
     result = await booking_service.create_payment_intent(
         ref_number=ref_number,
+        payment_method=body.payment_method,
         payment_gateway=body.payment_gateway,
         return_url=body.return_url,
         guest_id=guest.id,
+        advance_amount=body.advance_amount,
+        background_tasks=background_tasks,
     )
     return StandardResponse(data=PaymentIntentResponse(**result))
 
@@ -213,20 +218,55 @@ async def get_booking(
     return StandardResponse(data=BookingReservationResponse(**result))
 
 
-@router.delete(
-    "/{ref_number}",
+@router.post(
+    "/{ref_number}/pay-remaining",
     status_code=status.HTTP_200_OK,
     dependencies=[
         Depends(bypass_global_limit),
         Depends(
-            RateLimiter(max_requests=15, window_seconds=60, scope="delete_booking")
+            RateLimiter(max_requests=15, window_seconds=60, scope="pay_remaining")
         ),
     ],
 )
-async def delete_booking(
+async def pay_remaining_balance(
     ref_number: str,
+    body: PayRemainingRequest,
     guest: CurrentGuest,
+    background_tasks: BackgroundTasks,
     booking_service: Annotated[BookingService, Depends(get_booking_service)],
 ):
-    response = await booking_service.delete_booking(ref_number, guest.id)
-    return response
+    result = await booking_service.pay_remaining_balance(
+        ref_number=ref_number,
+        guest_id=guest.id,
+        payment_gateway=body.payment_gateway,
+        gateway_payload=body.gateway_payload,
+        idempotency_key=body.idempotency_key,
+        return_url=body.return_url,
+        background_tasks=background_tasks,
+    )
+    return StandardResponse(data=result)
+
+
+@router.post(
+    "/{ref_number}/record-staff-payment",
+    status_code=status.HTTP_200_OK,
+    dependencies=[
+        Depends(bypass_global_limit),
+        Depends(
+            RateLimiter(max_requests=15, window_seconds=60, scope="record_staff_payment")
+        ),
+    ],
+)
+async def record_staff_payment(
+    ref_number: str,
+    user :CurrentUser,
+    body: RecordStaffPaymentRequest,
+    booking_service: Annotated[BookingService, Depends(get_booking_service)],
+):
+    result = await booking_service.record_staff_payment(
+        ref_number=ref_number,
+        amount=body.amount,
+        payment_method_name=body.payment_method,
+        notes=body.notes,
+    )
+    return StandardResponse(data=result)

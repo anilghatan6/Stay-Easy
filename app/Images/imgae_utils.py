@@ -1,7 +1,7 @@
 
 from io import BytesIO
 from PIL import Image, ImageOps, UnidentifiedImageError
-from .exceptions import InvalidImageException
+from app.utils.exceptions import InvalidImageException
 
 Image.MAX_IMAGE_PIXELS = 25_000_000  # Max ~25 Megapixels (approx. 5000x5000)
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB strict limit

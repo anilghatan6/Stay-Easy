@@ -47,7 +47,7 @@
                                 reservation for {{ property_name }}</h1>
                             <p style="margin: 0 0 24px 0; color: #4c4c4c; font-size: 15px; line-height: 1.5;">
                                 Hi <strong>{{ owner_name }}</strong>, you have received a new booking through ServerIQ.
-                                Here are the guest details and stay summary:
+                                Here are the reservation details:
                             </p>
 
                             <!-- Reference Code Highlight Box -->
@@ -67,8 +67,8 @@
                                                 </td>
                                                 <td align="right" style="vertical-align: middle;">
                                                     <span
-                                                        style="font-size: 14px; font-weight: bold; color: #003580;">Total:
-                                                        {{ currency }} {{ total_amount }}</span>
+                                                        style="font-size: 14px; font-weight: bold; color: #003580;">Status:
+                                                        {{ payment_status }}</span>
                                                 </td>
                                             </tr>
                                         </table>
@@ -76,7 +76,52 @@
                                 </tr>
                             </table>
 
-                            <!-- Guest Details Card (Primary focus for Hosts) -->
+                            <!-- Property & Host Information Card -->
+                            <h2 style="margin: 0 0 12px 0; color: #1a1a1a; font-size: 16px; font-weight: bold;">Property
+                                & Host Information</h2>
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+                                style="border: 1px solid #e7e7e7; border-radius: 6px; margin-bottom: 24px; background-color: #ffffff;">
+                                <tr>
+                                    <td style="padding: 20px;">
+                                        <p
+                                            style="margin: 0 0 10px 0; font-size: 16px; color: #1a1a1a; font-weight: bold;">
+                                            🏢 {{ property_name }}
+                                        </p>
+                                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                                            <tr>
+                                                <td style="padding: 4px 0; color: #6b6b6b; font-size: 14px;"
+                                                    width="110"><strong>Host Name:</strong></td>
+                                                <td style="padding: 4px 0; color: #1a1a1a; font-size: 14px;">{{
+                                                    owner_name }}</td>
+                                            </tr>
+                                            {% if owner_email %}
+                                            <tr>
+                                                <td style="padding: 4px 0; color: #6b6b6b; font-size: 14px;"
+                                                    width="110"><strong>Email:</strong></td>
+                                                <td style="padding: 4px 0; color: #1a1a1a; font-size: 14px;">
+                                                    <a href="mailto:{{ owner_email }}"
+                                                        style="color: #006ce4; text-decoration: none;">{{ owner_email
+                                                        }}</a>
+                                                </td>
+                                            </tr>
+                                            {% endif %}
+                                            {% if owner_phone %}
+                                            <tr>
+                                                <td style="padding: 4px 0; color: #6b6b6b; font-size: 14px;"
+                                                    width="110"><strong>Phone:</strong></td>
+                                                <td style="padding: 4px 0; color: #1a1a1a; font-size: 14px;">
+                                                    <a href="tel:{{ owner_phone }}"
+                                                        style="color: #006ce4; text-decoration: none; font-weight: bold;">{{
+                                                        owner_phone }}</a>
+                                                </td>
+                                            </tr>
+                                            {% endif %}
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Guest Details Card -->
                             <h2 style="margin: 0 0 12px 0; color: #1a1a1a; font-size: 16px; font-weight: bold;">Guest
                                 Contact Information</h2>
                             <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
@@ -87,7 +132,6 @@
                                             style="margin: 0 0 10px 0; font-size: 16px; color: #1a1a1a; font-weight: bold;">
                                             👤 {{ guest_name }}
                                         </p>
-
                                         <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                                             {% if guest_phone %}
                                             <tr>
@@ -187,17 +231,60 @@
                             </table>
                             {% endfor %}
 
-                            <!-- Financial Summary Card -->
+                            <!-- Detailed Financial Summary Card -->
                             <h3 style="margin: 24px 0 12px 0; color: #1a1a1a; font-size: 16px; font-weight: bold;">
                                 Financial Summary</h3>
                             <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
                                 style="background-color: #f9f9f9; border: 1px solid #e7e7e7; border-radius: 6px; padding: 16px 20px;">
+
                                 <tr>
-                                    <td style="color: #1a1a1a; font-size: 16px; font-weight: bold;">Total Booking Amount
+                                    <td style="color: #6b6b6b; font-size: 14px; padding: 4px 0;">Subtotal</td>
+                                    <td align="right" style="color: #1a1a1a; font-size: 14px; padding: 4px 0;">{{
+                                        currency }} {{ subtotal }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="color: #6b6b6b; font-size: 14px; padding: 4px 0;">Payment Method</td>
+                                    <td align="right" style="color: #1a1a1a; font-size: 14px; padding: 4px 0;">{{
+                                        payment_method }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="color: #6b6b6b; font-size: 14px; padding: 4px 0;">Payment Status</td>
+                                    <td align="right"
+                                        style="color: #1a1a1a; font-size: 14px; padding: 4px 0; font-weight: bold;">{{
+                                        payment_status }}</td>
+                                </tr>
+
+                                <!-- Divider Line -->
+                                <tr>
+                                    <td colspan="2"
+                                        style="border-bottom: 1px solid #e7e7e7; padding-top: 8px; margin-bottom: 8px;">
                                     </td>
-                                    <td align="right" style="color: #003580; font-size: 18px; font-weight: bold;">{{
+                                </tr>
+                                <tr>
+                                    <td colspan="2" style="padding-top: 8px;"></td>
+                                </tr>
+
+                                <tr>
+                                    <td style="color: #1a1a1a; font-size: 16px; font-weight: bold; padding: 4px 0;">
+                                        Total Booking Amount</td>
+                                    <td align="right"
+                                        style="color: #003580; font-size: 16px; font-weight: bold; padding: 4px 0;">{{
                                         currency }} {{ total_amount }}</td>
                                 </tr>
+                                <tr>
+                                    <td style="color: #1a1a1a; font-size: 14px; padding: 4px 0;">Amount Paid</td>
+                                    <td align="right"
+                                        style="color: #008009; font-size: 14px; padding: 4px 0; font-weight: bold;">{{
+                                        currency }} {{ amount_paid }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="color: #1a1a1a; font-size: 15px; font-weight: bold; padding: 4px 0;">
+                                        Amount Due</td>
+                                    <td align="right"
+                                        style="color: #d32f2f; font-size: 15px; font-weight: bold; padding: 4px 0;">{{
+                                        currency }} {{ amount_due }}</td>
+                                </tr>
+
                             </table>
 
                             {% if special_requests %}

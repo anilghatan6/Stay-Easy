@@ -36,6 +36,7 @@ class StaffRepository:
                 monthly_salary=data["monthly_salary"],
                 joining_date=data["joining_date"],
                 status=data["status"],
+                shift=data["shift"],
                 photos=data["photos"],
             )
             self.db.add(staff)
