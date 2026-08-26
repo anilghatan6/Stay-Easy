@@ -321,6 +321,25 @@ class Propertylocalization(BaseModel):
         title="Always Allow Check In and Check Out",
         description="Always allow check in and check out of the property",
     )
+    allow_pay_on_arrival: bool = Field(
+        default=True,
+        title="Allow Pay on Arrival",
+        description="Allow pay on arrival of the property",
+    )
+    min_advance_percentage: float = Field(
+        default=10.0,
+        le=100.0,
+        ge=0.0,
+        title="Minimum Advance Percentage",
+        description="Minimum advance percentage of the property",
+    )
+    max_advance_percentage: float = Field(
+        default=50.0,
+        le=100.0,
+        ge=0.0,
+        title="Maximum Advance Percentage",
+        description="Maximum advance percentage of the property",
+    )
 
     @model_validator(mode="after")
     def validate_check_in_out_time(self) -> Self:
@@ -427,6 +446,9 @@ class PropertyResponse(BaseModel):
     number_of_floors: int = Field(default=1, gt=0)
     total_rooms: int = Field(default=1, ge=1)
     year_built: Optional[int] = Field(None, ge=1800, le=2100)
+    allow_pay_on_arrival: bool = Field(default=True)
+    min_advance_percentage: float = Field(default=10.0)
+    max_advance_percentage: float = Field(default=50.0)
 
     # Contact
     phone_number: Optional[str] = Field(None, max_length=15)
@@ -438,7 +460,6 @@ class PropertyResponse(BaseModel):
     language: Optional[str] = Field(None, max_length=100)
     brand_logo_url: Optional[str] = Field(None, max_length=2048)
     brand_color: Optional[str] = Field(None, max_length=20)
-
     is_active: bool
 
     # Amenities & Media
@@ -480,7 +501,10 @@ class PropertyBookingsResponse(BaseModel):
     coupon_discount: Decimal | None
     total_amount: Decimal
     created_at: datetime
-
+    allow_pay_on_arrival: bool = Field(default=True)
+    min_advance_percentage: float = Field(default=10.0)
+    max_advance_percentage: float = Field(default=50.0)
+    
     model_config = ConfigDict(from_attributes=True)
     
 
