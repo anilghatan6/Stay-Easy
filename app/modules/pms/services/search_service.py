@@ -1,5 +1,6 @@
 # service/search_service.py
 
+from sqlalchemy import true
 import math
 import uuid
 from collections import defaultdict
@@ -217,6 +218,9 @@ class SearchService:
                         "currency": prop.currency,
                         "total_price": float(r["total_price"]),
                         "nights": r["nights"],
+                        "average_rating": prop.average_rating, 
+                        "total_reviews": prop.total_reviews ,
+                        "allow_pay_on_arrival": prop.allow_pay_on_arrival or False,
                     }
                 )
             return enriched

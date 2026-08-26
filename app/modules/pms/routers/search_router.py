@@ -24,6 +24,8 @@ class PropertySearchItem(BaseModel):
     total_price: float
     nights: int
     average_rating: float = 0.0
+    total_reviews:int = 0
+    allow_pay_on_arrival:bool = False
     
 
     model_config = ConfigDict(from_attributes=True)
