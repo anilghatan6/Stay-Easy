@@ -282,7 +282,7 @@ class BookingService:
             if adults > total_max_adults or children > total_max_children:
                 await self.idempotency_repo.release(idempotency_key)
                 raise RoomsUnavailableError(
-                    "The selected rooms cannot accommodate the total number of guests"
+                    "The selected room(s) cannot accommodate the total number of guests"
                 )
 
             # Soft lock + re-verify availability
