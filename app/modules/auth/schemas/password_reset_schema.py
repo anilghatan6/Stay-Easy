@@ -34,6 +34,14 @@ class ForgotPasswordRequest(BaseModel):
     email: EmailStr = Field(max_length=120)
     role:RoleEnum = Field(default=RoleEnum.USER)
 
+    @field_validator("role", mode="before")
+    @classmethod
+    def validate_role(cls, value: str) -> str:
+        try:
+            return RoleEnum(value)
+        except ValueError:
+            raise ValueError("Invalid role.")
+
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: StrongPassword
