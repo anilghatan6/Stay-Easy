@@ -276,17 +276,13 @@ class BookingService:
                 )
 
             # Capacity check: even split across rooms
-            adults_per_room = math.ceil(adults / rooms_needed)
-            children_per_room = math.ceil(children / rooms_needed)
-            undersized = [
-                r
-                for r in requested_rooms
-                if r.max_adults < adults_per_room or r.max_children < children_per_room
-            ]
-            if undersized:
+            total_max_adults = sum(r.max_adults for r in requested_rooms)
+            total_max_children = sum(r.max_children for r in requested_rooms)
+
+            if adults > total_max_adults or children > total_max_children:
                 await self.idempotency_repo.release(idempotency_key)
                 raise RoomsUnavailableError(
-                    "One or more selected rooms cannot accommodate the requested guests"
+                    "The selected rooms cannot accommodate the total number of guests"
                 )
 
             # Soft lock + re-verify availability
