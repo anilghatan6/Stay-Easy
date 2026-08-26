@@ -34,7 +34,7 @@ async def forgot_password(
     password_reset_service: PasswordResetService = Depends(get_password_reset_service),
 ):
     background_tasks.add_task(
-        password_reset_service.request_password_reset, payload.email
+        password_reset_service.request_password_reset, payload.email,payload.role
     )
     return StandardResponse(
         success=True,

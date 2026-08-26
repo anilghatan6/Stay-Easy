@@ -1,8 +1,13 @@
+from sqlalchemy.sql.coercions import RoleImpl
 from pydantic import model_validator
 from pydantic import BaseModel, EmailStr, Field, AfterValidator,field_validator
 import re
 from typing import Annotated
+from enum import StrEnum
 
+class RoleEnum(StrEnum):
+    USER="USER"
+    GUEST="GUEST"
 
 def check_password_rules(value: str) -> str:
     value = value.strip()
@@ -27,7 +32,7 @@ StrongPassword = Annotated[
 
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr = Field(max_length=120)
-
+    role:RoleEnum = Field(default=RoleEnum.USER)
 
 class ResetPasswordRequest(BaseModel):
     token: str

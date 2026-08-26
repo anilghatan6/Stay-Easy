@@ -57,13 +57,16 @@ class PasswordResetService:
         alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
         return "".join(secrets.choice(alphabet) for _ in range(length))
 
-    async def request_password_reset(self, email: str) -> None:
+    async def request_password_reset(self, email: str,role:str) -> None:
         try:
-            user = await self.password_reset_repo.find_user_by_email(email)
-            guest = None
-
-            if user is None:
+            if role == "USER":
+                user = await self.password_reset_repo.find_user_by_email(email)
+                guest = None
+            elif role == "GUEST":
+                user = None
                 guest = await self.password_reset_repo.find_guest_by_email(email)
+            else:
+                raise InvalidAccountTypeException("Invalid account type")
 
             if user is None and guest is None:
                 logger.info(
