@@ -25,7 +25,7 @@ class UpdateSpecialRequest(BaseModel):
 
 
 class PaymentIntentRequest(BaseModel):
-    payment_method: str = Field(..., max_length=20)
+    payment_method: str = Field(default="ONLINE", max_length=20)
     payment_gateway: Optional[str] = Field(None, max_length=20)
     return_url: Optional[str] = Field(None, max_length=1000)
     advance_amount: Optional[float] = Field(
@@ -50,7 +50,7 @@ class PaymentIntentRequest(BaseModel):
     def uppercase_gateway(cls, v: str | None) -> str | None:
         if v is None:
             return None
-        payment_gateways = {"STRIPE", "RAZORPAY", "KHALTI"}
+        payment_gateways = {"STRIPE", "RAZORPAY", "KHALTI", "ESEWA"}
         v_upper = v.upper()
         if v_upper not in payment_gateways:
             raise ValueError(
@@ -90,6 +90,8 @@ class PaymentIntentResponse(BaseModel):
     client_secret: Optional[str] = None
     order_id: Optional[str] = None
     payment_url: Optional[str] = None
+    form_url: Optional[str] = None
+    form_fields: Optional[dict] = None
 
 
 class ConfirmPaymentRequest(BaseModel):
@@ -100,7 +102,8 @@ class ConfirmPaymentRequest(BaseModel):
             "Gateway-specific verification data from the frontend:\n"
             '- STRIPE: {"payment_intent_id": "pi_..."}\n'
             '- RAZORPAY: {"order_id": "...", "payment_id": "...", "signature": "..."}\n'
-            '- KHALTI: {"pidx": "..."} or {"payment_intent_id": "..."}'
+            '- KHALTI: {"pidx": "..."} or {"payment_intent_id": "..."}\n'
+            '- ESEWA: {"data": "eyJ..."}'
         ),
     )
 
@@ -121,7 +124,7 @@ class PayRemainingRequest(BaseModel):
     @field_validator("payment_gateway", mode="before")
     @classmethod
     def uppercase_gateway(cls, v: str) -> str:
-        payment_gateways = {"STRIPE", "RAZORPAY", "KHALTI"}
+        payment_gateways = {"STRIPE", "RAZORPAY", "KHALTI", "ESEWA"}
         v_upper = v.upper()
         if v_upper not in payment_gateways:
             raise ValueError(

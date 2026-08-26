@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     KHALTI_SECRET_KEY: str
     KHALTI_RETURN_URL: str
     KHALTI_WEBSITE_URL: str
+    ESEWA_PRODUCT_CODE: str
+    ESEWA_SECRET_KEY: str
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod

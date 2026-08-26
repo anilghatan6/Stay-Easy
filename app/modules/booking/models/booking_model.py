@@ -34,6 +34,7 @@ class PaymentGateway(StrEnum):
     RAZORPAY = "RAZORPAY"
     DUMMY = "DUMMY"
     KHALTI = "KHALTI"
+    ESEWA = "ESEWA"
 
 
 class PaymentMethod(StrEnum):

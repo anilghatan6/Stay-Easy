@@ -23,6 +23,10 @@ def get_payment_service_factory() -> PaymentServiceFactory:
         stripe_api_key=settings.STRIPE_SECRET_KEY,
         razorpay_key_id=settings.RAZORPAY_KEY_ID,
         razorpay_key_secret=settings.RAZORPAY_KEY_SECRET,
+        khalti_secret_key=settings.KHALTI_SECRET_KEY,
+        khalti_website_url=settings.KHALTI_WEBSITE_URL,
+        esewa_product_code=settings.ESEWA_PRODUCT_CODE,
+        esewa_secret_key=settings.ESEWA_SECRET_KEY,
     )
 
 

@@ -30,7 +30,7 @@ async def _expire_stale_bookings_loop(stop_event: asyncio.Event):
                     idempotency_repo = IdempotencyRepository(redis_client)
                     offer_repo = SpecialOfferRepository(db)
                     discount_code_repo = DiscountCodeRepository(db)
-                    factory = PaymentServiceFactory("", "", "")
+                    factory = PaymentServiceFactory("", "", "", "","","","")
                     payment_service = PaymentService(factory)
 
                     service = BookingService(

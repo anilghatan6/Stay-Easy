@@ -13,17 +13,24 @@ class PaymentGateway(StrEnum):
     RAZORPAY = "RAZORPAY"
     DUMMY = "DUMMY"
     KHALTI = "KHALTI"
+    ESEWA = "ESEWA"
 
 
 class PaymentServiceFactory:
     def __init__(
-        self, stripe_api_key: str, razorpay_key_id: str, razorpay_key_secret: str
+        self, stripe_api_key: str, razorpay_key_id: str, razorpay_key_secret: str,
+        khalti_secret_key: str,
+        khalti_website_url: str,
+        esewa_product_code: str,
+        esewa_secret_key: str,
     ):
         self._stripe_api_key = stripe_api_key
         self._razorpay_key_id = razorpay_key_id
         self._razorpay_key_secret = razorpay_key_secret
-        self._khalti_secret_key= settings.KHALTI_SECRET_KEY
-        self._khalti_website_url= settings.KHALTI_WEBSITE_URL
+        self._khalti_secret_key= khalti_secret_key
+        self._khalti_website_url = khalti_website_url
+        self._esewa_product_code = esewa_product_code
+        self._esewa_secret_key = esewa_secret_key
         self._redis_client = get_redis_client()
 
     def get_strategy(self, gateway: str) -> PaymentStrategy:
@@ -57,6 +64,13 @@ class PaymentServiceFactory:
                 KhaltiPaymentStrategy,
             )
             return KhaltiPaymentStrategy(self._khalti_secret_key, self._khalti_website_url, self._redis_client)
+        elif gateway_enum == PaymentGateway.ESEWA:
+            from app.modules.booking.payment.esewa_strategy import (
+                EsewaPaymentStrategy,
+            )
+            return EsewaPaymentStrategy(
+                self._esewa_product_code, self._esewa_secret_key, self._redis_client
+            )
 
         raise UnsupportedGatewayError(
             internal_detail=f"Unsupported payment gateway: {gateway}"
