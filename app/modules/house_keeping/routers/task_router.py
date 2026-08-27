@@ -27,11 +27,6 @@ router = APIRouter(
     tags=["housekeeping-tasks"],
 )
 
-rooms_router = APIRouter(
-    prefix="/properties/{property_id}/rooms",
-    tags=["housekeeping-rooms"],
-)
-
 
 # ─── TASK TYPE OPTIONS ──────────────────────────────
 
@@ -160,6 +155,24 @@ async def get_staff_work_summary(
     return {"success": True, "data": result}
 
 
+# @router.get(
+#     "/housekeeping-staff",
+#     response_model=StandardResponse[list],
+#     status_code=status.HTTP_200_OK,
+#     description="List housekeeping staff assigned to the property",
+# )
+# async def get_housekeeping_staff(
+#     property_id: uuid.UUID,
+#     current_user: CurrentUser,
+#     task_service: TaskService = Depends(get_task_service),
+# ):
+#     verify_tenant(current_user)
+#     tenant_id = current_user.tenant_id
+#     result = await task_service.get_housekeeping_staff(tenant_id, property_id)
+#     return {"success": True, "data": result}
+
+
+
 # ─── GET SINGLE TASK ────────────────────────────────
 
 @router.get(
@@ -254,100 +267,3 @@ async def delete_task(
     await task_service.delete_task(tenant_id, property_id, task_id)
     return {"success": True, "data": "Task deleted successfully"}
 
-
-# ═══════════════════════════════════════════════════════
-# ROOM-RELATED ROUTES (separate router, mounted separately)
-# ═══════════════════════════════════════════════════════
-
-# ─── HOUSEKEEPING STAFF ──────────────────────────────
-
-@router.get(
-    "/housekeeping-staff",
-    response_model=StandardResponse[list],
-    status_code=status.HTTP_200_OK,
-    description="List housekeeping staff assigned to the property",
-)
-async def get_housekeeping_staff(
-    property_id: uuid.UUID,
-    current_user: CurrentUser,
-    task_service: TaskService = Depends(get_task_service),
-):
-    verify_tenant(current_user)
-    tenant_id = current_user.tenant_id
-    result = await task_service.get_housekeeping_staff(tenant_id, property_id)
-    return {"success": True, "data": result}
-
-
-# ─── ROOMS BY STATUS ─────────────────────────────────
-
-@rooms_router.get(
-    "/status",
-    response_model=StandardResponse[list],
-    status_code=status.HTTP_200_OK,
-    description="Get rooms filtered by status (OCCUPIED, DIRTY, etc.)",
-)
-async def get_rooms_by_status(
-    property_id: uuid.UUID,
-    current_user: CurrentUser,
-    statuses: str = Query(
-        default="OCCUPIED,DIRTY",
-        description="Comma-separated room statuses (e.g., OCCUPIED,DIRTY)",
-    ),
-    skip: int = Query(0, ge=0, description="Number of rooms to skip"),
-    limit: int = Query(50, ge=1, le=100, description="Max rooms to return"),
-    task_service: TaskService = Depends(get_task_service),
-):
-    verify_tenant(current_user)
-    tenant_id = current_user.tenant_id
-
-    # Parse comma-separated statuses
-    status_list = []
-    for s in statuses.split(","):
-        s = s.strip().upper()
-        try:
-            status_list.append(RoomStatus(s))
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid room status: {s}. Allowed values: {', '.join(rs.value for rs in RoomStatus)}",
-            )
-
-    if not status_list:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="At least one room status is required",
-        )
-
-    room_list, total = await task_service.get_rooms_by_statuses(
-        tenant_id, property_id, status_list, skip, limit
-    )
-    has_more = (skip + len(room_list)) < total
-    return {
-        "success": True,
-        "data": room_list,
-        "meta": {
-            "total": total,
-            "skip": skip,
-            "limit": limit,
-            "has_more": has_more,
-        },
-    }
-
-
-# ─── ROOM STATUS SUMMARY ─────────────────────────────
-
-@rooms_router.get(
-    "/status-summary",
-    response_model=StandardResponse[RoomStatusSummaryResponse],
-    status_code=status.HTTP_200_OK,
-    description="Get room status counts for the property",
-)
-async def get_room_status_summary(
-    property_id: uuid.UUID,
-    current_user: CurrentUser,
-    task_service: TaskService = Depends(get_task_service),
-):
-    verify_tenant(current_user)
-    tenant_id = current_user.tenant_id
-    result = await task_service.get_room_status_summary(tenant_id, property_id)
-    return {"success": True, "data": result}

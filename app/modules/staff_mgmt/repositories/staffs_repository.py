@@ -1,11 +1,11 @@
 import uuid
 from typing import Optional, List
-from sqlalchemy import select, delete, func
+from sqlalchemy import select, func,update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.modules.staff_mgmt.models.staffs_model import Staff, StaffProperty
+from app.modules.staff_mgmt.models.staffs_model import Staff, StaffProperty,StaffStatus
 from app.utils.exceptions import RepositoryException
 from app.utils.logging import LoggerFactory
 
@@ -179,10 +179,90 @@ class StaffRepository:
             if staff is None:
                 return False
 
-            await self.db.delete(staff)  # cascade handles StaffProperty rows
+            await self.db.execute(update(Staff).where(Staff.id == staff_id).values(status=StaffStatus.INACTIVE))
             logger.info(f"[StaffRepository] Staff deleted successfully: {staff_id}")
             return True
 
         except SQLAlchemyError as e:
             logger.error(f"[StaffRepository] Failed to delete staff {staff_id}: {e}")
             raise RepositoryException("Could not delete staff member. Please try again.") from e
+
+    async def get_staff_summary(self, property_id:uuid.UUID):
+        logger.info(f"[StaffRepository] Fetching staff summary for property: {property_id}")
+        try:
+            stmt = (
+                select(Staff)
+                .join(StaffProperty, StaffProperty.staff_id == Staff.id)
+                .options(selectinload(Staff.property_assignments))
+                .where(StaffProperty.property_id == property_id)
+                .order_by(Staff.created_at.desc())
+            )
+            result = await self.db.execute(stmt)
+            staff_list = result.scalars().unique().all()
+
+            total_staff = len(staff_list)
+            
+            if total_staff == 0:
+                return {"total": 0, "active": 0, "inactive": 0, "on_leave": 0}
+            
+            active_staff = 0
+            inactive_staff = 0
+            onleave_staff = 0
+            
+            for staff in staff_list:
+                if staff.status == StaffStatus.INACTIVE:
+                    inactive_staff += 1
+                elif staff.status == StaffStatus.ON_LEAVE:
+                    onleave_staff += 1
+                else:
+                    active_staff += 1
+
+            return {"total": total_staff, "active": active_staff, "inactive": inactive_staff, "on_leave": onleave_staff}
+        except SQLAlchemyError as e:
+            logger.error(f"[StaffRepository] Failed to fetch staff summary for property {property_id}: {e}")
+            raise RepositoryException("Could not fetch staff summary. Please try again.") from e
+
+    async def get_housekeeping_staff(
+        self, property_id: uuid.UUID, search: Optional[str] = None, skip: int = 0, limit: int = 50
+    ) -> tuple[List[Staff], int]:
+        logger.info(f"[StaffRepository] Fetching housekeeping staff for property: {property_id}")
+        try:
+            base_filter = (
+                StaffProperty.property_id == property_id,
+                Staff.job_role == "HOUSEKEEPING",
+                Staff.status == "ACTIVE",
+            )
+
+            stmt = (
+                select(Staff)
+                .join(StaffProperty, StaffProperty.staff_id == Staff.id)
+                .options(selectinload(Staff.property_assignments))
+                .where(*base_filter)
+            )
+
+            count_stmt = (
+                select(func.count())
+                .select_from(Staff)
+                .join(StaffProperty, StaffProperty.staff_id == Staff.id)
+                .where(*base_filter)
+            )
+
+            if search is not None:
+                search_filter = Staff.full_name.ilike(f"%{search}%")
+                stmt = stmt.where(search_filter)
+                count_stmt = count_stmt.where(search_filter)
+
+            stmt = stmt.order_by(Staff.full_name.asc()).offset(skip).limit(limit)
+
+            result = await self.db.execute(stmt)
+            staff_list = result.scalars().unique().all()
+
+            count_result = await self.db.execute(count_stmt)
+            total = count_result.scalar_one()
+
+            logger.info(f"[StaffRepository] Found {len(staff_list)} housekeeping staff")
+            return staff_list, total
+
+        except SQLAlchemyError as e:
+            logger.error(f"[StaffRepository] Failed to fetch housekeeping staff for property {property_id}: {e}")
+            raise RepositoryException("Could not fetch housekeeping staff.") from e

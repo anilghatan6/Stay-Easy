@@ -34,7 +34,7 @@ from app.modules.staff_operations.router import router as staff_operations_route
 
 from app.modules.house_keeping.models import *
 from app.modules.house_keeping.routers.task_router import router as task_router
-from app.modules.house_keeping.routers.task_router import rooms_router as housekeeping_rooms_router
+from app.modules.house_keeping.routers.rooms_task_router import rooms_router as housekeeping_rooms_router
 
 from app.modules.booking.routers.favorites_router import router as favorites_router
 

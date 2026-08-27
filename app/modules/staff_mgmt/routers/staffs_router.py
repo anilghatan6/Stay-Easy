@@ -1,5 +1,5 @@
 import uuid
-
+from typing import Optional
 from fastapi import APIRouter, Depends, status, Query
 from app.modules.staff_mgmt.services.staffs_services import StaffService
 from app.modules.staff_mgmt.dependencies import get_staff_service
@@ -54,6 +54,51 @@ async def list_staff(
     return {
         "success": True,
         "data": response,
+        "meta": {
+            "total": total, "skip": skip, "limit": limit, "has_more": has_more
+        },
+    }
+
+@router.get("/staffs-summary",response_model=StandardResponse, status_code=status.HTTP_200_OK, description="Get a summary of all staff for the property")
+async def get_staff_summary(
+    property_id:uuid.UUID,
+    current_user:CurrentUser,
+    staff_service:StaffService = Depends(get_staff_service),
+):
+    verify_tenant(current_user)
+    response = await staff_service.get_staff_summary(
+        property_id
+    )
+
+    return {
+        "success":True,
+        "data":response,
+    }
+
+# get all the housekeeping staffs
+@router.get("/housekeeping-staffs", response_model=StandardResponse[list[StaffResponse]], status_code=status.HTTP_200_OK, description="Get all housekeeping staffs")
+async def get_housekeeping_staff(
+    property_id:uuid.UUID,
+    current_user:CurrentUser,
+    search: Optional[str] = Query(default=None, description="Search by staff name (case-insensitive)"),
+    skip: int = Query(0, ge=0, description="Number of staff to skip"),
+    limit: int = Query(50, ge=1, le=100, description="Max staff to return"),
+    staff_service:StaffService = Depends(get_staff_service),
+):
+    verify_tenant(current_user)
+    tenant_id = current_user.tenant_id
+    response, total = await staff_service.get_housekeeping_staff(
+        tenant_id,
+        property_id,
+        search,
+        skip,
+        limit
+    )
+
+    has_more = skip + len(response) < total
+    return {
+        "success":True,
+        "data":response,
         "meta": {
             "total": total, "skip": skip, "limit": limit, "has_more": has_more
         },

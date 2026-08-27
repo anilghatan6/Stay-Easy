@@ -12,7 +12,7 @@ from app.modules.house_keeping.models.task_model import (
     TaskStatus,
     TaskPriority,
 )
-from app.modules.pms.models.rooms_model import Rooms, RoomStatus
+from app.modules.pms.models.rooms_model import Rooms, RoomStatus, RoomType
 from app.modules.pms.models.properties_model import Property
 from app.modules.staff_mgmt.models.staffs_model import Staff, StaffProperty
 from app.modules.auth.models import User
@@ -145,31 +145,116 @@ class TaskRepository:
         logger.info("[TaskRepository] Fetching task types")
         return [{"value": t.value, "label": t.value.replace("_", " ").title()} for t in TaskType]
 
-    async def get_rooms_by_statuses(
-        self, property_id: uuid.UUID, statuses: list[RoomStatus], skip: int = 0, limit: int = 50
-    ) -> tuple[List[Rooms], int]:
-        logger.info(f"[TaskRepository] Fetching rooms with statuses {[s.value for s in statuses]} for property {property_id}")
+    async def get_rooms_by_status(
+        self,
+        property_id: uuid.UUID,
+        status: Optional[RoomStatus] = None,
+        search: Optional[str] = None,
+        floor_number: Optional[int] = None,
+        task_status: Optional[List[TaskStatus]] = None,
+        room_type: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> tuple[List[dict], int]:
+        logger.info(
+            f"[TaskRepository] Fetching rooms for property {property_id} "
+            f"with filters: status={status}, search={search}, floor={floor_number}, "
+            f"task_status={task_status}, room_type={room_type}"
+        )
         try:
+            base_filter = Rooms.property_id == property_id
+
+            latest_task_subq = (
+                select(HousekeepingTask.id)
+                .where(HousekeepingTask.room_id == Rooms.id)
+                .order_by(HousekeepingTask.created_at.desc())
+                .limit(1)
+                .correlate(Rooms)
+                .scalar_subquery()
+            )
+
             stmt = (
-                select(Rooms)
-                .where(Rooms.property_id == property_id, Rooms.status.in_(statuses))
-                .options(joinedload(Rooms.room_type), joinedload(Rooms.bed_type))
-                .order_by(Rooms.room_name.asc())
-                .offset(skip)
-                .limit(limit)
+                select(
+                    Rooms,
+                    Rooms.photos["cover"].as_string().label("cover_image"),
+                    func.coalesce(HousekeepingTask.status, None).label("task_status"),
+                    func.coalesce(Staff.full_name, None).label("assigned_to"),
+                    func.coalesce(HousekeepingTask.completed_at, None).label("last_cleaned"),
+                )
+                .where(base_filter)
+                .options(joinedload(Rooms.room_type))
+                .outerjoin(
+                    HousekeepingTask,
+                    HousekeepingTask.id == latest_task_subq,
+                )
+                .outerjoin(Staff, HousekeepingTask.assigned_staff_id == Staff.id)
             )
 
             count_stmt = (
                 select(func.count())
                 .select_from(Rooms)
-                .where(Rooms.property_id == property_id, Rooms.status.in_(statuses))
+                .where(base_filter)
             )
 
+            if status is not None:
+                stmt = stmt.where(Rooms.status == status)
+                count_stmt = count_stmt.where(Rooms.status == status)
+
+            if search is not None:
+                search_filter = Rooms.room_name.ilike(f"%{search}%")
+                stmt = stmt.where(search_filter)
+                count_stmt = count_stmt.where(search_filter)
+
+            if floor_number is not None:
+                floor_filter = Rooms.floor_number == floor_number
+                stmt = stmt.where(floor_filter)
+                count_stmt = count_stmt.where(floor_filter)
+
+            if task_status is not None and len(task_status) > 0:
+                task_subq = (
+                    select(HousekeepingTask.room_id)
+                    .where(
+                        HousekeepingTask.property_id == property_id,
+                        HousekeepingTask.status.in_(task_status),
+                    )
+                    .group_by(HousekeepingTask.room_id)
+                    .having(func.count(func.distinct(HousekeepingTask.status)) == len(task_status))
+                    .scalar_subquery()
+                )
+                task_filter = Rooms.id.in_(task_subq)
+                stmt = stmt.where(task_filter)
+                count_stmt = count_stmt.where(task_filter)
+
+            if room_type is not None:
+                room_type_filter = RoomType.room_type_name == room_type
+                stmt = stmt.join(RoomType, Rooms.room_type_id == RoomType.id).where(room_type_filter)
+                count_stmt = (
+                    count_stmt
+                    .join(RoomType, Rooms.room_type_id == RoomType.id)
+                    .where(room_type_filter)
+                )
+
+            stmt = stmt.order_by(Rooms.room_name.asc()).offset(skip).limit(limit)
+
             result = await self.db.execute(stmt)
-            rooms = list(result.unique().scalars().all())
+            rows = result.unique().all()
 
             count_result = await self.db.execute(count_stmt)
             total = count_result.scalar() or 0
+
+            rooms = []
+            for row in rows:
+                room = row[0]
+                rooms.append({
+                    "id": room.id,
+                    "room_name": room.room_name,
+                    "cover_image": row.cover_image,
+                    "room_type": room.room_type.room_type_name if room.room_type else None,
+                    "floor_number": room.floor_number,
+                    "task_status": row.task_status.value if row.task_status else None,
+                    "assigned_to": row.assigned_to,
+                    "last_cleaned": row.last_cleaned,
+                })
 
             return rooms, total
 

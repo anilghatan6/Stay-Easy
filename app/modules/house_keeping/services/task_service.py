@@ -235,36 +235,32 @@ class TaskService:
         task_list = [self._to_list_response_dict(task) for task in tasks]
         return task_list, total
 
-    async def get_rooms_by_statuses(
+    async def get_rooms_by_status(
         self,
         tenant_id: uuid.UUID,
         property_id: uuid.UUID,
-        statuses: list[RoomStatus],
+        status: Optional[RoomStatus] = None,
+        search: Optional[str] = None,
+        floor_number: Optional[int] = None,
+        task_status: Optional[list] = None,
+        room_type: Optional[str] = None,
         skip: int = 0,
         limit: int = 50,
     ) -> tuple[list[dict], int]:
         await self._verify_property(tenant_id, property_id)
 
-        rooms, total = await self.task_repo.get_rooms_by_statuses(
+        rooms, total = await self.task_repo.get_rooms_by_status(
             property_id=property_id,
-            statuses=statuses,
+            status=status,
+            search=search,
+            floor_number=floor_number,
+            task_status=task_status,
+            room_type=room_type,
             skip=skip,
             limit=limit,
         )
 
-        room_list = [
-            {
-                "id": room.id,
-                "room_name": room.room_name,
-                "status": room.status,
-                "floor_number": room.floor_number,
-                "room_type": room.room_type.room_type_name if room.room_type else None,
-                "bed_type": room.bed_type.bed_name if room.bed_type else None,
-                "base_rate": str(room.base_rate) if room.base_rate else None,
-            }
-            for room in rooms
-        ]
-        return room_list, total
+        return rooms, total
 
     async def get_housekeeping_staff(
         self, tenant_id: uuid.UUID, property_id: uuid.UUID

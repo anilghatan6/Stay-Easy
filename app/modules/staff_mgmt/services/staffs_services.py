@@ -1,6 +1,7 @@
 import uuid
 import secrets
 import string
+from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.staff_mgmt.repositories.staffs_repository import StaffRepository
@@ -351,3 +352,34 @@ class StaffService:
             await self.db.rollback()
             logger.error(f"Error deleting staff: {e}", exc_info=True)
             raise ServiceException("Error deleting staff")
+
+
+    async def get_staff_summary(self, property_id:uuid.UUID):
+        logger.info(f"[StaffService] Getting staff summary for property: {property_id}")
+        try:
+            staff_summary = await self.staff_repo.get_staff_summary(property_id)
+            logger.info("[StaffService] Staff summary retrieved successfully")
+            return staff_summary
+        except RepositoryException:
+            raise
+        except Exception as e:
+            logger.error(f"[StaffService] Error getting staff summary: {e}", exc_info=True)
+            raise ServiceException("Error getting staff summary")
+
+    async def get_housekeeping_staff(
+        self, tenant_id: uuid.UUID, property_id: uuid.UUID, search: Optional[str] = None, skip: int = 0, limit: int = 50
+    ) -> tuple[list[StaffResponse], int]:
+        try:
+            property_obj = await self.prop_repo.get_property_by_id(property_id, tenant_id)
+            if property_obj is None:
+                raise PropertyNotFoundException("Property not found")
+
+            staff_list, total = await self.staff_repo.get_housekeeping_staff(property_id, search, skip, limit)
+            logger.info("[StaffService] Housekeeping staff retrieved successfully")
+            return [StaffResponse.model_validate(s) for s in staff_list], total
+
+        except (PropertyNotFoundException, RepositoryException):
+            raise
+        except Exception as e:
+            logger.error(f"[StaffService] Error getting housekeeping staff: {e}", exc_info=True)
+            raise ServiceException("Error getting housekeeping staff")
