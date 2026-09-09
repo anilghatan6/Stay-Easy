@@ -689,12 +689,12 @@ class BookingService:
             raise ServiceException("Could not get booking details. Please try again.")
 
     async def get_guest_bookings(
-        self, guest_id: uuid.UUID, skip: int, limit: int, page: int = 1
+        self, guest_id: uuid.UUID, skip: int, limit: int, page: int = 1, status: Optional[MasterBookingStatus] = None
     ) -> dict:
         logger.info("getting guest bookings")
         try:
             bookings, total = await self.booking_repo.get_bookings_by_guest(
-                guest_id, skip, limit
+                guest_id, skip, limit, status=status
             )
             booking_items = [
                 {

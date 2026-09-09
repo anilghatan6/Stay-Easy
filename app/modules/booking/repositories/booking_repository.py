@@ -232,7 +232,7 @@ class BookingRepository:
             )
 
     async def get_bookings_by_guest(
-        self, guest_id: uuid.UUID, skip: int, limit: int
+        self, guest_id: uuid.UUID, skip: int, limit: int, status=None
     ) -> tuple[list[Booking], int]:
         logger.info("[BookingRepository] Fetching bookings by guest")
         try:
@@ -241,12 +241,15 @@ class BookingRepository:
                 MasterBookingStatus.EXPIRED,
             ]
 
+            base_filter = Booking.guest_id == guest_id, ~Booking.status.in_(excluded_statuses)
+
+            if status is not None:
+                base_filter = Booking.guest_id == guest_id, Booking.status == status
+
             stmt = (
                 select(Booking)
                 .options(joinedload(Booking.property))
-                .where(
-                    Booking.guest_id == guest_id, ~Booking.status.in_(excluded_statuses)
-                )
+                .where(*base_filter)
                 .order_by(Booking.created_at.desc())
                 .offset(skip)
                 .limit(limit)
@@ -256,9 +259,7 @@ class BookingRepository:
             total_stmt = (
                 select(func.count())
                 .select_from(Booking)
-                .where(
-                    Booking.guest_id == guest_id, ~Booking.status.in_(excluded_statuses)
-                )
+                .where(*base_filter)
             )
 
             total_result = await self.db.execute(total_stmt)

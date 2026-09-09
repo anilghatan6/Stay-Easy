@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import (
     APIRouter,
@@ -28,6 +28,7 @@ from app.modules.booking.schemas.booking_schema import (
     UpdateSpecialRequest,
 )
 from app.modules.booking.services.booking_service import BookingService
+from app.modules.booking.models.booking_model import MasterBookingStatus
 from app.utils.exceptions import BookingException
 from app.utils.schemas import StandardResponse
 
@@ -216,8 +217,9 @@ async def get_my_bookings(
     booking_service: Annotated[BookingService, Depends(get_booking_service)],
     skip: int = Query(0, ge=0, description="Number of bookings to skip"),
     limit: int = Query(10, ge=1, le=50, description="Max number of bookings to return"),
+    booking_status: Optional[MasterBookingStatus] = Query(None, alias="status", description="Filter by booking status (CONFIRMED, CANCELLED)"),
 ):
-    result = await booking_service.get_guest_bookings(guest.id, skip, limit)
+    result = await booking_service.get_guest_bookings(guest.id, skip, limit, status=booking_status)
     has_more = skip + len(result["bookings"]) < result["total"]
 
     return StandardResponse(
