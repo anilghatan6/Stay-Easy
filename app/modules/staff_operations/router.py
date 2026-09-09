@@ -32,7 +32,7 @@ from app.utils.schemas import StandardResponse
 
 router = APIRouter(
     prefix="/staff",
-    tags=["staff-operations"],
+    tags=["Front desk staff operations"],
 )
 
 
