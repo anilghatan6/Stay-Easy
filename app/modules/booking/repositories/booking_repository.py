@@ -237,7 +237,7 @@ class BookingRepository:
         logger.info("[BookingRepository] Fetching bookings by guest")
         try:
             excluded_statuses = [
-                MasterBookingStatus.CANCELLED,
+                # MasterBookingStatus.CANCELLED,
                 MasterBookingStatus.EXPIRED,
             ]
 
