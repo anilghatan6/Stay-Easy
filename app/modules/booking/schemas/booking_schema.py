@@ -236,3 +236,11 @@ class CancelBookingResponse(BaseModel):
     refund_amount: float
     refund_status: str  # "processed" | "manual_required" | "none"
     message: str
+
+
+class ExpireBookingResponse(BaseModel):
+    ref_number: str
+    status: str
+    message: str
+    expired_at: datetime
+

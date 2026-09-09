@@ -909,7 +909,43 @@ class BookingService:
             logger.error(f"[BookingService] Failed to cancel booking {ref_number}: {e}")
             raise ServiceException("Could not cancel booking. Please try again.")
 
+    async def expire_booking(
+        self,
+        ref_number: str,
+        guest_id: uuid.UUID,
+    ) -> dict:
+        """
+        Transitions a PENDING booking to EXPIRED status when a guest backs out of checkout,
+        and releases the Redis soft lock.
+        """
+        logger.info(f"[BookingService] Expiring booking {ref_number} for guest {guest_id}")
+        try:
+            booking_dict = await self.booking_repo.try_expire_booking(
+                ref_number=ref_number, guest_id=guest_id
+            )
+            if not booking_dict:
+                raise BookingException("Booking not found or cannot be expired")
+
+            booking_id = booking_dict["id"]
+            await self.redis.delete(f"booking:softlock:{booking_id}")
+            await self.db.commit()
+
+            return {
+                "ref_number": ref_number,
+                "status": "EXPIRED",
+                "message": "Booking reservation hold expired successfully",
+                "expired_at": datetime.now(timezone.utc),
+            }
+        except (BookingException, RepositoryException):
+            await self.db.rollback()
+            raise
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"[BookingService] Failed to expire booking {ref_number}: {e}")
+            raise ServiceException("Could not expire booking. Please try again.")
+
     async def cancel_booking(
+
         self,
         ref_number: str,
         guest_id: uuid.UUID,

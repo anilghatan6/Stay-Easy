@@ -20,6 +20,7 @@ from app.modules.booking.schemas.booking_schema import (
     CancelBookingResponse,
     ConfirmPaymentRequest,
     ConfirmPaymentResponse,
+    ExpireBookingResponse,
     PaginatedBookingsResponse,
     PayRemainingRequest,
     PaymentIntentRequest,
@@ -211,7 +212,30 @@ async def cancel_booking(
     return StandardResponse(data=CancelBookingResponse(**result))
 
 
+@router.post(
+    "/{ref_number}/expire",
+    status_code=status.HTTP_200_OK,
+    dependencies=[
+        Depends(bypass_global_limit),
+        Depends(
+            RateLimiter(max_requests=15, window_seconds=60, scope="expire_booking")
+        ),
+    ],
+)
+async def expire_booking(
+    ref_number: str,
+    guest: CurrentGuest,
+    booking_service: Annotated[BookingService, Depends(get_booking_service)],
+):
+    result = await booking_service.expire_booking(
+        ref_number=ref_number,
+        guest_id=guest.id,
+    )
+    return StandardResponse(data=ExpireBookingResponse(**result))
+
+
 @router.get("/me")
+
 async def get_my_bookings(
     guest: CurrentGuest,
     booking_service: Annotated[BookingService, Depends(get_booking_service)],

@@ -763,3 +763,52 @@ class BookingRepository:
             raise RepositoryException(
                 "Could not fetch booking details. Please try again."
             ) from e
+
+    async def try_expire_booking(
+        self, ref_number: str, guest_id: uuid.UUID
+    ) -> dict | None:
+        """
+        Atomically transitions a PENDING booking to EXPIRED status.
+        Only allows PENDING -> EXPIRED.
+        Returns a dictionary with booking id, ref_number, and status, or None if not eligible.
+        """
+        logger.info(f"[BookingRepository] Attempting to expire booking {ref_number}")
+        try:
+            result = await self.db.execute(
+                select(Booking)
+                .where(
+                    Booking.ref_number == ref_number,
+                    Booking.guest_id == guest_id,
+                )
+                .with_for_update()
+            )
+            booking = result.scalar_one_or_none()
+
+            if booking is None:
+                return None
+
+            if booking.status == MasterBookingStatus.EXPIRED:
+                return {
+                    "id": booking.id,
+                    "ref_number": booking.ref_number,
+                    "status": booking.status.value if hasattr(booking.status, "value") else str(booking.status),
+                    "already_expired": True,
+                }
+
+            if booking.status != MasterBookingStatus.PENDING:
+                return None
+
+            booking.status = MasterBookingStatus.EXPIRED
+            return {
+                "id": booking.id,
+                "ref_number": booking.ref_number,
+                "status": booking.status.value if hasattr(booking.status, "value") else str(booking.status),
+                "already_expired": False,
+            }
+
+        except SQLAlchemyError as e:
+            logger.error(
+                f"[BookingRepository] Failed to expire booking {ref_number}: {e}"
+            )
+            raise RepositoryException("Could not expire booking.") from e
+
