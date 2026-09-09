@@ -15,6 +15,7 @@ from .rooms_model import (
     BedType
 )
 from .review_model import Review
+from .activity_log_model import PropertyActivityLog
 
 __all__ = [
     "Tenant",
@@ -26,4 +27,5 @@ __all__ = [
     "RoomType",
     "BedType",
     "Review",
+    "PropertyActivityLog",
 ]

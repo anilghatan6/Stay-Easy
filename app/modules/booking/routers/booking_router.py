@@ -17,6 +17,7 @@ from app.modules.booking.schemas.booking_schema import (
     ApplyDiscountRequest,
     BookingCreateRequest,
     BookingReservationResponse,
+    CancelBookingResponse,
     ConfirmPaymentRequest,
     ConfirmPaymentResponse,
     PaginatedBookingsResponse,
@@ -183,6 +184,30 @@ async def update_special_requests(
         special_requests=body.special_requests,
     )
     return result
+
+
+@router.post(
+    "/{ref_number}/cancel",
+    status_code=status.HTTP_200_OK,
+    dependencies=[
+        Depends(bypass_global_limit),
+        Depends(
+            RateLimiter(max_requests=5, window_seconds=60, scope="cancel_booking")
+        ),
+    ],
+)
+async def cancel_booking(
+    ref_number: str,
+    guest: CurrentGuest,
+    background_tasks: BackgroundTasks,
+    booking_service: Annotated[BookingService, Depends(get_booking_service)],
+):
+    result = await booking_service.cancel_booking(
+        ref_number=ref_number,
+        guest_id=guest.id,
+        background_tasks=background_tasks,
+    )
+    return StandardResponse(data=CancelBookingResponse(**result))
 
 
 @router.get("/me")

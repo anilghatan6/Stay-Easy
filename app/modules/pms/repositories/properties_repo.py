@@ -1,4 +1,5 @@
 import uuid
+from typing import Optional
 from sqlalchemy import func, select, or_, text
 from sqlalchemy.orm import joinedload,selectinload
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -14,6 +15,12 @@ from app.modules.booking.models import (
     MasterBookingStatus,
     Booking,
     BookingRoom
+)
+from app.modules.booking.models.booking_model import (
+    PaymentGateway,
+    PaymentStatus,
+    PaymentMethod,
+    BookingType,
 )
 # from app.modules.pms.models.rooms_model import Rooms, RoomStatus
 from app.utils.exceptions import (
@@ -472,6 +479,10 @@ class PropertyRepository:
             logger.info(
                 f"[PropertyRepository] Deleted property: {property_id} for tenant: {tenant_id}"
             )
+        except SQLAlchemyError as e:
+            await self.db.rollback()
+            logger.error(f"[PropertyRepository] Error deleting property: {str(e)}")
+            raise RepositoryException(internal_detail=f"Property cannot be deleted as it is associated with other records: {str(e)}")
         except PropertyNotFoundException:
             raise
         except Exception as e:
@@ -480,16 +491,13 @@ class PropertyRepository:
             raise RepositoryException(internal_detail=str(e))
 
     async def search_by_destination(
-        self, query: str, threshold: float = 0.2
+        self, query: str, threshold: float = 0.2,
+        amenity_ids: list[uuid.UUID] | None = None,
     ) -> list[tuple[Property, float]]:
-        """
-        Fuzzy destination search using pg_trgm similarity.
-        Returns list of (Property, score) tuples, ordered by best match first.
-        """
         logger.info(f"[PropertyRepository] Searching by destination: {query}")
         await self.db.execute(
             text("SELECT set_config('pg_trgm.similarity_threshold', :t, false)"),
-            {"t": "0.2"},  # Note: PostgreSQL set_config expects the value as a string
+            {"t": "0.2"},
         )
         try:
             score = func.greatest(
@@ -501,34 +509,34 @@ class PropertyRepository:
                 func.similarity(Property.type, query),
             ).label("score")
 
+            conditions = [
+                or_(
+                    Property.name.op("%")(query),
+                    Property.country.op("%")(query),
+                    Property.state.op("%")(query),
+                    Property.city.op("%")(query),
+                    Property.address.op("%")(query),
+                    Property.type.op("%")(query),
+                ),
+                Property.is_active,
+            ]
+
+            if amenity_ids:
+                # requires the property's amenity array to be a superset of the requested ids
+                conditions.append(Property.system_amenity_ids.contains(amenity_ids))
+
             stmt = (
                 select(Property, score)
-                .where(
-                    or_(
-                        Property.name.op("%")(query),
-                        Property.country.op("%")(query),
-                        Property.state.op("%")(query),
-                        Property.city.op("%")(query),
-                        Property.address.op("%")(query),
-                        Property.type.op("%")(query),
-                    ),
-                    Property.is_active,
-                )
+                .where(*conditions)
                 .order_by(score.desc())
             )
             result = await self.db.execute(stmt)
             rows = result.all()
-
-            logger.info("returning tuple of property and score")
             return [(row[0], row[1]) for row in rows]
 
         except Exception as e:
-            logger.error(
-                f"[PropertyRepository] Error searching by destination: {str(e)}"
-            )
-            raise RepositoryException(
-                internal_detail=f"Failed to search by destination: {str(e)}"
-            )
+            logger.error(f"[PropertyRepository] Error searching by destination: {str(e)}")
+            raise RepositoryException(internal_detail=f"Failed to search by destination: {str(e)}")
 
     async def get_by_ids(self, property_ids: list[uuid.UUID]) -> list[Property]:
         logger.info(f"[PropertyRepository] Getting properties by ids: {property_ids}")
@@ -695,7 +703,14 @@ class PropertyRepository:
                 internal_detail="Could not search for nearby properties. Please try again."
             )
 
-    async def get_property_bookings(self, property_id, tenant_id, skip:int, limit:int):
+    async def get_property_bookings(
+        self, property_id, tenant_id, skip: int, limit: int,
+        status: Optional[MasterBookingStatus] = None,
+        payment_status: Optional[PaymentStatus] = None,
+        payment_method: Optional[PaymentMethod] = None,
+        payment_gateway: Optional[PaymentGateway] = None,
+        booking_type: Optional[BookingType] = None,
+    ):
         logger.info("[PropertyRepository] getting property bookings")
         try:
             excludes_booking_status = {
@@ -704,10 +719,28 @@ class PropertyRepository:
 
             }
 
+            # Base conditions
+            base_conditions = [
+                Booking.property_id == property_id,
+                Booking.status.notin_(excludes_booking_status),
+            ]
+
+            # Add optional filters (AND logic)
+            if status is not None:
+                base_conditions.append(Booking.status == status)
+            if payment_status is not None:
+                base_conditions.append(Booking.payment_status == payment_status)
+            if payment_method is not None:
+                base_conditions.append(Booking.payment_method == payment_method)
+            if payment_gateway is not None:
+                base_conditions.append(Booking.payment_gateway == payment_gateway)
+            if booking_type is not None:
+                base_conditions.append(Booking.booking_type == booking_type)
+
             count_stmt = (
             select(func.count())
             .select_from(Booking)
-            .where(Booking.property_id == property_id, Booking.status.notin_(excludes_booking_status))
+            .where(*base_conditions)
             )
             count_result = await self.db.execute(count_stmt)
             total = count_result.scalar() or 0
@@ -715,11 +748,12 @@ class PropertyRepository:
          
             stmt = (
                 select(Booking)
-                .where(Booking.property_id == property_id, Booking.status.notin_(excludes_booking_status))
+                .where(*base_conditions)
                 .options(
-                    joinedload(Booking.guest), # Eagerly joins the single Guest row
-                    selectinload(Booking.booking_rooms)  # Slices mapping row collections efficiently
-                .joinedload(BookingRoom.room_unit) # Joins exact Rooms table
+                    joinedload(Booking.guest),
+                    joinedload(Booking.booking_guest),
+                    selectinload(Booking.booking_rooms)
+                    .joinedload(BookingRoom.room_unit)
                 )
                 .order_by(Booking.created_at.desc())
                 .offset(skip)

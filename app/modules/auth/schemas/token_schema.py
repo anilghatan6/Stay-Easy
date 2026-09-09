@@ -1,4 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
+from typing import Optional, List, Dict, Any
 
 class VerifyOTP(BaseModel):
     email: EmailStr
@@ -11,7 +12,10 @@ class Token(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str
-    must_change_password:bool
+    must_change_password: bool
+    role: str
+    property: Optional[Dict[str, Any]] = None
+    properties: Optional[list[Dict[str, Any]]] = None
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str

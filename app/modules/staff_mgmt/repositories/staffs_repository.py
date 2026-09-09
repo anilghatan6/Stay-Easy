@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.modules.staff_mgmt.models.staffs_model import Staff, StaffProperty,StaffStatus
+from app.modules.pms.models.properties_model import Property
 from app.utils.exceptions import RepositoryException
 from app.utils.logging import LoggerFactory
 
@@ -29,6 +30,7 @@ class StaffRepository:
             staff = Staff(
                 id=data["staff_id"],
                 tenant_id=tenant_id,
+                user_id=data["user_id"],
                 full_name=data["full_name"],
                 email=data["email"],
                 phone_number=data["phone_number"],
@@ -81,6 +83,24 @@ class StaffRepository:
 
         except SQLAlchemyError as e:
             logger.error(f"[StaffRepository] Failed to fetch staff by email {email}: {e}")
+            raise RepositoryException("Could not fetch staff details. Please try again.") from e
+
+    async def get_staff_by_user_id(self, user_id: uuid.UUID) -> Optional[Staff]:
+        logger.info(f"[StaffRepository] Fetching staff by user_id: {user_id}")
+        try:
+            stmt = (
+                select(Staff)
+                .options(
+                    selectinload(Staff.property_assignments)
+                    .selectinload(StaffProperty.property)
+                )
+                .where(Staff.user_id == user_id)
+            )
+            result = await self.db.execute(stmt)
+            return result.scalar_one_or_none()
+
+        except SQLAlchemyError as e:
+            logger.error(f"[StaffRepository] Failed to fetch staff by user_id {user_id}: {e}")
             raise RepositoryException("Could not fetch staff details. Please try again.") from e
 
     async def list_by_tenant(
@@ -266,3 +286,18 @@ class StaffRepository:
         except SQLAlchemyError as e:
             logger.error(f"[StaffRepository] Failed to fetch housekeeping staff for property {property_id}: {e}")
             raise RepositoryException("Could not fetch housekeeping staff.") from e
+
+    async def get_staff_properties(self,staff_id:uuid.UUID):
+        logger.info(f"[StaffRepository] Getting staff properties for staff {staff_id}")
+        try:
+            stmt = (
+                select(Property.id, Property.name)
+                .join(StaffProperty, Property.id == StaffProperty.property_id)
+                .where(StaffProperty.staff_id == staff_id)
+            )
+            properties = await self.db.execute(stmt)
+            logger.info(f"[StaffRepository] Found {len(properties.scalars().all())} properties for staff {staff_id}")
+            return properties.scalars().all()
+        except SQLAlchemyError as e:
+            logger.error(f"[StaffRepository] Failed to fetch staff properties for staff {staff_id}: {e}")
+            raise RepositoryException("Could not fetch staff properties.") from e

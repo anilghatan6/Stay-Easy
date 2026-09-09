@@ -93,6 +93,7 @@ async def update_task_status(
         return {"success": False, "data": None, "message": "Staff profile not found"}
 
     result = await task_service.update_task_status(
-        staff.id, property_id, task_id, payload.status
+        staff.id, property_id, task_id, payload.status,
+        staff_name=staff.full_name,
     )
     return {"success": True, "data": result}

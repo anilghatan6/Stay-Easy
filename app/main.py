@@ -32,6 +32,8 @@ from app.modules.staff_mgmt.routers.staffs_router import router as staff_router
 
 from app.modules.staff_operations.router import router as staff_operations_router
 
+from app.modules.folio.router import router as folio_router
+
 from app.modules.house_keeping.models import *
 from app.modules.house_keeping.routers.task_router import router as task_router
 from app.modules.house_keeping.routers.rooms_task_router import rooms_router as housekeeping_rooms_router
@@ -116,6 +118,7 @@ app.include_router(search_router)
 app.include_router(booking_router)
 app.include_router(favorites_router)
 app.include_router(staff_operations_router)
+app.include_router(folio_router)
 app.include_router(review_router)
 
 app.include_router(mobile_task_router)

@@ -57,6 +57,7 @@ class Rooms(Base, TimestampMixin):
             "property_id", "room_name", name="uq_rooms_property_id_room_name"
         ),
         Index("ix_rooms_status", "status"),
+        Index("ix_rooms_type_bed_rate", "room_type_id", "bed_type_id", "base_rate"),  
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

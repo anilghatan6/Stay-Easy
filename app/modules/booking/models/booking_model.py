@@ -15,6 +15,7 @@ from sqlalchemy import (
     UUID,
     Integer,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.utils.timestamp import TimestampMixin
 from app.config.database_config import Base
@@ -32,9 +33,20 @@ class MasterBookingStatus(StrEnum):
 class PaymentGateway(StrEnum):
     STRIPE = "STRIPE"
     RAZORPAY = "RAZORPAY"
-    DUMMY = "DUMMY"
+    # DUMMY = "DUMMY"
     KHALTI = "KHALTI"
     ESEWA = "ESEWA"
+    BANK_TRANSFER = "BANK_TRANSFER"
+    CASH = "CASH"
+    CARD = "CARD"
+
+
+
+class PaymentStatus(StrEnum):
+    UNPAID = "UNPAID"
+    PARTIAL = "PARTIAL"
+    PAID = "PAID"
+
 
 
 class PaymentMethod(StrEnum):
@@ -43,10 +55,30 @@ class PaymentMethod(StrEnum):
     PAY_ON_ARRIVAL = "PAY_ON_ARRIVAL"
 
 
+
 class PaymentStatus(StrEnum):
     UNPAID = "UNPAID"
     PARTIAL = "PARTIAL"
     PAID = "PAID"
+
+
+class BookingType(StrEnum):
+    ONLINE = "ONLINE"
+    WALK_IN = "WALK_IN"
+
+
+class BookingGuest(Base, TimestampMixin):
+    """Contact info for walk-in / phone / email bookings (no auth account)."""
+
+    __tablename__ = "booking_guests"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    full_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    nationality: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
 
 class Booking(Base, TimestampMixin):
@@ -74,10 +106,25 @@ class Booking(Base, TimestampMixin):
         nullable=False,
     )
 
-    guest_id: Mapped[uuid.UUID] = mapped_column(
+    # ONLINE bookings use guest_id (authenticated Guest account)
+    # WALK_IN bookings use booking_guest_id (BookingGuest contact record)
+    guest_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("guests.id", ondelete="RESTRICT"),
         index=True,
+        nullable=True,
+    )
+
+    booking_guest_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("booking_guests.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+
+    booking_type: Mapped[BookingType] = mapped_column(
+        SqlEnum(BookingType, native_enum=False, length=20),
+        default=BookingType.ONLINE,
         nullable=False,
     )
 
@@ -154,6 +201,10 @@ class Booking(Base, TimestampMixin):
         Numeric(10, 2), nullable=False, default=Decimal("0.00")
     )
 
+    gateway_payload: Mapped[Optional[dict]] = mapped_column(
+        JSONB, nullable=True, default=None
+    )
+
     checked_in_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True, default=None
     )
@@ -163,7 +214,8 @@ class Booking(Base, TimestampMixin):
     )
 
     # Relationships
-    guest: Mapped["Guest"] = relationship("Guest")
+    guest: Mapped[Optional["Guest"]] = relationship("Guest")
+    booking_guest: Mapped[Optional["BookingGuest"]] = relationship("BookingGuest")
     property: Mapped["Property"] = relationship("Property")
     booking_rooms: Mapped[List["BookingRoom"]] = relationship(
         "BookingRoom", back_populates="booking", cascade="all, delete-orphan"

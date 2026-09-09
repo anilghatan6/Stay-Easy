@@ -1,8 +1,8 @@
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone, timedelta
 from decimal import Decimal
 from typing import Optional
-from sqlalchemy import select, update,delete
+from sqlalchemy import select, update, delete, func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, joinedload
@@ -10,9 +10,11 @@ from sqlalchemy.orm import selectinload, joinedload
 from app.modules.booking.models.booking_model import (
     Booking,
     BookingRoom,
+    BookingGuest,
     MasterBookingStatus,
 )
 from app.modules.pms.models.rooms_model import Rooms, RoomStatus
+from app.modules.pms.models.activity_log_model import PropertyActivityLog
 from app.modules.staff_mgmt.models.staffs_model import Staff, StaffProperty
 from app.modules.auth.models.users_model import User
 from app.utils.exceptions import RepositoryException
@@ -56,13 +58,14 @@ class StaffOperationsRepository:
             raise RepositoryException("Could not verify staff assignment.")
 
     async def get_booking_by_ref_with_details(self, ref_number: str) -> Booking | None:
-        """Fetch booking with rooms, property, and guest for staff operations."""
+        """Fetch booking with rooms, property, guest, and booking_guest for staff operations."""
         logger.info(f"[StaffOperationsRepository] Fetching booking {ref_number} for staff")
         try:
             stmt = (
                 select(Booking)
                 .options(
                     joinedload(Booking.guest),
+                    joinedload(Booking.booking_guest),
                     joinedload(Booking.property),
                     selectinload(Booking.booking_rooms)
                     .joinedload(BookingRoom.room_unit)
@@ -145,18 +148,51 @@ class StaffOperationsRepository:
             raise RepositoryException("Could not check out booking.")
 
     async def update_rooms_status(
-        self, room_ids: list[uuid.UUID], new_status: RoomStatus
+        self,
+        room_ids: list[uuid.UUID],
+        new_status: RoomStatus,
+        property_id: Optional[uuid.UUID] = None,
+        staff_id: Optional[uuid.UUID] = None,
+        staff_name: Optional[str] = None,
+        old_status: Optional[RoomStatus] = None,
     ) -> None:
-        """Bulk update room status for all rooms in a booking."""
+        """Bulk update room status for all rooms in a booking. Auto-logs activity when context is provided."""
         logger.info(
             f"[StaffOperationsRepository] Updating {len(room_ids)} rooms to {new_status}"
         )
         try:
+            # Fetch room names before update for logging
+            rooms = []
+            if property_id and staff_id and staff_name:
+                result = await self.db.execute(
+                    select(Rooms).where(Rooms.id.in_(room_ids))
+                )
+                rooms = list(result.scalars().all())
+
             await self.db.execute(
                 update(Rooms)
                 .where(Rooms.id.in_(room_ids))
                 .values(status=new_status)
             )
+
+            # Auto-log room status changes
+            if property_id and staff_id and staff_name and rooms:
+                for room in rooms:
+                    self.db.add(
+                        PropertyActivityLog(
+                            property_id=property_id,
+                            staff_id=staff_id,
+                            staff_name=staff_name,
+                            activity_type="ROOM_STATUS_CHANGE",
+                            description=f"Room {room.room_name} status changed to {new_status.value}",
+                            room_id=room.id,
+                            extra_data={
+                                "old_status": old_status.value if old_status else None,
+                                "new_status": new_status.value,
+                                "room_name": room.room_name,
+                            },
+                        )
+                    )
         except SQLAlchemyError as e:
             logger.error(
                 f"[StaffOperationsRepository] Failed to update room statuses: {e}"
@@ -325,5 +361,256 @@ class StaffOperationsRepository:
             select(Rooms).where(Rooms.id.in_(room_ids))
         )
         return list(result.scalars().all())
+
+    async def set_refund_due_on_cancel(
+        self, ref_number: str, amount_paid: Decimal
+    ) -> None:
+        """Set refund_due to amount_paid and clear amount_due on cancellation."""
+        logger.info(
+            f"[StaffOperationsRepository] Setting refund_due={amount_paid} on cancel for {ref_number}"
+        )
+        try:
+            await self.db.execute(
+                update(Booking)
+                .where(Booking.ref_number == ref_number)
+                .values(
+                    refund_due=amount_paid,
+                    amount_due=Decimal("0.00"),
+                )
+            )
+        except SQLAlchemyError as e:
+            logger.error(
+                f"[StaffOperationsRepository] Failed to set refund_due for {ref_number}: {e}"
+            )
+            raise RepositoryException("Could not set refund due.")
+
+    async def get_property_activity_logs(
+        self,
+        property_id: uuid.UUID,
+        skip: int = 0,
+        limit: int = 20,
+        activity_types: Optional[list[str]] = None,
+    ) -> tuple[list[PropertyActivityLog], int]:
+        """Fetch paginated activity logs for a property, filtered by activity types."""
+        logger.info(
+            f"[StaffOperationsRepository] Fetching activity logs for property {property_id}"
+        )
+        try:
+            conditions = [PropertyActivityLog.property_id == property_id]
+            if activity_types:
+                conditions.append(PropertyActivityLog.activity_type.in_(activity_types))
+
+            count_result = await self.db.execute(
+                select(PropertyActivityLog).where(*conditions)
+            )
+            total = len(count_result.scalars().all())
+
+            stmt = (
+                select(PropertyActivityLog)
+                .where(*conditions)
+                .order_by(PropertyActivityLog.created_at.desc())
+                .offset(skip)
+                .limit(limit)
+            )
+            result = await self.db.execute(stmt)
+            logs = list(result.scalars().all())
+
+            return logs, total
+
+        except SQLAlchemyError as e:
+            logger.error(
+                f"[StaffOperationsRepository] Failed to fetch activity logs: {e}"
+            )
+            raise RepositoryException("Could not fetch activity logs.")
+
+    async def get_todays_arrivals(
+        self, property_id: uuid.UUID, today: date
+    ) -> list[Booking]:
+        """Fetch all bookings checking in today for a property."""
+        logger.info(
+            f"[StaffOperationsRepository] Fetching today's arrivals for property {property_id}"
+        )
+        try:
+            stmt = (
+                select(Booking)
+                .where(
+                    Booking.property_id == property_id,
+                    Booking.checkin_date == today,
+                    Booking.status.in_([
+                        MasterBookingStatus.CONFIRMED,
+                        MasterBookingStatus.PENDING,
+                    ]),
+                )
+                .options(
+                    joinedload(Booking.guest),
+                    joinedload(Booking.booking_guest),
+                    joinedload(Booking.property),
+                    selectinload(Booking.booking_rooms)
+                    .joinedload(BookingRoom.room_unit),
+                )
+                .order_by(Booking.created_at.asc())
+            )
+            result = await self.db.execute(stmt)
+            return list(result.unique().scalars().all())
+
+        except SQLAlchemyError as e:
+            logger.error(
+                f"[StaffOperationsRepository] Failed to fetch today's arrivals: {e}"
+            )
+            raise RepositoryException("Could not fetch today's arrivals.")
+
+    async def get_todays_departures(
+        self, property_id: uuid.UUID, today: date
+    ) -> list[Booking]:
+        """Fetch all bookings checking out today for a property."""
+        logger.info(
+            f"[StaffOperationsRepository] Fetching today's departures for property {property_id}"
+        )
+        try:
+            stmt = (
+                select(Booking)
+                .where(
+                    Booking.property_id == property_id,
+                    Booking.checkout_date == today,
+                    Booking.status.in_([
+                        MasterBookingStatus.CHECKED_IN,
+                    ]),
+                )
+                .options(
+                    joinedload(Booking.guest),
+                    joinedload(Booking.booking_guest),
+                    joinedload(Booking.property),
+                    selectinload(Booking.booking_rooms)
+                    .joinedload(BookingRoom.room_unit),
+                )
+                .order_by(Booking.checkout_date.asc())
+            )
+            result = await self.db.execute(stmt)
+            return list(result.unique().scalars().all())
+
+        except SQLAlchemyError as e:
+            logger.error(
+                f"[StaffOperationsRepository] Failed to fetch today's departures: {e}"
+            )
+            raise RepositoryException("Could not fetch today's departures.")
+
+    async def get_front_desk_summary(
+        self, property_id: uuid.UUID, today: date
+    ) -> dict:
+        """Get summary counts for front desk dashboard."""
+        logger.info(
+            f"[StaffOperationsRepository] Fetching front desk summary for property {property_id}"
+        )
+        try:
+            # Today's arrivals (CONFIRMED/PENDING with checkin_date=today)
+            arrivals_result = await self.db.execute(
+                select(func.count())
+                .select_from(Booking)
+                .where(
+                    Booking.property_id == property_id,
+                    Booking.checkin_date == today,
+                    Booking.status.in_([
+                        MasterBookingStatus.CONFIRMED,
+                        MasterBookingStatus.PENDING,
+                    ]),
+                )
+            )
+            todays_arrivals = arrivals_result.scalar() or 0
+
+            # Today's departures (CHECKED_IN with checkout_date=today)
+            departures_result = await self.db.execute(
+                select(func.count())
+                .select_from(Booking)
+                .where(
+                    Booking.property_id == property_id,
+                    Booking.checkout_date == today,
+                    Booking.status == MasterBookingStatus.CHECKED_IN,
+                )
+            )
+            todays_departures = departures_result.scalar() or 0
+
+            # Today's checked in (status changed to CHECKED_IN today)
+            checked_in_result = await self.db.execute(
+                select(func.count())
+                .select_from(Booking)
+                .where(
+                    Booking.property_id == property_id,
+                    Booking.status == MasterBookingStatus.CHECKED_IN,
+                    Booking.checked_in_at >= today,
+                    Booking.checked_in_at < today + timedelta(days=1),
+                )
+            )
+            todays_checked_in = checked_in_result.scalar() or 0
+
+            # Today's checked out (status changed to CHECKED_OUT today)
+            checked_out_result = await self.db.execute(
+                select(func.count())
+                .select_from(Booking)
+                .where(
+                    Booking.property_id == property_id,
+                    Booking.status == MasterBookingStatus.CHECKED_OUT,
+                    Booking.checked_out_at >= today,
+                    Booking.checked_out_at < today + timedelta(days=1),
+                )
+            )
+            todays_checked_out = checked_out_result.scalar() or 0
+
+            # Total available rooms
+            available_result = await self.db.execute(
+                select(func.count())
+                .select_from(Rooms)
+                .where(
+                    Rooms.property_id == property_id,
+                    Rooms.status == RoomStatus.AVAILABLE,
+                )
+            )
+            total_available_rooms = available_result.scalar() or 0
+
+            # Total rooms in property
+            total_rooms_result = await self.db.execute(
+                select(func.count())
+                .select_from(Rooms)
+                .where(Rooms.property_id == property_id)
+            )
+            total_rooms = total_rooms_result.scalar() or 0
+
+            # Dirty rooms count
+            dirty_result = await self.db.execute(
+                select(func.count())
+                .select_from(Rooms)
+                .where(
+                    Rooms.property_id == property_id,
+                    Rooms.status == RoomStatus.DIRTY,
+                )
+            )
+            dirty_rooms = dirty_result.scalar() or 0
+
+            # Currently occupied rooms
+            occupied_result = await self.db.execute(
+                select(func.count())
+                .select_from(Rooms)
+                .where(
+                    Rooms.property_id == property_id,
+                    Rooms.status == RoomStatus.OCCUPIED,
+                )
+            )
+            occupied_rooms = occupied_result.scalar() or 0
+
+            return {
+                "todays_arrivals": todays_arrivals,
+                "todays_departures": todays_departures,
+                "todays_checked_in": todays_checked_in,
+                "todays_checked_out": todays_checked_out,
+                "total_rooms": total_rooms,
+                "total_available_rooms": total_available_rooms,
+                "dirty_rooms": dirty_rooms,
+                "occupied_rooms": occupied_rooms,
+            }
+
+        except SQLAlchemyError as e:
+            logger.error(
+                f"[StaffOperationsRepository] Failed to fetch front desk summary: {e}"
+            )
+            raise RepositoryException("Could not fetch front desk summary.")
 
         

@@ -28,6 +28,11 @@ class Property(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("tenant_id", "name", name="uq_tenant_property_name"),
         Index("ix_properties_geo_location", "country", "state", "city","address"),
+        Index(
+            "ix_properties_amenities_gin",
+            "system_amenity_ids",
+            postgresql_using="gin",
+        ),
         CheckConstraint(
             "check_in_grace_period >= 0",
             name="chk_check_in_grace_period_non_negative",

@@ -1,15 +1,17 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from sqlalchemy import DateTime, func, Index
 from sqlalchemy.orm import Mapped, mapped_column, declared_attr
 
 
 class TimestampMixin:
-  
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
 
     # Use @declared_attr to dynamically generate the index per table

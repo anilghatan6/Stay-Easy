@@ -17,6 +17,7 @@ from app.modules.booking.models.booking_model import (
     PaymentMethod,
     PaymentStatus,
 )
+from app.modules.pms.models.rooms_model import CancellationPolicy, RoomStatus
 from app.modules.booking.repositories.booking_repository import BookingRepository
 from app.modules.booking.repositories.idempotency_repository import (
     IdempotencyRepository,
@@ -43,6 +44,8 @@ from app.utils.logging import LoggerFactory
 from app.utils.mail_services import (
     send_booking_confirmed_guest_email,
     send_booking_confirmed_owner_email,
+    send_booking_cancelled_guest_email,
+    send_booking_cancelled_owner_email,
 )
 from app.utils.url_validation import validate_khalti_return_url
 
@@ -452,6 +455,9 @@ class BookingService:
                 await self.idempotency_repo.save_result(idempotency_key, response)
                 return response
 
+            # Persist gateway payload for future refunds
+            await self.booking_repo.save_gateway_payload(ref_number, gateway_payload)
+
             await self.db.commit()
             await self.redis.delete(f"booking:softlock:{booking.id}")
 
@@ -828,24 +834,33 @@ class BookingService:
 
                 property_obj = booking.property
                 guest = booking.guest
+                booking_guest = booking.booking_guest
                 room_units = [br.room_unit for br in booking.booking_rooms]
 
-                await send_booking_confirmed_guest_email(
-                    to_email=guest.email,
-                    guest_name=guest.full_name,
-                    guest_phone_number=guest.phone,
-                    booking=booking,
-                    property_obj=property_obj,
-                    room_units=room_units,
-                )
+                # Resolve guest info from either source
+                guest_name = guest.full_name if guest else (booking_guest.full_name if booking_guest else "Guest")
+                guest_email = guest.email if guest else (booking_guest.email if booking_guest else None)
+                guest_phone = guest.phone if guest else (booking_guest.phone if booking_guest else None)
+                guest_nationality = guest.nationality if guest else (booking_guest.nationality if booking_guest else None)
+
+                # Send guest email only if we have an email address
+                if guest_email:
+                    await send_booking_confirmed_guest_email(
+                        to_email=guest_email,
+                        guest_name=guest_name,
+                        guest_phone_number=guest_phone,
+                        booking=booking,
+                        property_obj=property_obj,
+                        room_units=room_units,
+                    )
 
                 await send_booking_confirmed_owner_email(
                     to_email=property_obj.email,
                     owner_name=property_obj.name,
-                    guest_name=guest.full_name,
-                    guest_email=guest.email,
-                    guest_phone=guest.phone,
-                    guest_nationality=guest.nationality,
+                    guest_name=guest_name,
+                    guest_email=guest_email or "",
+                    guest_phone=guest_phone,
+                    guest_nationality=guest_nationality,
                     booking=booking,
                     property_obj=property_obj,
                     room_units=room_units,
@@ -893,6 +908,357 @@ class BookingService:
             await self.db.rollback()
             logger.error(f"[BookingService] Failed to cancel booking {ref_number}: {e}")
             raise ServiceException("Could not cancel booking. Please try again.")
+
+    async def cancel_booking(
+        self,
+        ref_number: str,
+        guest_id: uuid.UUID,
+        background_tasks: BackgroundTasks,
+    ) -> dict:
+        """Guest-facing booking cancellation with policy enforcement and auto-refund."""
+        logger.info(
+            f"[BookingService] Cancelling booking {ref_number} for guest {guest_id}"
+        )
+        try:
+            # 1. Fetch booking with room details for cancellation policy
+            booking = await self.booking_repo.get_by_ref_with_room_details(ref_number)
+            if booking is None:
+                raise BookingException("Booking not found")
+            if booking.guest_id != guest_id:
+                raise BookingException("Booking not found")
+
+            # 2. Only PENDING and CONFIRMED can be cancelled
+            if booking.status not in (
+                MasterBookingStatus.PENDING,
+                MasterBookingStatus.CONFIRMED,
+            ):
+                current_status = (
+                    booking.status.value
+                    if hasattr(booking.status, "value")
+                    else booking.status
+                )
+                raise BookingException(
+                    f"Booking in status {current_status} cannot be cancelled. "
+                    "Only pending or confirmed bookings can be cancelled."
+                )
+
+            # 3. Collect room units with their individual cancellation policies
+            room_units = [br.room_unit for br in booking.booking_rooms]
+            if not room_units:
+                raise BookingException("No rooms found for this booking")
+
+            # 4. Calculate refund amount based on each room's own cancellation policy
+            refund_amount, per_room_details = self._calculate_refund_amount(
+                booking=booking,
+                room_units=room_units,
+            )
+
+            # 5. Atomic cancel transition
+            snapshot = await self.booking_repo.try_cancel_booking(ref_number)
+            if snapshot is None:
+                raise BookingException(
+                    "Booking cannot be cancelled at this time."
+                )
+
+            # 6. Set refund due on booking
+            refund_decimal = Decimal(str(refund_amount))
+            if refund_decimal > 0:
+                await self.booking_repo.set_refund_due_on_cancel(
+                    ref_number, refund_decimal
+                )
+
+            # 7. Reset room statuses to AVAILABLE
+            room_ids = [br.room_unit_id for br in booking.booking_rooms]
+            if room_ids:
+                await self.room_repo.update_rooms_status(
+                    room_ids, RoomStatus.AVAILABLE
+                )
+
+            # 8. Clear Redis soft-lock
+            await self.redis.delete(f"booking:softlock:{booking.id}")
+
+            # 9. Determine refund status and schedule background tasks
+            refund_status = "none"
+            if refund_amount > 0:
+                payment_gateway = (
+                    snapshot.get("payment_gateway") if snapshot else None
+                )
+                payment_method = (
+                    snapshot.get("payment_method") if snapshot else None
+                )
+
+                if payment_method == "PAY_ON_ARRIVAL":
+                    refund_status = "none"
+                elif payment_gateway in ("STRIPE", "RAZORPAY"):
+                    refund_status = "processed"
+                    background_tasks.add_task(
+                        self._process_refund_background,
+                        ref_number,
+                        payment_gateway,
+                        booking.gateway_payload,
+                        refund_decimal,
+                    )
+                else:
+                    # Khalti, eSewa, CASH, BANK_TRANSFER — manual processing
+                    refund_status = "manual_required"
+
+            # 10. Schedule cancellation emails
+            background_tasks.add_task(
+                self.send_cancellation_emails,
+                ref_number,
+                refund_amount,
+                refund_status,
+                per_room_details,
+            )
+
+            # 11. Commit
+            await self.db.commit()
+
+            return {
+                "ref_number": ref_number,
+                "status": MasterBookingStatus.CANCELLED.value,
+                "refund_amount": refund_amount,
+                "refund_status": refund_status,
+                "message": "Booking cancelled successfully.",
+            }
+
+        except (BookingException, RepositoryException):
+            await self.db.rollback()
+            raise
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(
+                f"[BookingService] Error cancelling booking {ref_number}: {e}"
+            )
+            raise ServiceException(
+                "Could not cancel booking. Please try again."
+            )
+
+    def _calculate_refund_amount(
+        self, booking, room_units: list
+    ) -> tuple[float, list[dict]]:
+        """Calculate refund amount based on each room's cancellation policy and timing.
+
+        Returns:
+            A tuple of (total_refund_amount, per_room_details) where per_room_details
+            is a list of dicts containing per-room refund breakdown info.
+        """
+        amount_paid = float(booking.amount_paid)
+
+        # PENDING bookings: always full refund (typically 0 if unpaid)
+        if booking.status == MasterBookingStatus.PENDING:
+            per_room_details = []
+            for room in room_units:
+                per_room_details.append({
+                    "room_name": room.room_name,
+                    "room_type": room.room_type.room_type_name if room.room_type else "",
+                    "cancellation_title": room.cancellation_title,
+                    "cancellation_description": room.cancellation_description,
+                    "cancellation_policy": room.cancellation_policy,
+                    "room_refund_amount": 0.0,
+                })
+            return amount_paid, per_room_details
+
+        # For CONFIRMED bookings, calculate per-room refund based on each room's policy
+        now = datetime.now(timezone.utc)
+        checkin = datetime.combine(
+            booking.checkin_date, datetime.min.time(), tzinfo=timezone.utc
+        )
+        hours_until_checkin = (checkin - now).total_seconds() / 3600
+
+        nights = (booking.checkout_date - booking.checkin_date).days
+
+        # Calculate proportional allocation: each room's share of amount_paid
+        total_subtotal = sum(float(r.base_rate) * nights for r in room_units)
+        if total_subtotal == 0:
+            # Fallback: equal distribution if subtotal is zero
+            per_room_share = amount_paid / len(room_units) if room_units else 0
+        else:
+            per_room_share = None  # Will compute per room below
+
+        total_refund = 0.0
+        per_room_details = []
+
+        for room in room_units:
+            room_subtotal = float(room.base_rate) * nights
+            if per_room_share is not None:
+                room_amount_paid = per_room_share
+            else:
+                room_amount_paid = (
+                    (room_subtotal / total_subtotal) * amount_paid
+                    if total_subtotal > 0
+                    else amount_paid / len(room_units)
+                )
+
+            room_refund = self._calculate_single_room_refund(
+                room.cancellation_policy, hours_until_checkin, room_amount_paid
+            )
+
+            total_refund += room_refund
+            per_room_details.append({
+                "room_name": room.room_name,
+                "room_type": room.room_type.room_type_name if room.room_type else "",
+                "cancellation_title": room.cancellation_title,
+                "cancellation_description": room.cancellation_description,
+                "cancellation_policy": room.cancellation_policy,
+                "room_refund_amount": room_refund,
+            })
+
+        return total_refund, per_room_details
+
+    def _calculate_single_room_refund(
+        self,
+        cancellation_policy: CancellationPolicy,
+        hours_until_checkin: float,
+        room_amount_paid: float,
+    ) -> float:
+        """Calculate refund for a single room based on its own cancellation policy."""
+        if cancellation_policy == CancellationPolicy.FLEXIBLE:
+            if hours_until_checkin > 24:
+                return room_amount_paid
+            return 0.0
+
+        elif cancellation_policy == CancellationPolicy.MODERATE:
+            if hours_until_checkin > 120:
+                return room_amount_paid
+            return 0.0
+
+        elif cancellation_policy == CancellationPolicy.STRICT:
+            if hours_until_checkin > 168:
+                return room_amount_paid * 0.5
+            return 0.0
+
+        elif cancellation_policy == CancellationPolicy.NON_REFUNDABLE:
+            return 0.0
+
+        elif cancellation_policy == CancellationPolicy.CUSTOM:
+            return 0.0
+
+        return 0.0
+
+    async def _process_refund_background(
+        self,
+        ref_number: str,
+        gateway: str,
+        gateway_payload: dict | None,
+        refund_amount: Decimal,
+    ) -> None:
+        """Background task to process refund via payment gateway."""
+        logger.info(
+            f"[BookingService] Processing refund for {ref_number} via {gateway}"
+        )
+        if not gateway_payload:
+            logger.warning(
+                f"[BookingService] No gateway payload for {ref_number} — cannot process refund"
+            )
+            return
+
+        try:
+            async with AsyncSessionLocal() as session:
+                fresh_booking_repo = BookingRepository(session)
+                booking = await fresh_booking_repo.get_by_ref(ref_number)
+                if not booking:
+                    logger.error(
+                        f"[BookingService] Booking {ref_number} not found for refund"
+                    )
+                    return
+
+                result = await self.payment_service.refund(
+                    gateway=gateway,
+                    ref_number=ref_number,
+                    gateway_payload=gateway_payload,
+                    amount=refund_amount,
+                )
+                logger.info(
+                    f"[BookingService] Refund processed for {ref_number}: {result}"
+                )
+
+        except Exception as e:
+            logger.error(
+                f"[BookingService] Failed to process refund for {ref_number}: {e}"
+            )
+            # Refund failure is logged but doesn't affect the cancellation
+
+    async def send_cancellation_emails(
+        self,
+        ref_number: str,
+        refund_amount: float,
+        refund_status: str,
+        per_room_details: list[dict],
+    ) -> None:
+        """Send cancellation notification emails to owner and guest."""
+        logger.info(
+            f"[BookingService] Sending cancellation emails for {ref_number}"
+        )
+        async with AsyncSessionLocal() as session:
+            try:
+                fresh_booking_repo = BookingRepository(session)
+                booking = await fresh_booking_repo.get_by_ref_with_room_details(
+                    ref_number
+                )
+
+                if booking is None:
+                    logger.error(
+                        f"[BookingService] Could not send cancellation emails — booking {ref_number} not found"
+                    )
+                    return
+
+                property_obj = booking.property
+                guest = booking.guest
+                booking_guest = booking.booking_guest
+                room_units = [br.room_unit for br in booking.booking_rooms]
+
+                # Resolve guest info
+                guest_name = (
+                    guest.full_name
+                    if guest
+                    else (booking_guest.full_name if booking_guest else "Guest")
+                )
+                guest_email = (
+                    guest.email
+                    if guest
+                    else (booking_guest.email if booking_guest else None)
+                )
+                guest_phone = (
+                    guest.phone
+                    if guest
+                    else (booking_guest.phone if booking_guest else None)
+                )
+
+                # 1. Send owner notification
+                await send_booking_cancelled_owner_email(
+                    to_email=property_obj.email,
+                    owner_name=property_obj.name,
+                    guest_name=guest_name,
+                    guest_email=guest_email or "",
+                    guest_phone=guest_phone or "",
+                    booking=booking,
+                    property_obj=property_obj,
+                    room_units=room_units,
+                    refund_amount=refund_amount,
+                    refund_status=refund_status,
+                    reason="Cancelled by guest",
+                    per_room_details=per_room_details,
+                )
+
+                # 2. Send guest confirmation
+                if guest_email:
+                    await send_booking_cancelled_guest_email(
+                        to_email=guest_email,
+                        guest_name=guest_name,
+                        booking=booking,
+                        property_obj=property_obj,
+                        room_units=room_units,
+                        refund_amount=refund_amount,
+                        refund_status=refund_status,
+                        per_room_details=per_room_details,
+                    )
+
+            except Exception as e:
+                logger.error(
+                    f"[BookingService] Failed to send cancellation emails for {ref_number}: {e}"
+                )
+                # Deliberately swallowed — runs after the response is already sent.
 
     async def update_special_requests(
         self, ref_number: str, guest_id: uuid.UUID, special_requests: str

@@ -41,6 +41,11 @@ class SearchService:
         rooms_needed: int,
         skip: int,
         limit: int,
+        min_price: float | None = None,
+        max_price: float | None = None,
+        room_type_ids: list[uuid.UUID] | None = None,
+        bed_type_ids: list[uuid.UUID] | None = None,
+        amenity_ids: list[uuid.UUID] | None = None,
     ):
         logger.info(
             f"[SearchService] Initiationg searching for destination: {destination}"
@@ -61,6 +66,11 @@ class SearchService:
                     rooms=rooms_needed,
                     skip=skip,
                     limit=limit,
+                    min_price=min_price,
+                    max_price=max_price,
+                    room_type_ids=sorted(str(i) for i in room_type_ids) if room_type_ids else None,
+                    bed_type_ids=sorted(str(i) for i in bed_type_ids) if bed_type_ids else None,
+                    amenity_ids=sorted(str(i) for i in amenity_ids) if amenity_ids else None,
                 )
 
             except ValueError as e:
@@ -80,7 +90,7 @@ class SearchService:
             children_per_room = math.ceil(children / rooms_needed)
 
             # 1. Fuzzy destination match — now returns (Property, score) pairs
-            matched = await self.property_repo.search_by_destination(query=destination)
+            matched = await self.property_repo.search_by_destination(query=destination,amenity_ids=amenity_ids)
             if not matched:
                 return {
                     "data": {
@@ -102,7 +112,11 @@ class SearchService:
 
             # 2. Availability-filtered rooms for the date range
             available_rooms = await self.room_repo.get_available_rooms(
-                property_ids, check_in, check_out
+                property_ids, check_in, check_out,
+                room_type_ids=room_type_ids,
+                bed_type_ids=bed_type_ids,
+                min_price=min_price,
+                max_price=max_price,
             )
 
             rooms_by_property: dict[uuid.UUID, list] = defaultdict(list)
@@ -232,6 +246,54 @@ class SearchService:
             raise ServiceException(
                 internal_detail=f"Failed to attach property details: {str(e)}"
             )
+
+    async def get_system_room_types(self):
+        logger.info("[SearchService] Fetching system room types")
+        try:
+            room_types = await self.room_repo.get_system_room_types()
+            return [
+                {
+                    "id": rt.id,
+                    "room_type_name": rt.room_type_name,
+                    "is_default": rt.is_default,
+                }
+                for rt in room_types
+            ]
+        except Exception as e:
+            logger.error(f"[SearchService] Error fetching system room types: {e}")
+            raise ServiceException(internal_detail=f"Failed to fetch system room types: {str(e)}")
+
+    async def get_system_bed_types(self):
+        logger.info("[SearchService] Fetching system bed types")
+        try:
+            bed_types = await self.room_repo.get_system_bed_types()
+            return [
+                {
+                    "id": bt.id,
+                    "bed_name": bt.bed_name,
+                    "is_default": bt.is_default,
+                }
+                for bt in bed_types
+            ]
+        except Exception as e:
+            logger.error(f"[SearchService] Error fetching system bed types: {e}")
+            raise ServiceException(internal_detail=f"Failed to fetch system bed types: {str(e)}")
+
+    async def get_system_amenities(self):
+        logger.info("[SearchService] Fetching system amenities")
+        try:
+            amenities = await self.property_repo.get_all_system_amenities()
+            return [
+                {
+                    "id": a.id,
+                    "name": a.name,
+                    "icon": a.icon,
+                }
+                for a in amenities
+            ]
+        except Exception as e:
+            logger.error(f"[SearchService] Error fetching system amenities: {e}")
+            raise ServiceException(internal_detail=f"Failed to fetch system amenities: {str(e)}")
 
     async def get_nearby_properties(self, lat: float, lon: float,limit: int ):
         logger.info(

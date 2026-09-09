@@ -6,7 +6,7 @@ from app.Images.image_services import ImageService
 from app.config.database_config import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.auth.dependencies import get_user_repository,get_guest_auth_service
+from app.modules.auth.dependencies import get_user_repository, get_guest_auth_service, get_password_reset_repository
 
 
 
@@ -26,7 +26,8 @@ def get_staff_service(
     property_repo: PropertyRepository = Depends(get_property_repository),
     image_service: ImageService = Depends(get_image_service),
     user_repo=Depends(get_user_repository),
-    security_service=Depends(get_guest_auth_service)
+    security_service=Depends(get_guest_auth_service),
+    password_reset_repo=Depends(get_password_reset_repository),
 ) -> StaffService:
-    return StaffService(db=db, staff_repo=staff_repo, prop_repo=property_repo, image_service=image_service, user_repo=user_repo, security_service=security_service)
+    return StaffService(db=db, staff_repo=staff_repo, prop_repo=property_repo, image_service=image_service, user_repo=user_repo, security_service=security_service, password_reset_repo=password_reset_repo)
 

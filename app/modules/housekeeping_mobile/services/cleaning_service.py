@@ -12,6 +12,7 @@ from app.modules.housekeeping_mobile.models.cleaning_submission_model import (
 )
 from app.modules.house_keeping.models.task_model import TaskStatus
 from app.modules.pms.repositories.room_repo import RoomRepository
+from app.modules.pms.models.activity_log_model import PropertyActivityLog
 from app.Images.image_services import ImageService
 from app.utils.exceptions import ServiceException, RoomNotFoundException
 from app.utils.logging import LoggerFactory
@@ -33,6 +34,36 @@ class CleaningService:
         self.task_repo = task_repo
         self.room_repo = room_repo
         self.image_service = image_service
+
+    async def _log_activity(
+        self,
+        property_id: uuid.UUID,
+        staff_id: Optional[uuid.UUID],
+        staff_name: str,
+        activity_type: str,
+        description: str,
+        room_id: Optional[uuid.UUID] = None,
+        extra_data: Optional[dict] = None,
+    ) -> None:
+        """Log a property activity for the activity feed."""
+        self.db.add(
+            PropertyActivityLog(
+                property_id=property_id,
+                staff_id=staff_id,
+                staff_name=staff_name,
+                activity_type=activity_type,
+                description=description,
+                room_id=room_id,
+                extra_data=extra_data,
+            )
+        )
+
+    async def _get_staff_name_by_user_id(self, user_id: uuid.UUID) -> str:
+        """Resolve staff display name from user_id."""
+        staff = await self.task_repo.get_staff_by_user_id(user_id)
+        if staff:
+            return staff.full_name
+        return "Unknown Staff"
 
     def _to_response_dict(self, submission: CleaningSubmission) -> dict:
         return {
@@ -160,6 +191,24 @@ class CleaningService:
 
         # Transition task status to AWAITING_INSPECTION
         task.status = TaskStatus.AWAITING_INSPECTION
+
+        # Log cleaning submission activity
+        staff_name = await self._get_staff_name_by_user_id(staff_id)
+        room_name = task.room.room_name if task.room else "Unknown"
+        await self._log_activity(
+            property_id=property_id,
+            staff_id=staff_id,
+            staff_name=staff_name,
+            activity_type="CLEANING_SUBMITTED",
+            description=f"Cleaning submitted for {room_name} - awaiting inspection",
+            room_id=task.room_id,
+            extra_data={
+                "task_type": task.task_type,
+                "room_name": room_name,
+                "submitted_by": staff_name,
+            },
+        )
+
         await self.db.commit()
         await self.db.refresh(submission)
         return self._to_response_dict(submission)
@@ -247,6 +296,26 @@ class CleaningService:
                 task.status = TaskStatus.COMPLETED
             else:
                 task.status = TaskStatus.IN_PROGRESS
+
+        # Log cleaning review activity
+        supervisor_name = await self._get_staff_name_by_user_id(supervisor_user_id)
+        room_name = submission.room.room_name if submission.room else "Unknown"
+        staff_name = submission.staff.full_name if submission.staff else "Unknown"
+        await self._log_activity(
+            property_id=property_id,
+            staff_id=supervisor_user_id,
+            staff_name=supervisor_name,
+            activity_type="CLEANING_REVIEWED",
+            description=f"Cleaning {status.value.lower()} for {room_name} by {staff_name}",
+            room_id=submission.room_id,
+            extra_data={
+                "review_status": status.value,
+                "room_name": room_name,
+                "cleaned_by": staff_name,
+                "reviewed_by": supervisor_name,
+                "rejection_reason": rejection_reason,
+            },
+        )
 
         await self.db.commit()
         await self.db.refresh(updated)

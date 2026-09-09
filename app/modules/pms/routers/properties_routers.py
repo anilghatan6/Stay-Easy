@@ -1,20 +1,11 @@
 import uuid
+from typing import Optional
 
 from fastapi import APIRouter, Depends, status, Query
 
-from app.middlewares.auth_middlewares import CurrentUser
+from app.middlewares.auth_middlewares import CurrentUser, CurrentStaff
 from app.modules.pms.dependencies import get_property_service
 from app.modules.pms.schemas.properties_schemas import (
-    GeneralPropertyInfo,
-    GeneralPropertyInfoResponse,
-    Location,
-    LocationResponse,
-    PropertyPhotosAndAmenities,
-    PropertyPhotosAndAmenitiesResponse,
-    Propertylocalization,
-    PropertylocalizationResponse,
-    BrandVisual,
-    BrandVisualResponse,
     TenantPropertiesListResponse,
     SystemAmenitiesListResponse,
     PropertyResponse,
@@ -24,6 +15,13 @@ from app.modules.pms.schemas.properties_schemas import (
     CreatePropertyRequest
 )
 from app.modules.pms.services.properties_scervices import PropertyService
+from app.modules.booking.models.booking_model import (
+    MasterBookingStatus,
+    PaymentGateway,
+    PaymentStatus,
+    PaymentMethod,
+    BookingType,
+)
 from app.utils.schemas import StandardResponse
 from app.utils.validation import verify_tenant
 
@@ -81,25 +79,6 @@ async def get_amenities(
     verify_tenant(current_user)
     response = await property_service.get_all_system_amenities()
     return {"success": True, "data": response}
-
-
-# @router.post(
-#     "/general-information",
-#     response_model=StandardResponse[GeneralPropertyInfoResponse],
-#     status_code=status.HTTP_201_CREATED,
-# )
-# async def create_general_information(
-#     payload: GeneralPropertyInfo,
-#     current_user: CurrentUser,
-#     property_service: PropertyService = Depends(get_property_service),
-# ):
-#     verify_tenant(current_user)
-#     tenant_id = current_user.tenant_id
-
-#     response = await property_service.create_general_information(
-#         payload=payload, tenant_id=tenant_id
-#     )
-#     return {"success": True, "data": response}
 
 
 
@@ -164,80 +143,6 @@ async def get_specific_property(
     return {"success": True, "data": response}
 
 
-# @router.post(
-#     "/{property_id}/create-location",
-#     response_model=StandardResponse[LocationResponse],
-#     status_code=status.HTTP_200_OK,
-# )
-# async def create_location(
-#     property_id: uuid.UUID,
-#     payload: Location,
-#     current_user: CurrentUser,
-#     property_service: PropertyService = Depends(get_property_service),
-# ):
-#     verify_tenant(current_user)
-#     tenant_id = current_user.tenant_id
-#     response = await property_service.create_location(property_id, payload, tenant_id)
-#     return {"success": True, "data": response}
-
-
-# @router.post(
-#     "/{property_id}/create-photos-and-amenities",
-#     response_model=StandardResponse[PropertyPhotosAndAmenitiesResponse],
-#     status_code=status.HTTP_200_OK,
-# )
-# async def create_photos_and_amenities(
-#     property_id: uuid.UUID,
-#     payload: PropertyPhotosAndAmenities,
-#     current_user: CurrentUser,
-#     property_service: PropertyService = Depends(get_property_service),
-# ):
-#     verify_tenant(current_user)
-#     tenant_id = current_user.tenant_id
-#     response = await property_service.create_photos_and_amenities(
-#         property_id, payload, tenant_id
-#     )
-#     return {"success": True, "data": response}
-
-
-# @router.post(
-#     "/{property_id}/create-localization",
-#     response_model=StandardResponse[PropertylocalizationResponse],
-#     status_code=status.HTTP_200_OK,
-# )
-# async def create_localization(
-#     property_id: uuid.UUID,
-#     payload: Propertylocalization,
-#     current_user: CurrentUser,
-#     property_service: PropertyService = Depends(get_property_service),
-# ):
-#     verify_tenant(current_user)
-#     tenant_id = current_user.tenant_id
-#     response = await property_service.create_localization(
-#         property_id, payload, tenant_id
-#     )
-#     return {"success": True, "data": response}
-
-
-# @router.post(
-#     "/{property_id}/create-brand-visual",
-#     response_model=StandardResponse[BrandVisualResponse],
-#     status_code=status.HTTP_200_OK,
-# )
-# async def create_brand_visual(
-#     property_id: uuid.UUID,
-#     payload: BrandVisual,
-#     current_user: CurrentUser,
-#     property_service: PropertyService = Depends(get_property_service),
-# ):
-#     verify_tenant(current_user)
-#     tenant_id = current_user.tenant_id
-#     response = await property_service.create_brand_visual(
-#         property_id, payload, tenant_id
-#     )
-#     return {"success": True, "data": response}
-
-
 @router.post(
     "/{property_id}/toggle-property-activation",
     status_code=status.HTTP_200_OK,
@@ -277,15 +182,25 @@ async def get_number_of_floors(
 )
 async def get_property_bookings(
     property_id: uuid.UUID,
-    current_user: CurrentUser,
+    current_user: CurrentStaff,
     skip: int = Query(default=0, ge=0, description="Number of bookings to skip"),
     limit: int = Query(default=10, ge=1, le=50, description="Max bookings to return"),
+    status: Optional[MasterBookingStatus] = Query(default=None, description="Filter by booking status"),
+    payment_status: Optional[PaymentStatus] = Query(default=None, description="Filter by payment status"),
+    payment_method: Optional[PaymentMethod] = Query(default=None, description="Filter by payment method"),
+    payment_gateway: Optional[PaymentGateway] = Query(default=None, description="Filter by payment gateway"),
+    booking_type: Optional[BookingType] = Query(default=None, description="Filter by booking type"),
     property_service: PropertyService = Depends(get_property_service),
 ):
     verify_tenant(current_user)
     tenant_id = current_user.tenant_id
     response, total_count = await property_service.get_property_bookings(
-        property_id, tenant_id, skip, limit
+        property_id, tenant_id, skip, limit,
+        status=status,
+        payment_status=payment_status,
+        payment_method=payment_method,
+        payment_gateway=payment_gateway,
+        booking_type=booking_type,
     )
     has_more = skip + len(response) < total_count
     return {

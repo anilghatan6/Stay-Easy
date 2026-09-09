@@ -10,6 +10,8 @@ from app.modules.pms.models import Rooms
 from app.modules.booking.models.booking_model import (
     Booking,
     BookingRoom,
+    BookingGuest,
+    BookingType,
     MasterBookingStatus,
     PaymentGateway as PGEnum,
     PaymentMethod,
@@ -28,7 +30,7 @@ class BookingRepository:
 
     async def create_booking(
         self,
-        guest_id: uuid.UUID,
+        guest_id: uuid.UUID | None,
         property_id: uuid.UUID,
         room_ids: list[uuid.UUID],
         adults: int,
@@ -39,14 +41,30 @@ class BookingRepository:
         subtotal: Decimal,
         special_offer_discount: Decimal,
         ref_number: str,
+        booking_type: BookingType = BookingType.ONLINE,
+        booking_guest_id: uuid.UUID | None = None,
+        payment_method: PaymentMethod = PaymentMethod.ONLINE,
+        payment_status: PaymentStatus = PaymentStatus.UNPAID,
+        amount_paid: Decimal = Decimal("0.00"),
+        amount_due: Decimal | None = None,
+        advance_amount: Decimal | None = None,
+        coupon_code: str | None = None,
+        coupon_discount: Decimal = Decimal("0.00"),
+        special_requests: str | None = None,
+        status: MasterBookingStatus = MasterBookingStatus.PENDING,
     ) -> Booking:
         logger.info("[BookingRepository] Creating booking")
         try:
+            if amount_due is None:
+                amount_due = total_amount
+
             booking = Booking(
                 id=uuid.uuid4(),
                 property_id=property_id,
                 guest_id=guest_id,
-                status=MasterBookingStatus.PENDING,
+                booking_guest_id=booking_guest_id,
+                booking_type=booking_type,
+                status=status,
                 number_of_adults=adults,
                 number_of_children=children,
                 checkin_date=check_in,
@@ -55,10 +73,14 @@ class BookingRepository:
                 subtotal=subtotal,
                 special_offer_discount=special_offer_discount,
                 ref_number=ref_number,
-                payment_method=PaymentMethod.ONLINE,
-                payment_status=PaymentStatus.UNPAID,
-                amount_paid=Decimal("0.00"),
-                amount_due=total_amount,
+                payment_method=payment_method,
+                payment_status=payment_status,
+                amount_paid=amount_paid,
+                amount_due=amount_due,
+                advance_amount=advance_amount,
+                coupon_code=coupon_code,
+                coupon_discount=coupon_discount,
+                special_requests=special_requests,
             )
             self.db.add(booking)
             await self.db.flush()
@@ -378,7 +400,7 @@ class BookingRepository:
     async def get_by_ref_with_details(self, ref_number: str) -> Booking | None:
         """
         Fetches a booking with everything needed for confirmation emails:
-        property (+ owner), guest, and all booked rooms — eagerly loaded
+        property (+ owner), guest, booking_guest, and all booked rooms — eagerly loaded
         in one query so no lazy-load happens outside the request/session scope.
         """
         logger.info(
@@ -389,6 +411,7 @@ class BookingRepository:
                 select(Booking)
                 .options(
                     joinedload(Booking.guest),
+                    joinedload(Booking.booking_guest),
                     joinedload(Booking.property),
                     selectinload(Booking.booking_rooms)
                     .joinedload(BookingRoom.room_unit)
@@ -580,3 +603,162 @@ class BookingRepository:
                 f"[BookingRepository] Failed to set {ref_number} as fully paid: {e}"
             )
             raise RepositoryException("Could not update payment status.")
+
+    async def create_booking_guest(
+        self,
+        full_name: str,
+        email: str,
+        phone: str | None = None,
+        nationality: str | None = None,
+    ) -> BookingGuest:
+        """Create a BookingGuest record for walk-in / phone bookings."""
+        logger.info("[BookingRepository] Creating booking guest record")
+        try:
+            guest = BookingGuest(
+                id=uuid.uuid4(),
+                full_name=full_name,
+                email=email,
+                phone=phone,
+                nationality=nationality,
+            )
+            self.db.add(guest)
+            await self.db.flush()
+            logger.info("[BookingRepository] Booking guest created successfully")
+            return guest
+        except SQLAlchemyError as e:
+            logger.error(f"[BookingRepository] Failed to create booking guest: {e}")
+            raise RepositoryException("Could not create booking guest record.") from e
+
+    async def try_cancel_booking(self, ref_number: str) -> dict | None:
+        """
+        Atomically transitions a booking to CANCELLED.
+        Only allows PENDING or CONFIRMED → CANCELLED.
+        Returns snapshot dict or None if not cancellable.
+        """
+        logger.info(f"[BookingRepository] Attempting to cancel booking {ref_number}")
+        try:
+            result = await self.db.execute(
+                select(Booking)
+                .where(Booking.ref_number == ref_number)
+                .with_for_update()
+            )
+            booking = result.scalar_one_or_none()
+
+            if booking is None:
+                return None
+
+            cancellable_statuses = {
+                MasterBookingStatus.PENDING,
+                MasterBookingStatus.CONFIRMED,
+            }
+            if booking.status not in cancellable_statuses:
+                return None
+
+            snapshot = {
+                "id": str(booking.id),
+                "status": booking.status.value
+                if hasattr(booking.status, "value")
+                else booking.status,
+                "total_amount": str(booking.total_amount),
+                "amount_paid": str(booking.amount_paid),
+                "payment_gateway": booking.payment_gateway.value
+                if booking.payment_gateway
+                else None,
+                "payment_method": booking.payment_method.value
+                if hasattr(booking.payment_method, "value")
+                else booking.payment_method,
+            }
+
+            booking.status = MasterBookingStatus.CANCELLED
+            return snapshot
+
+        except SQLAlchemyError as e:
+            logger.error(
+                f"[BookingRepository] Failed to cancel booking {ref_number}: {e}"
+            )
+            raise RepositoryException("Could not cancel booking.") from e
+
+    async def save_gateway_payload(
+        self, ref_number: str, gateway_payload: dict
+    ) -> Booking | None:
+        """Persist the payment gateway payload on the booking for future refunds."""
+        logger.info(f"[BookingRepository] Saving gateway payload for {ref_number}")
+        try:
+            result = await self.db.execute(
+                select(Booking)
+                .where(Booking.ref_number == ref_number)
+                .with_for_update()
+            )
+            booking = result.scalar_one_or_none()
+
+            if booking is None:
+                return None
+
+            booking.gateway_payload = gateway_payload
+            return booking
+
+        except SQLAlchemyError as e:
+            logger.error(
+                f"[BookingRepository] Failed to save gateway payload for {ref_number}: {e}"
+            )
+            raise RepositoryException("Could not save payment reference.")
+
+    async def set_refund_due_on_cancel(
+        self, ref_number: str, refund_due: Decimal
+    ) -> Booking | None:
+        """Set refund_due and clear amount_due on cancellation."""
+        logger.info(
+            f"[BookingRepository] Setting refund_due={refund_due} for {ref_number}"
+        )
+        try:
+            result = await self.db.execute(
+                select(Booking)
+                .where(Booking.ref_number == ref_number)
+                .with_for_update()
+            )
+            booking = result.scalar_one_or_none()
+
+            if booking is None:
+                return None
+
+            booking.refund_due = refund_due
+            booking.amount_due = Decimal("0.00")
+            return booking
+
+        except SQLAlchemyError as e:
+            logger.error(
+                f"[BookingRepository] Failed to set refund_due for {ref_number}: {e}"
+            )
+            raise RepositoryException("Could not set refund due.")
+
+    async def get_by_ref_with_room_details(self, ref_number: str) -> Booking | None:
+        """Fetch booking with rooms and room details for cancellation policy lookup."""
+        logger.info(
+            f"[BookingRepository] Fetching booking with room details for {ref_number}"
+        )
+        try:
+            stmt = (
+                select(Booking)
+                .where(Booking.ref_number == ref_number)
+                .options(
+                    joinedload(Booking.guest),
+                    joinedload(Booking.booking_guest),
+                    joinedload(Booking.property),
+                    selectinload(Booking.booking_rooms)
+                    .joinedload(BookingRoom.room_unit)
+                    .options(
+                        joinedload(Rooms.room_type),
+                        selectinload(Rooms.system_amenities),
+                    ),
+                )
+            )
+            result = await self.db.execute(stmt)
+            return result.unique().scalar_one_or_none()
+
+        except SQLAlchemyError as e:
+            logger.error(
+                f"[BookingRepository] Failed to fetch booking with room details for {ref_number}: {e}"
+            )
+            raise RepositoryException(
+                "Could not fetch booking details. Please try again."
+            ) from e

@@ -1,7 +1,7 @@
 from app.utils.exceptions import RoomNotFoundException
 import uuid
 
-from sqlalchemy import func, select, or_
+from sqlalchemy import func, select, or_, update
 from sqlalchemy.orm import joinedload,selectinload
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -264,6 +264,40 @@ class RoomRepository:
             logger.error(f"[RoomRepository] Unexpected error getting rooms: {str(e)}")
             raise RepositoryException(f"Failed to get rooms: {str(e)}")
 
+    async def get_system_room_types(self) -> Sequence[RoomType]:
+        """Get system-wide default room types (property_id IS NULL, is_default = True)."""
+        logger.info("[RoomRepository] Getting system room types")
+        try:
+            stmt = (
+                select(RoomType)
+                .where(RoomType.property_id.is_(None), RoomType.is_default.is_(True))
+                .order_by(RoomType.room_type_name.asc())
+            )
+            result = await self.db.execute(stmt)
+            room_types = result.scalars().all()
+            logger.info(f"[RoomRepository] Found {len(room_types)} system room types")
+            return room_types
+        except Exception as e:
+            logger.error(f"[RoomRepository] Error getting system room types: {str(e)}")
+            raise RepositoryException(f"Failed to get system room types: {str(e)}")
+
+    async def get_system_bed_types(self) -> Sequence[BedType]:
+        """Get system-wide default bed types (property_id IS NULL, is_default = True)."""
+        logger.info("[RoomRepository] Getting system bed types")
+        try:
+            stmt = (
+                select(BedType)
+                .where(BedType.property_id.is_(None), BedType.is_default.is_(True))
+                .order_by(BedType.bed_name.asc())
+            )
+            result = await self.db.execute(stmt)
+            bed_types = result.scalars().all()
+            logger.info(f"[RoomRepository] Found {len(bed_types)} system bed types")
+            return bed_types
+        except Exception as e:
+            logger.error(f"[RoomRepository] Error getting system bed types: {str(e)}")
+            raise RepositoryException(f"Failed to get system bed types: {str(e)}")
+
     async def get_all_room_types(self, property_id: uuid.UUID) -> Sequence[RoomType]:
         """Get all room types for a property."""
         logger.info(
@@ -449,46 +483,48 @@ class RoomRepository:
         property_ids: list[uuid.UUID],
         check_in: date,
         check_out: date,
+        room_type_ids: list[uuid.UUID] | None = None,
+        bed_type_ids: list[uuid.UUID] | None = None,
+        min_price: float | None = None,
+        max_price: float | None = None,
     ) -> list[Rooms]:
-        """
-        Returns rooms belonging to the given properties that are:
-        - not permanently blocked (MAINTENANCE / OUT_OF_SERVICE)
-        - not already booked for any overlapping date range
-        """
         logger.info("[RoomRepository] Getting available rooms for properties")
         if not property_ids:
-            logger.info("[RoomRepository] No properties provided, returning empty list")
             return []
 
         try:
-            # Rooms with an overlapping active booking for the requested dates
             overlapping_room_ids_subq = (
                 select(BookingRoom.room_unit_id)
                 .join(Booking, Booking.id == BookingRoom.booking_id)
                 .where(
-                    Booking.status.in_(
-                        [
-                            MasterBookingStatus.PENDING,
-                            MasterBookingStatus.CONFIRMED,
-                            MasterBookingStatus.CHECKED_IN,
-                        ]
-                    ),
-                    Booking.checkin_date < check_out,  # overlap formula
-                    Booking.checkout_date > check_in,  # overlap formula
+                    Booking.status.in_([
+                        MasterBookingStatus.PENDING,
+                        MasterBookingStatus.CONFIRMED,
+                        MasterBookingStatus.CHECKED_IN,
+                    ]),
+                    Booking.checkin_date < check_out,
+                    Booking.checkout_date > check_in,
                 )
             )
 
-            stmt = select(Rooms).where(
+            conditions = [
                 Rooms.property_id.in_(property_ids),
-                Rooms.status.notin_(
-                    [RoomStatus.MAINTENANCE, RoomStatus.OUT_OF_SERVICE]
-                ),
+                Rooms.status.notin_([RoomStatus.MAINTENANCE, RoomStatus.OUT_OF_SERVICE]),
                 Rooms.id.notin_(overlapping_room_ids_subq),
-            )
+            ]
 
+            if room_type_ids:
+                conditions.append(Rooms.room_type_id.in_(room_type_ids))
+            if bed_type_ids:
+                conditions.append(Rooms.bed_type_id.in_(bed_type_ids))
+            if min_price is not None:
+                conditions.append(Rooms.base_rate >= min_price)
+            if max_price is not None:
+                conditions.append(Rooms.base_rate <= max_price)
+
+            stmt = select(Rooms).where(*conditions)
             result = await self.db.execute(stmt)
             rooms = result.scalars().all()
-            logger.info("returning list of available rooms")
             return rooms
         except Exception as e:
             logger.error("[RoomRepository] Error getting available rooms")
@@ -621,3 +657,22 @@ class RoomRepository:
         except Exception as e:
             logger.error("[RoomRepository] Error locking and checking rooms")
             raise RepositoryException(f"Failed to lock and check rooms: {str(e)}")
+
+    async def update_rooms_status(
+        self, room_ids: list[uuid.UUID], new_status: RoomStatus
+    ) -> None:
+        """Bulk update room status for all rooms in a booking."""
+        logger.info(
+            f"[RoomRepository] Updating {len(room_ids)} rooms to {new_status}"
+        )
+        try:
+            await self.db.execute(
+                update(Rooms)
+                .where(Rooms.id.in_(room_ids))
+                .values(status=new_status)
+            )
+        except Exception as e:
+            logger.error(
+                f"[RoomRepository] Error updating room statuses: {str(e)}"
+            )
+            raise RepositoryException(f"Failed to update room statuses: {str(e)}")

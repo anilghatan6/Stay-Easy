@@ -5,7 +5,7 @@ from app.modules.auth.services.auth_services import AuthService
 from app.modules.auth.services.otp_service import OTPService
 from app.utils.mail_services import send_verification_email
 from app.modules.auth.services.password_reset_services import PasswordResetService
-
+from app.modules.staff_mgmt.repositories.staffs_repository import StaffRepository
 
 from app.utils.exceptions import (
     ServiceException,
@@ -27,6 +27,7 @@ import uuid
 
 logger = LoggerFactory.get_logger(__name__)
 
+STAFF_ROLES = {"MANAGER", "FRONT_DESK", "HOUSEKEEPING","MAINTENANCE","KITCHEN","WAITER"}
 
 class UserService:
     def __init__(
@@ -36,6 +37,7 @@ class UserService:
         otp_service: OTPService,
         background_tasks: BackgroundTasks,
         password_reset_service: PasswordResetService,
+        staff_repository: StaffRepository,
 
     ):
         self.user_repository = user_repository
@@ -43,6 +45,7 @@ class UserService:
         self.otp_service = otp_service
         self.background_tasks = background_tasks
         self.password_reset_service = password_reset_service
+        self.staff_repository = staff_repository
 
 
     async def register_user(self, user_data: dict) -> User:
@@ -164,6 +167,7 @@ class UserService:
         try:
             email = credentials["email"].strip()
             password = credentials["password"].strip()
+            logger.info(f"password: {password}")
             user = await self.user_repository.get_user_by_email(email)
             if not user or not self.auth_service.verify_password(
                 password, user.hashed_password
@@ -177,15 +181,37 @@ class UserService:
                     "Account not verified. Please verify your email."
                 )
 
-            if user.must_change_password:
-                await self.password_reset_service.validate_and_consume_temp_password(user_id=user.id)
-
+            # if user.must_change_password:
+            #     await self.password_reset_service.validate_and_consume_temp_password(user_id=user.id)
             token_data = {"sub": str(user.id), "role": str(user.role).lower()}
+            
+            properties = await self.get_properties(user)
+            
+         
+            if len(properties) == 1:
+                return {
+                    "access_token": self.auth_service.create_access_token(token_data),
+                    "refresh_token": self.auth_service.create_refresh_token(token_data),
+                    "token_type": "bearer",
+                    "must_change_password": user.must_change_password,
+                    "role": str(user.role).lower(),
+                    "property": properties[0],
+                }
+            elif len(properties) > 1:
+                return {
+                    "access_token": self.auth_service.create_access_token(token_data),
+                    "refresh_token": self.auth_service.create_refresh_token(token_data),
+                    "token_type": "bearer",
+                    "must_change_password": user.must_change_password,
+                    "role": str(user.role).lower(),
+                    "properties": properties,
+                }
             return {
                 "access_token": self.auth_service.create_access_token(token_data),
                 "refresh_token": self.auth_service.create_refresh_token(token_data),
                 "token_type": "bearer",
                 "must_change_password": user.must_change_password,
+                "role": str(user.role).lower(),
             }
         except (UserNotFoundException, AccountInactiveException,InvalidPasswordException,TempPasswordExpiredError, TempPasswordAlreadyUsedError):
             raise
@@ -235,3 +261,23 @@ class UserService:
         except Exception as e:
             logger.error(f"[UserService] Error in update_user_tenant_id: {str(e)}")
             raise ServiceException("Tenant update failed")
+
+    async def get_properties(self, user:User) -> list:
+        """
+        Returns a list of property_ids the staff user has access to.
+        """
+        try:
+            if user.role not in STAFF_ROLES:
+                return []
+            staff = await self.staff_repository.get_staff_by_user_id(user.id)
+            if not staff:
+                return []
+            properties = [
+                {"id": assignment.property.id, "name": assignment.property.name}
+                for assignment in staff.property_assignments
+            ]
+            logger.info(f"[UserService] total properties is {len(properties)}")
+            return properties
+        except Exception as e:
+            logger.error(f"[UserService] Error in get_staff_properties: {str(e)}")
+            raise ServiceException("Failed to get staff properties")

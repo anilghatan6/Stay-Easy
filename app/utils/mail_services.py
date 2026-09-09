@@ -3,6 +3,7 @@ from app.utils.logging import LoggerFactory
 from app.utils.exceptions import ServiceException
 from fastapi.templating import Jinja2Templates
 from app.config.settings_config import settings
+from datetime import datetime, timezone
 
 
 
@@ -125,7 +126,13 @@ async def send_booking_confirmed_guest_email(
     map_url = f"https://www.google.com/maps?q={property_obj.latitude},{property_obj.longitude}"
 
     nights = (booking.checkout_date - booking.checkin_date).days
-    booking_created_at = booking.created_at.strftime("%B %d, %Y at %I:%M %p")
+    if isinstance(booking.created_at, str):
+        utc_time = datetime.fromisoformat(booking.created_at.replace("Z", "+00:00"))
+    else:
+        utc_time = booking.created_at if booking.created_at.tzinfo else booking.created_at.replace(tzinfo=timezone.utc)
+
+    local_time = utc_time.astimezone()
+    booking_created_at = local_time.strftime("%Y-%m-%d, %I:%M:%S %p")
 
     html_content = template.render(
         guest_name=guest_name,
@@ -268,5 +275,151 @@ async def send_staff_welcome_email(
     await send_transactional_email(
         to_email=to_email,
         subject=f"Welcome to the Team - Account Credentials | {property_name}",
+        html_content=html_content or plain_text,
+    )
+
+
+async def send_booking_cancelled_owner_email(
+    to_email: str,
+    owner_name: str,
+    guest_name: str,
+    guest_email: str,
+    guest_phone: str,
+    booking,
+    property_obj,
+    room_units: list,
+    refund_amount: float,
+    refund_status: str,
+    reason: str,
+    per_room_details: list[dict] | None = None,
+) -> None:
+    """Notify property owner that a guest has cancelled a booking."""
+    template = templates.env.get_template("booking_cancelled_owner.html")
+
+    # Build per-room data with cancellation policy and refund info
+    if per_room_details:
+        rooms_with_policy = [
+            {
+                "room_name": r["room_name"],
+                "cancellation_title": r["cancellation_title"],
+                "cancellation_description": r["cancellation_description"],
+                "room_refund_amount": f"{r['room_refund_amount']:.2f}",
+            }
+            for r in per_room_details
+        ]
+    else:
+        rooms_with_policy = [
+            {
+                "room_name": r.room_name,
+                "cancellation_title": r.cancellation_title,
+                "cancellation_description": r.cancellation_description,
+                "room_refund_amount": f"{refund_amount / len(room_units):.2f}" if room_units else "0.00",
+            }
+            for r in room_units
+        ]
+
+    html_content = template.render(
+        owner_name=owner_name,
+        guest_name=guest_name,
+        guest_email=guest_email,
+        guest_phone=guest_phone,
+        ref_number=booking.ref_number,
+        property_name=property_obj.name,
+        checkin_date=booking.checkin_date.strftime("%B %d, %Y"),
+        checkout_date=booking.checkout_date.strftime("%B %d, %Y"),
+        rooms=[{"room_name": r.room_name} for r in room_units],
+        rooms_with_policy=rooms_with_policy,
+        currency=property_obj.currency,
+        total_amount=f"{booking.total_amount:.2f}",
+        amount_paid=f"{booking.amount_paid:.2f}",
+        refund_amount=f"{refund_amount:.2f}",
+        refund_status=refund_status,
+        reason=reason,
+    )
+
+    plain_text = (
+        f"A booking ({booking.ref_number}) at {property_obj.name} has been cancelled by {guest_name}. "
+        f"Refund amount: {property_obj.currency} {refund_amount:.2f}. "
+        f"Status: {refund_status}."
+    )
+
+    await send_transactional_email(
+        to_email=to_email,
+        subject=f"Booking Cancelled - {booking.ref_number} | {property_obj.name}",
+        html_content=html_content or plain_text,
+    )
+
+
+async def send_booking_cancelled_guest_email(
+    to_email: str,
+    guest_name: str,
+    booking,
+    property_obj,
+    room_units: list,
+    refund_amount: float,
+    refund_status: str,
+    per_room_details: list[dict] | None = None,
+) -> None:
+    """Confirm to guest that their booking cancellation was successful."""
+    template = templates.env.get_template("booking_cancelled_guest.html")
+
+    nights = (booking.checkout_date - booking.checkin_date).days
+
+    # Build per-room data with cancellation policy and refund info
+    if per_room_details:
+        rooms_with_policy = [
+            {
+                "room_name": r["room_name"],
+                "room_type": r["room_type"],
+                "cancellation_title": r["cancellation_title"],
+                "cancellation_description": r["cancellation_description"],
+                "room_refund_amount": f"{r['room_refund_amount']:.2f}",
+            }
+            for r in per_room_details
+        ]
+    else:
+        rooms_with_policy = [
+            {
+                "room_name": r.room_name,
+                "room_type": r.room_type.room_type_name if r.room_type else "",
+                "cancellation_title": r.cancellation_title,
+                "cancellation_description": r.cancellation_description,
+                "room_refund_amount": f"{refund_amount / len(room_units):.2f}" if room_units else "0.00",
+            }
+            for r in room_units
+        ]
+
+    html_content = template.render(
+        guest_name=guest_name,
+        ref_number=booking.ref_number,
+        guest_email=to_email,
+        property_name=property_obj.name,
+        property_email=property_obj.email,
+        property_phone_number=property_obj.phone_number,
+        property_address=property_obj.address,
+        property_city=property_obj.city,
+        property_country=property_obj.country,
+        brand_logo_url=property_obj.brand_logo_url,
+        checkin_date=booking.checkin_date.strftime("%B %d, %Y"),
+        checkout_date=booking.checkout_date.strftime("%B %d, %Y"),
+        nights=nights,
+        rooms=[{"room_name": r.room_name, "room_type": r.room_type.room_type_name} for r in room_units],
+        rooms_with_policy=rooms_with_policy,
+        currency=property_obj.currency,
+        total_amount=f"{booking.total_amount:.2f}",
+        amount_paid=f"{booking.amount_paid:.2f}",
+        refund_amount=f"{refund_amount:.2f}",
+        refund_status=refund_status,
+    )
+
+    plain_text = (
+        f"Your booking {booking.ref_number} at {property_obj.name} has been cancelled successfully. "
+        f"Refund amount: {property_obj.currency} {refund_amount:.2f}. "
+        f"Status: {refund_status}."
+    )
+
+    await send_transactional_email(
+        to_email=to_email,
+        subject=f"Booking Cancelled Successfully - {booking.ref_number} | ServerIQ",
         html_content=html_content or plain_text,
     )

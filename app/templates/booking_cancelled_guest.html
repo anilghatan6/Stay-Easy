@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Booking Cancelled - {{ ref_number }}</title>
+</head>
+
+<body
+    style="margin: 0; padding: 0; font-family: Arial, Helvetica, sans-serif; background-color: #f4f4f6; color: #333333;">
+
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+        style="background-color: #f4f4f6; padding: 20px 0;">
+        <tr>
+            <td align="center">
+                <table role="presentation" width="650" cellspacing="0" cellpadding="0"
+                    style="background-color: #ffffff; border: 1px solid #dcdcdc; border-radius: 4px; overflow: hidden; width: 100%; max-width: 650px;">
+
+                    <!-- ServerIQ Top Branding -->
+                    <tr style="background-color: #381d66;">
+                        <td style="padding: 14px 30px; border-bottom: 1px solid #573398;">
+                            <span
+                                style="font-size: 18px; font-weight: bold; color: #ffffff; letter-spacing: 0.5px;">ServerIQ</span>
+                        </td>
+                    </tr>
+
+                    <!-- Header Banner -->
+                    <tr>
+                        <td style="background-color: #8b2252; color: #ffffff; padding: 24px 30px;">
+                            <h2 style="margin: 0 0 10px 0; font-size: 22px; font-weight: normal; color: #ffffff;">
+                                Booking cancelled
+                            </h2>
+                            <p style="margin: 0 0 6px 0; font-size: 16px; font-weight: bold; color: #ffffff;">
+                                Booking No. {{ ref_number }}
+                            </p>
+                            <p style="margin: 0; font-size: 12px; color: #f0d0e0;">
+                                Cancelled successfully
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Body -->
+                    <tr>
+                        <td style="padding: 24px 30px;">
+
+                            <!-- Greeting -->
+                            <p style="margin: 0 0 16px 0; font-size: 15px; color: #333333; line-height: 1.5;">
+                                Hi <strong>{{ guest_name }}</strong>,
+                            </p>
+                            <p style="margin: 0 0 24px 0; font-size: 15px; color: #333333; line-height: 1.5;">
+                                Your booking at <strong>{{ property_name }}</strong> has been cancelled successfully.
+                                Below are the details of your cancelled reservation.
+                            </p>
+
+                            <!-- Property Info -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+                                style="border: 1px solid #dcdcdc; border-radius: 4px; margin-bottom: 20px;">
+                                <tr>
+                                    <td style="padding: 16px 20px;">
+                                        <p
+                                            style="margin: 0 0 8px 0; font-size: 16px; color: #381d66; font-weight: bold;">
+                                            {{ property_name }}
+                                        </p>
+                                        <p style="margin: 0 0 4px 0; font-size: 13px; color: #666666;">
+                                            {{ property_address }}, {{ property_city }}, {{ property_country }}
+                                        </p>
+                                        {% if property_phone_number %}
+                                        <p style="margin: 0 0 4px 0; font-size: 13px; color: #666666;">
+                                            Phone: <a href="tel:{{ property_phone_number }}"
+                                                style="color: #381d66; text-decoration: none; font-weight: bold;">{{
+                                                property_phone_number }}</a>
+                                        </p>
+                                        {% endif %}
+                                        {% if property_email %}
+                                        <p style="margin: 0; font-size: 13px; color: #666666;">
+                                            Email: <a href="mailto:{{ property_email }}"
+                                                style="color: #381d66; text-decoration: none;">{{ property_email
+                                                }}</a>
+                                        </p>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Dates -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+                                style="background-color: #f9f9f9; border: 1px solid #dcdcdc; border-radius: 4px; margin-bottom: 20px;">
+                                <tr>
+                                    <td width="50%"
+                                        style="padding: 14px 20px; border-right: 1px solid #dcdcdc; vertical-align: top;">
+                                        <span
+                                            style="font-size: 11px; color: #888888; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">Check-in
+                                            Date</span>
+                                        <p
+                                            style="margin: 4px 0 0 0; font-size: 15px; font-weight: bold; color: #333333;">
+                                            {{ checkin_date }}</p>
+                                    </td>
+                                    <td width="50%" style="padding: 14px 20px; vertical-align: top;">
+                                        <span
+                                            style="font-size: 11px; color: #888888; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">Check-out
+                                            Date</span>
+                                        <p
+                                            style="margin: 4px 0 0 0; font-size: 15px; font-weight: bold; color: #333333;">
+                                            {{ checkout_date }}</p>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Booked Rooms -->
+                            <h3 style="margin: 0 0 10px 0; color: #333333; font-size: 15px; font-weight: bold;">
+                                Cancelled Rooms ({{ nights }} night{{ 's' if nights != 1 else '' }})</h3>
+                            {% for room in rooms_with_policy %}
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+                                style="border: 1px solid #dcdcdc; border-radius: 4px; margin-bottom: 12px;">
+                                <tr>
+                                    <td style="padding: 14px 16px; background-color: #ffffff;">
+                                        <p style="margin: 0 0 6px 0; color: #333333; font-size: 14px;">
+                                            <strong>{{ room.room_name }}</strong>
+                                            <span style="color: #888888; font-size: 12px; margin-left: 6px;">{{
+                                                room.room_type }}</span>
+                                        </p>
+                                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+                                            style="margin-top: 8px;">
+                                            <tr>
+                                                <td style="background-color: #f3f0ff; border-left: 3px solid #381d66; padding: 8px 12px; border-radius: 0 3px 3px 0;">
+                                                    <p style="margin: 0 0 2px 0; font-size: 12px; color: #381d66; font-weight: bold;">
+                                                        {{ room.cancellation_title }}
+                                                    </p>
+                                                    <p style="margin: 0; font-size: 11px; color: #555555; line-height: 1.4;">
+                                                        {{ room.cancellation_description }}
+                                                    </p>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                        <p style="margin: 8px 0 0 0; font-size: 13px; color: #381d66; font-weight: bold;">
+                                            Refund for this room: {{ currency }} {{ room.room_refund_amount }}
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                            {% endfor %}
+
+                            <!-- Financial Summary -->
+                            <h3 style="margin: 20px 0 10px 0; color: #333333; font-size: 15px; font-weight: bold;">
+                                Refund Summary</h3>
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+                                style="background-color: #f9f9f9; border: 1px solid #dcdcdc; border-radius: 4px;">
+                                <tr>
+                                    <td style="padding: 12px 20px; color: #666666; font-size: 14px;">Original Booking
+                                        Amount</td>
+                                    <td align="right"
+                                        style="padding: 12px 20px; color: #333333; font-size: 14px;">{{ currency }}
+                                        {{ total_amount }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 12px 20px; color: #666666; font-size: 14px;">Amount You Paid</td>
+                                    <td align="right"
+                                        style="padding: 12px 20px; color: #333333; font-size: 14px;">{{ currency }}
+                                        {{ amount_paid }}</td>
+                                </tr>
+                                <tr>
+                                    <td colspan="2"
+                                        style="border-bottom: 1px solid #dcdcdc; margin: 0 20px;">
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 14px 20px; color: #333333; font-size: 15px; font-weight: bold;">
+                                        Refund Amount</td>
+                                    <td align="right"
+                                        style="padding: 14px 20px; color: #381d66; font-size: 15px; font-weight: bold;">
+                                        {{ currency }} {{ refund_amount }}</td>
+                                </tr>
+                            </table>
+
+                            <!-- Refund Status -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+                                style="margin-top: 16px;">
+                                <tr>
+                                    <td
+                                        style="padding: 14px 20px; border-radius: 4px; background-color: {% if refund_status == 'processed' %}#e8f5e9{% elif refund_status == 'manual_required' %}#fff3e0{% else %}#f5f5f5{% endif %}; border: 1px solid {% if refund_status == 'processed' %}#a5d6a7{% elif refund_status == 'manual_required' %}#ffe0b2{% else %}#e0e0e0{% endif %};">
+                                        <p
+                                            style="margin: 0; font-size: 14px; color: {% if refund_status == 'processed' %}#2e7d32{% elif refund_status == 'manual_required' %}#e65100{% else %}#666666{% endif %}; font-weight: bold;">
+                                            {% if refund_status == 'processed' %}
+                                            Refund Processed — Your refund of {{ currency }} {{ refund_amount }} has been
+                                            initiated and will be credited to your original payment method within 5-10
+                                            business days.
+                                            {% elif refund_status == 'manual_required' %}
+                                            Refund Pending — Your refund of {{ currency }} {{ refund_amount }} requires
+                                            manual processing. Our team will process it within 3-5 business days. You
+                                            will receive a separate confirmation once the refund is complete.
+                                            {% else %}
+                                            No refund applicable for this cancellation based on the cancellation policy.
+                                            {% endif %}
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Help Text -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+                                style="margin-top: 24px;">
+                                <tr>
+                                    <td
+                                        style="background-color: #f3f0ff; border-left: 4px solid #381d66; padding: 12px 16px; border-radius: 0 4px 4px 0;">
+                                        <p style="margin: 0; font-size: 13px; color: #381d66; line-height: 1.5;">
+                                            <strong>Need help?</strong> Contact the property directly at <a
+                                                href="mailto:{{ property_email }}"
+                                                style="color: #381d66; text-decoration: underline;">{{ property_email
+                                                }}</a>{% if property_phone_number %} or call <a
+                                                href="tel:{{ property_phone_number }}"
+                                                style="color: #381d66; text-decoration: underline;">{{
+                                                property_phone_number }}</a>{% endif %}.
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td
+                            style="background-color: #f4f4f6; padding: 20px 30px; text-align: center; border-top: 1px solid #dcdcdc;">
+                            <p style="margin: 0 0 6px 0; color: #888888; font-size: 12px;">
+                                This is an automated cancellation confirmation from ServerIQ.
+                            </p>
+                            <p style="margin: 0; color: #aaaaaa; font-size: 11px;">
+                                If you did not cancel this booking, please contact the property immediately.
+                            </p>
+                        </td>
+                    </tr>
+
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+
+</html>

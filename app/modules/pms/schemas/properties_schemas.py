@@ -494,12 +494,19 @@ class PropertyBookingsResponse(BaseModel):
     checkin_date: date
     checkout_date: date
     status: str
-    payment_gateway: str
+    payment_gateway: Optional[str] = None
+    payment_method: Optional[str] = None
+    payment_status: Optional[str] = None
+    booking_type: Optional[str] = None
     subtotal: Decimal
     special_offer_discount: Decimal | None
     coupon_code: str | None
     coupon_discount: Decimal | None
     total_amount: Decimal
+    amount_paid: Decimal = Decimal("0.00")
+    amount_due: Decimal = Decimal("0.00")
+    advance_amount: Decimal | None = None
+    refund_due: Decimal = Decimal("0.00")
     created_at: datetime
     allow_pay_on_arrival: bool = Field(default=True)
     min_advance_percentage: float = Field(default=10.0)

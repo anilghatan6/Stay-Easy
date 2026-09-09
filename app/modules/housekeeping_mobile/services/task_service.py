@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.housekeeping_mobile.repositories.task_repository import MobileTaskRepository
 from app.modules.house_keeping.models.task_model import TaskStatus
+from app.modules.pms.models.activity_log_model import PropertyActivityLog
 from app.utils.exceptions import ServiceException
 from app.utils.logging import LoggerFactory
 
@@ -16,6 +17,29 @@ class MobileTaskService:
     def __init__(self, db: AsyncSession, task_repo: MobileTaskRepository):
         self.db = db
         self.task_repo = task_repo
+
+    async def _log_activity(
+        self,
+        property_id: uuid.UUID,
+        staff_id: Optional[uuid.UUID],
+        staff_name: str,
+        activity_type: str,
+        description: str,
+        room_id: Optional[uuid.UUID] = None,
+        extra_data: Optional[dict] = None,
+    ) -> None:
+        """Log a property activity for the activity feed."""
+        self.db.add(
+            PropertyActivityLog(
+                property_id=property_id,
+                staff_id=staff_id,
+                staff_name=staff_name,
+                activity_type=activity_type,
+                description=description,
+                room_id=room_id,
+                extra_data=extra_data,
+            )
+        )
 
     def _to_response_dict(self, task) -> dict:
         return {
@@ -68,6 +92,7 @@ class MobileTaskService:
         property_id: uuid.UUID,
         task_id: uuid.UUID,
         new_status: TaskStatus,
+        staff_name: str = "Unknown Staff",
     ) -> dict:
         task = await self.task_repo.get_task_by_id(task_id)
         if task is None:
@@ -89,7 +114,25 @@ class MobileTaskService:
                 status_code=400,
             )
 
+        old_status = task.status
         updated_task = await self.task_repo.update_task_status(task_id, new_status)
+
+        # Log task status update activity
+        room_name = task.room.room_name if task.room else "Unknown"
+        await self._log_activity(
+            property_id=property_id,
+            staff_id=staff_id,
+            staff_name=staff_name,
+            activity_type="TASK_STATUS_UPDATE",
+            description=f"Task {task.task_type} status changed from {old_status} to {new_status} for {room_name}",
+            room_id=task.room_id,
+            extra_data={
+                "task_type": task.task_type,
+                "old_status": old_status,
+                "new_status": new_status,
+                "room_name": room_name,
+            },
+        )
         await self.db.commit()
         await self.db.refresh(updated_task)
         return self._to_response_dict(updated_task)

@@ -51,6 +51,13 @@ class Staff(Base, TimestampMixin):
         nullable=False,
     )
 
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     phone_number: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)

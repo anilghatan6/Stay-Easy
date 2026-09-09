@@ -8,7 +8,7 @@ from app.modules.auth.schemas.token_schema import (
 )
 from app.modules.auth.services.users_services import UserService
 from app.modules.auth.dependencies import get_user_service
-from app.middlewares.auth_middlewares import CurrentUser
+from app.middlewares.auth_middlewares import CurrentUser, CurrentStaff
 from app.middlewares.rate_limiter import RateLimiter, bypass_global_limit
 
 router = APIRouter(prefix="/auth/users", tags=["Users"])
@@ -103,5 +103,5 @@ async def refresh_token(
     "/me",
     response_model=UserResponse,
 )
-async def get_current_user(current_user: CurrentUser) -> UserResponse:
+async def get_current_user(current_user: CurrentStaff) -> UserResponse:
     return current_user

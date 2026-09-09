@@ -179,6 +179,7 @@ class GuestService:
                 "refresh_token": self.auth_service.create_refresh_token(token_data),
                 "token_type": "bearer",
                 "must_change_password": guest.must_change_password,
+                "role": "guest",
             }
         except (UserNotFoundException, ServiceException, AccountInactiveException,InvalidPasswordException,TempPasswordExpiredError, TempPasswordAlreadyUsedError):
             raise

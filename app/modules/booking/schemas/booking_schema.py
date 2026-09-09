@@ -228,3 +228,11 @@ class BookingListItemResponse(BaseModel):
 
 class PaginatedBookingsResponse(BaseModel):
     items: list[BookingListItemResponse]
+
+
+class CancelBookingResponse(BaseModel):
+    ref_number: str
+    status: str
+    refund_amount: float
+    refund_status: str  # "processed" | "manual_required" | "none"
+    message: str

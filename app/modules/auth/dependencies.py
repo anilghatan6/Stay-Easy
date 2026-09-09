@@ -12,6 +12,8 @@ from app.config.database_config import get_db
 from app.config.redis_config import get_redis_client
 from app.modules.auth.services.otp_service import OTPService
 from app.modules.auth.services.password_reset_services import PasswordResetService
+from app.modules.staff_mgmt.repositories.staffs_repository import StaffRepository
+
 
 
 def get_guest_auth_service() -> AuthService:
@@ -30,6 +32,10 @@ def get_user_repository(db=Depends(get_db)) -> UserRepository:
 
 def get_otp_service(redis_client=Depends(get_redis_client)) -> OTPService:
     return OTPService(redis_client)
+
+
+def get_staff_repository(db=Depends(get_db)) -> StaffRepository:
+    return StaffRepository(db)
 
 
 def get_password_reset_repository(
@@ -82,6 +88,8 @@ def get_user_service(
     otp_service: OTPService = Depends(get_otp_service),
     background_tasks: BackgroundTasks = BackgroundTasks,
     password_reset_service: PasswordResetService = Depends(get_password_reset_service),
+    staff_repository: StaffRepository = Depends(get_staff_repository),
+
 ) -> UserService:
     return UserService(
         user_repository=user_repository,
@@ -89,6 +97,7 @@ def get_user_service(
         otp_service=otp_service,
         background_tasks=background_tasks,
         password_reset_service=password_reset_service,
+        staff_repository=staff_repository,
     )
 
 

@@ -1,19 +1,11 @@
 import uuid
-
+from typing import Optional
+from sqlalchemy.exc import SQLAlchemyError
 from app.modules.pms.models import Property
 
 from app.modules.pms.repositories.properties_repo import PropertyRepository
 from app.modules.pms.schemas.properties_schemas import (
-    GeneralPropertyInfo,
-    GeneralPropertyInfoResponse,
-    Location,
-    LocationResponse,
-    PropertyPhotosAndAmenities,
-    PropertyPhotosAndAmenitiesResponse,
-    Propertylocalization,
-    PropertylocalizationResponse,
-    BrandVisual,
-    BrandVisualResponse,
+
     PropertyResponse,
     TenantPropertiesListResponse,
     SystemAmenityResponse,
@@ -22,6 +14,13 @@ from app.modules.pms.schemas.properties_schemas import (
     UpdatePropertyInfo,
     SpecificPropertyResponse,
     CreatePropertyRequest
+)
+from app.modules.booking.models.booking_model import (
+    MasterBookingStatus,
+    PaymentGateway,
+    PaymentStatus,
+    PaymentMethod,
+    BookingType,
 )
 from app.utils.exceptions import (
     PropertyAlreadyExistsException,
@@ -181,57 +180,6 @@ class PropertyService:
 
         return PropertyResponse.model_validate(property_obj)
 
-    # async def create_general_information(
-    #     self, payload: GeneralPropertyInfo, tenant_id: uuid.UUID
-    # ) -> GeneralPropertyInfoResponse:
-    #     logger.info("[PropertyService] creating general information about the property")
-    #     payload_dict = payload.model_dump()
-    #     try:
-    #         property_obj = await self.property_repo.get_property_by_name(
-    #             payload_dict["name"], tenant_id
-    #         )
-    #         if property_obj:
-    #             logger.warning(
-    #                 f"Property with name {payload_dict['name']} already exists"
-    #             )
-    #             raise PropertyAlreadyExistsException(
-    #                 f"Property with name {payload_dict['name']} already exists"
-    #             )
-
-    #         response = await self.property_repo.create_general_information(
-    #             payload_dict, tenant_id
-    #         )
-
-    #         return GeneralPropertyInfoResponse.model_validate(response)
-
-    #     except (PropertyAlreadyExistsException, RepositoryException):
-    #         raise
-    #     except Exception as e:
-    #         logger.error(
-    #             f"[PropertyService] Error creating general information: {str(e)}"
-    #         )
-    #         raise ServiceException(
-    #             internal_detail=f"Failed to create general information of property :{str(e)}"
-    #         )
-
-    # async def create_location(
-    #     self, property_id: uuid.UUID, payload: Location, tenant_id: uuid.UUID
-    # ) -> LocationResponse:
-    #     logger.info(f"[PropertyService] creating location for property {property_id}")
-    #     payload_dict = payload.model_dump()
-    #     try:
-    #         property_obj = await self.property_repo.create_location(
-    #             property_id, tenant_id, payload_dict
-    #         )
-    #         return LocationResponse.model_validate(property_obj)
-    #     except (PropertyNotFoundException, RepositoryException):
-    #         raise
-    #     except Exception as e:
-    #         logger.error(f"[PropertyService] Error updating location: {str(e)}")
-    #         raise ServiceException(
-    #             internal_detail=f"Failed to update location for property: {str(e)}"
-    #         )
-
     async def _validate_photos_and_amenities(
         self,
         payload_dict: dict,
@@ -304,49 +252,6 @@ class PropertyService:
             raise ServiceException(
                 internal_detail=f"Failed to update photos and amenities for property: {str(e)}"
             )
-
-    # async def create_localization(
-    #     self,
-    #     property_id: uuid.UUID,
-    #     payload: Propertylocalization,
-    #     tenant_id: uuid.UUID,
-    # ) -> PropertylocalizationResponse:
-    #     logger.info(
-    #         f"[PropertyService] creating localization for property {property_id}"
-    #     )
-    #     payload_dict = payload.model_dump()
-    #     try:
-    #         property_obj = await self.property_repo.create_localization(
-    #             property_id, tenant_id, payload_dict
-    #         )
-    #         return PropertylocalizationResponse.model_validate(property_obj)
-    #     except (PropertyNotFoundException, RepositoryException):
-    #         raise
-    #     except Exception as e:
-    #         logger.error(f"[PropertyService] Error updating localization: {str(e)}")
-    #         raise ServiceException(
-    #             internal_detail=f"Failed to update localization for property: {str(e)}"
-    #         )
-
-    # async def create_brand_visual(
-    #     self, property_id: uuid.UUID, payload: BrandVisual, tenant_id: uuid.UUID
-    # ) -> BrandVisualResponse:
-    #     logger.info(
-    #         f"[PropertyService] creating brand visual for property {property_id}"
-    #     )
-    #     payload_dict = payload.model_dump()
-    #     try:
-    #         property_obj = await self.property_repo.create_brand_visual(
-    #             property_id, tenant_id, payload_dict
-    #         )
-    #         return BrandVisualResponse.model_validate(property_obj)
-    #     except (PropertyNotFoundException, RepositoryException):
-    #         raise
-    #     except Exception as e:
-    #         logger.error(f"[PropertyService] Error updating brand visual: {str(e)}")
-    #         raise ServiceException(
-    #             internal_detail=f"Failed to update brand visual for property: {str(e)}"
-    #         )
 
     async def get_tenant_properties_list(
         self, tenant_id: uuid.UUID, skip: int = 0, limit: int = 100
@@ -454,6 +359,8 @@ class PropertyService:
             # Best-effort Cloudinary cleanup (non-fatal)
             await self.image_service.delete_images_by_urls(all_photo_urls)
 
+        except SQLAlchemyError:
+            raise PropertyNotFoundException("Property deletion denied...")
         except (PropertyNotFoundException, RepositoryException):
             raise
         except Exception as e:
@@ -568,7 +475,12 @@ class PropertyService:
             )
 
     async def get_property_bookings(
-        self, property_id: uuid.UUID, tenant_id: uuid.UUID, skip: int, limit: int
+        self, property_id: uuid.UUID, tenant_id: uuid.UUID, skip: int, limit: int,
+        status: Optional[MasterBookingStatus] = None,
+        payment_status: Optional[PaymentStatus] = None,
+        payment_method: Optional[PaymentMethod] = None,
+        payment_gateway: Optional[PaymentGateway] = None,
+        booking_type: Optional[BookingType] = None,
     ) -> tuple[list[PropertyBookingsResponse], int]:
         logger.info(
             f"[PropertyService] Getting the property bookings for property {property_id}"
@@ -580,7 +492,12 @@ class PropertyService:
             if not property_obj:
                 raise PropertyNotFoundException("Property not found or access denied")
             bookings, total_count = await self.property_repo.get_property_bookings(
-                property_id, tenant_id, skip, limit
+                property_id, tenant_id, skip, limit,
+                status=status,
+                payment_status=payment_status,
+                payment_method=payment_method,
+                payment_gateway=payment_gateway,
+                booking_type=booking_type,
             )
 
             formatted_bookings = []
@@ -593,14 +510,17 @@ class PropertyService:
 
                 formatted_booking = {
                     "id": booking.id,
-                    "guest_name": booking.guest.full_name,
-                    "guest_email": booking.guest.email,
+                    "guest_name": booking.guest.full_name if booking.guest else (booking.booking_guest.full_name if booking.booking_guest else "Unknown"),
+                    "guest_email": booking.guest.email if booking.guest else (booking.booking_guest.email if booking.booking_guest else ""),
                     "booking_number": booking.ref_number,
                     "room_names": room_names,
                     "checkin_date": booking.checkin_date,
                     "checkout_date": booking.checkout_date,
                     "status": str(booking.status),
-                    "payment_gateway": booking.payment_gateway,
+                    "payment_gateway": booking.payment_gateway.value if booking.payment_gateway else None,
+                    "payment_method": booking.payment_method.value if booking.payment_method else None,
+                    "payment_status": str(booking.payment_status),
+                    "booking_type": str(booking.booking_type),
                     "subtotal": Decimal(booking.subtotal)
                     if booking.subtotal
                     else Decimal(0),
@@ -614,6 +534,10 @@ class PropertyService:
                     "total_amount": Decimal(booking.total_amount)
                     if booking.total_amount
                     else Decimal(0),
+                    "amount_paid": Decimal(booking.amount_paid),
+                    "amount_due": Decimal(booking.amount_due),
+                    "advance_amount": Decimal(booking.advance_amount) if booking.advance_amount else None,
+                    "refund_due": Decimal(booking.refund_due),
                     "created_at": booking.created_at,
                 }
                 formatted_bookings.append(formatted_booking)

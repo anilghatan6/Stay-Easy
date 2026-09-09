@@ -8,6 +8,7 @@ from app.modules.house_keeping.repositories.task_repository import TaskRepositor
 from app.modules.pms.repositories.properties_repo import PropertyRepository
 from app.modules.pms.repositories.room_repo import RoomRepository
 from app.modules.pms.models.rooms_model import RoomStatus
+from app.modules.pms.models.activity_log_model import PropertyActivityLog
 from app.modules.staff_mgmt.repositories.staffs_repository import StaffRepository
 from app.modules.staff_mgmt.models.staffs_model import JobRole
 from app.modules.staff_mgmt.schemas.staffs_schemas import StaffResponse
@@ -37,6 +38,38 @@ class TaskService:
         self.prop_repo = prop_repo
         self.room_repo = room_repo
         self.staff_repo = staff_repo
+
+    async def _log_activity(
+        self,
+        property_id: uuid.UUID,
+        staff_id: Optional[uuid.UUID],
+        staff_name: str,
+        activity_type: str,
+        description: str,
+        booking_id: Optional[uuid.UUID] = None,
+        room_id: Optional[uuid.UUID] = None,
+        extra_data: Optional[dict] = None,
+    ) -> None:
+        """Log a property activity for the activity feed."""
+        self.db.add(
+            PropertyActivityLog(
+                property_id=property_id,
+                staff_id=staff_id,
+                staff_name=staff_name,
+                activity_type=activity_type,
+                description=description,
+                booking_id=booking_id,
+                room_id=room_id,
+                extra_data=extra_data,
+            )
+        )
+
+    async def _get_staff_name_by_user_id(self, user_id: uuid.UUID) -> str:
+        """Resolve staff display name from user_id."""
+        staff = await self.staff_repo.get_staff_by_user_id(user_id)
+        if staff:
+            return staff.full_name
+        return "Unknown Staff"
 
     def _to_response_dict(self, task, room_name: str, staff_name: str) -> dict:
         return {
@@ -117,6 +150,25 @@ class TaskService:
         }
 
         task = await self.task_repo.create_task(task_data)
+
+        # Log task creation activity
+        staff_name = await self._get_staff_name_by_user_id(assigned_by_id)
+        await self._log_activity(
+            property_id=property_id,
+            staff_id=assigned_by_id,
+            staff_name=staff_name,
+            activity_type="TASK_CREATED",
+            description=f"Task {payload.task_type} assigned to {staff.full_name} for {room.room_name}",
+            room_id=payload.room_id,
+            extra_data={
+                "task_type": payload.task_type,
+                "priority": payload.priority,
+                "assigned_to": staff.full_name,
+                "room_name": room.room_name,
+            },
+        )
+        await self.db.commit()
+
         return self._to_response_dict(task, room.room_name, staff.full_name)
 
     async def bulk_create_tasks(
@@ -154,6 +206,21 @@ class TaskService:
             })
 
         created_tasks = await self.task_repo.bulk_create_tasks(task_data_list)
+
+        # Log bulk task creation activity
+        staff_name = await self._get_staff_name_by_user_id(assigned_by_id)
+        await self._log_activity(
+            property_id=property_id,
+            staff_id=assigned_by_id,
+            staff_name=staff_name,
+            activity_type="TASK_CREATED",
+            description=f"Bulk assigned {len(created_tasks)} housekeeping tasks",
+            extra_data={
+                "task_count": len(created_tasks),
+                "task_types": list(set(item.task_type for item in tasks_items)),
+            },
+        )
+        await self.db.commit()
 
         from app.modules.house_keeping.schemas.task_schema import TaskResponse
 
@@ -348,10 +415,29 @@ class TaskService:
         )
 
         completed_task = await self.task_repo.get_task_by_id(task_id)
+
+        # Log task completion activity
+        assigned_staff_name = completed_task.assigned_staff.full_name if completed_task.assigned_staff else "Unknown"
+        room_name = completed_task.room.room_name if completed_task.room else "Unknown"
+        await self._log_activity(
+            property_id=property_id,
+            staff_id=completed_task.assigned_staff_id,
+            staff_name=assigned_staff_name,
+            activity_type="TASK_COMPLETED",
+            description=f"Task {completed_task.task_type} completed for {room_name}",
+            room_id=completed_task.room_id,
+            extra_data={
+                "task_type": completed_task.task_type,
+                "room_name": room_name,
+                "assigned_to": assigned_staff_name,
+            },
+        )
+        await self.db.commit()
+
         return self._to_response_dict(
             completed_task,
-            completed_task.room.room_name if completed_task.room else "",
-            completed_task.assigned_staff.full_name if completed_task.assigned_staff else "",
+            room_name,
+            assigned_staff_name,
         )
 
     # ─── DELETE ──────────────────────────────────────

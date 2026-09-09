@@ -99,3 +99,5 @@ class UserRepository:
             logger.error(f"[UserRepository] Error updating user: {str(e)}")
             await self.session.rollback()
             raise RepositoryException(internal_detail=f"Error updating user: {str(e)}")
+
+   

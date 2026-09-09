@@ -2,12 +2,14 @@ import uuid
 import secrets
 import string
 from typing import Optional
+from datetime import datetime, timedelta, UTC
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.staff_mgmt.repositories.staffs_repository import StaffRepository
 from app.Images.image_services import ImageService
 from app.modules.pms.repositories.properties_repo import PropertyRepository
 from app.modules.auth.repositories.users_repo import UserRepository
+from app.modules.auth.repositories.password_reset_repository import PasswordResetRepository
 from app.modules.auth.services.auth_services import AuthService
 from app.utils.exceptions import (
     ServiceException,
@@ -25,6 +27,7 @@ from app.modules.staff_mgmt.schemas.staffs_schemas import (
 )
 from app.utils.mail_services import send_staff_welcome_email
 from app.utils.logging import LoggerFactory
+from app.config.settings_config import settings
 
 logger = LoggerFactory.get_logger(__name__)
 
@@ -38,6 +41,7 @@ class StaffService:
         image_service: ImageService,
         user_repo: UserRepository,
         security_service: AuthService,
+        password_reset_repo: PasswordResetRepository,
     ):
         self.db = db
         self.staff_repo = staff_repo
@@ -45,6 +49,7 @@ class StaffService:
         self.image_service = image_service
         self.user_repo = user_repo
         self.security_service = security_service
+        self.password_reset_repo = password_reset_repo
 
     async def _promote_staff_images_if_any(
         self, photos_data: dict, staff_id: uuid.UUID
@@ -130,6 +135,7 @@ class StaffService:
             staff_data["photos"] = promoted_photos
 
             temp_password = self._generate_temp_password(8)
+            logger.info(f"[StaffService] Temporary password generated for staff: {temp_password}")
             hashed_password = self.security_service.get_password_hash(temp_password)
 
             user_data = {
@@ -139,10 +145,14 @@ class StaffService:
                 "role": staff_data["job_role"],
                 "tenant_id": tenant_id,
                 "hashed_password": hashed_password,
+                "must_change_password": True,
                 "is_active": True,
             }
 
             await self.user_repo.register_user(user=user_data)
+
+            created_user = await self.user_repo.get_user_by_email(staff_data["email"])
+            staff_data["user_id"] = created_user.id
 
             staff = await self.staff_repo.create_staff(
                 tenant_id=tenant_id, property_id=property_id, data=staff_data

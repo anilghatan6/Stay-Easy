@@ -27,7 +27,7 @@ class BookingModificationLog(Base, TimestampMixin):
 
     staff_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="RESTRICT"),  # adjust FK target to your staff/User table
+        ForeignKey("users.id", ondelete="RESTRICT"),
         index=True,
         nullable=False,
     )
