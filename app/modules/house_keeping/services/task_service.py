@@ -329,6 +329,12 @@ class TaskService:
 
         return rooms, total
 
+    async def get_all_rooms(
+        self, tenant_id: uuid.UUID, property_id: uuid.UUID
+    ) -> list[dict]:
+        await self._verify_property(tenant_id, property_id)
+        return await self.task_repo.get_all_rooms_for_property(property_id)
+
     async def get_housekeeping_staff(
         self, tenant_id: uuid.UUID, property_id: uuid.UUID
     ) -> list[StaffResponse]:

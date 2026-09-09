@@ -13,6 +13,8 @@ from app.modules.house_keeping.schemas.task_schema import (
     TaskListResponse,
     RoomStatusSummaryResponse,
     StaffWorkSummaryResponse,
+    RoomOptionResponse,
+    HousekeepingStaffOptionResponse,
 )
 from app.modules.house_keeping.models.task_model import TaskStatus, TaskPriority
 from app.modules.pms.models.rooms_model import RoomStatus
@@ -155,21 +157,50 @@ async def get_staff_work_summary(
     return {"success": True, "data": result}
 
 
-# @router.get(
-#     "/housekeeping-staff",
-#     response_model=StandardResponse[list],
-#     status_code=status.HTTP_200_OK,
-#     description="List housekeeping staff assigned to the property",
-# )
-# async def get_housekeeping_staff(
-#     property_id: uuid.UUID,
-#     current_user: CurrentUser,
-#     task_service: TaskService = Depends(get_task_service),
-# ):
-#     verify_tenant(current_user)
-#     tenant_id = current_user.tenant_id
-#     result = await task_service.get_housekeeping_staff(tenant_id, property_id)
-#     return {"success": True, "data": result}
+# ─── GET ALL ROOMS (id, name) ─────────────────────────
+
+@router.get(
+    "/rooms",
+    response_model=StandardResponse[List[RoomOptionResponse]],
+    status_code=status.HTTP_200_OK,
+    description="Get all rooms (id, name) for the property",
+)
+async def get_all_rooms(
+    property_id: uuid.UUID,
+    current_user: CurrentUser,
+    task_service: TaskService = Depends(get_task_service),
+):
+    verify_tenant(current_user)
+    tenant_id = current_user.tenant_id
+    result = await task_service.get_all_rooms(tenant_id, property_id)
+    return {"success": True, "data": result}
+
+
+# ─── GET HOUSEKEEPING STAFF (id, name, cover_photo) ──
+
+@router.get(
+    "/housekeeping-staff",
+    response_model=StandardResponse[List[HousekeepingStaffOptionResponse]],
+    status_code=status.HTTP_200_OK,
+    description="Get all housekeeping staff (id, name, cover_photo) for the property",
+)
+async def get_housekeeping_staff(
+    property_id: uuid.UUID,
+    current_user: CurrentUser,
+    task_service: TaskService = Depends(get_task_service),
+):
+    verify_tenant(current_user)
+    tenant_id = current_user.tenant_id
+    staff_list = await task_service.get_housekeeping_staff(tenant_id, property_id)
+    result = [
+        HousekeepingStaffOptionResponse(
+            id=s.id,
+            name=s.full_name,
+            cover_photo=s.photos.get("profile") if s.photos else None,
+        )
+        for s in staff_list
+    ]
+    return {"success": True, "data": result}
 
 
 

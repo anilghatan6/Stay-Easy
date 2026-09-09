@@ -262,6 +262,21 @@ class TaskRepository:
             logger.error(f"[TaskRepository] Failed to fetch rooms by status: {e}")
             raise RepositoryException("Could not fetch rooms.") from e
 
+    async def get_all_rooms_for_property(self, property_id: uuid.UUID) -> list[dict]:
+        logger.info(f"[TaskRepository] Fetching all rooms for property {property_id}")
+        try:
+            stmt = (
+                select(Rooms.id, Rooms.room_name, Rooms.status)
+                .where(Rooms.property_id == property_id)
+                .order_by(Rooms.room_name.asc())
+            )
+            result = await self.db.execute(stmt)
+            rows = result.all()
+            return [{"id": row.id, "name": row.room_name, "status": row.status} for row in rows]
+        except SQLAlchemyError as e:
+            logger.error(f"[TaskRepository] Failed to fetch rooms for property {property_id}: {e}")
+            raise RepositoryException("Could not fetch rooms.") from e
+
     async def get_housekeeping_staff(
         self, property_id: uuid.UUID
     ) -> list[Staff]:

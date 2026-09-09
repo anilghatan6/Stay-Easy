@@ -139,3 +139,15 @@ class StaffWorkSummaryResponse(BaseModel):
     pending: int
     in_progress: int
     cancelled: int
+
+
+class RoomOptionResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    status: RoomStatus
+
+
+class HousekeepingStaffOptionResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    cover_photo: Optional[str] = None

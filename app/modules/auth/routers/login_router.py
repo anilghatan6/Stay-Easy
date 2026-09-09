@@ -21,7 +21,7 @@ router = APIRouter(
 @router.post("/login", response_model=Token, status_code=status.HTTP_200_OK)
 async def login(
     credentials: Annotated[OAuth2PasswordRequestForm, Depends()],
-    role: Optional[str] = Query(None, description="Account type to login as: 'guest' or 'user'"),
+    role: Optional[str] = Query("user", description="Account type to login as: 'guest' or 'user'"),
     guest_service: GuestService = Depends(get_guest_service),
     user_service: UserService = Depends(get_user_service),
 ):
