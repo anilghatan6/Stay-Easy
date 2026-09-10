@@ -218,7 +218,7 @@ async def cancel_booking(
     dependencies=[
         Depends(bypass_global_limit),
         Depends(
-            RateLimiter(max_requests=15, window_seconds=60, scope="expire_booking")
+            RateLimiter(max_requests=60, window_seconds=60, scope="expire_booking")
         ),
     ],
 )
