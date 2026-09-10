@@ -446,7 +446,11 @@ class StaffOperationsRepository:
                     joinedload(Booking.booking_guest),
                     joinedload(Booking.property),
                     selectinload(Booking.booking_rooms)
-                    .joinedload(BookingRoom.room_unit),
+                    .joinedload(BookingRoom.room_unit)
+                    .options(
+                        joinedload(Rooms.room_type),
+                        joinedload(Rooms.bed_type),
+                    ),
                 )
                 .order_by(Booking.created_at.asc())
             )
@@ -481,7 +485,11 @@ class StaffOperationsRepository:
                     joinedload(Booking.booking_guest),
                     joinedload(Booking.property),
                     selectinload(Booking.booking_rooms)
-                    .joinedload(BookingRoom.room_unit),
+                    .joinedload(BookingRoom.room_unit)
+                    .options(
+                        joinedload(Rooms.room_type),
+                        joinedload(Rooms.bed_type),
+                    ),
                 )
                 .order_by(Booking.checkout_date.asc())
             )
