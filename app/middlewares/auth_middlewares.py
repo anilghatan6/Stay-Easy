@@ -58,7 +58,7 @@ async def get_current_guest_change_password(
             detail="You are not authorized to access this resource",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    guest = await guest_service.get_guest_by_id(guest["user_id"])
+    guest = await guest_service.get_guest_by_id(payload["user_id"])
     if not guest:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

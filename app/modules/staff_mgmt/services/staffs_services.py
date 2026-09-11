@@ -277,13 +277,6 @@ class StaffService:
             if staff is None:
                 raise StaffNotFound("Staff member not found")
 
-            if payload.email and payload.email != staff.email:
-                email_owner = await self.staff_repo.get_by_email(payload.email)
-                if email_owner is not None and email_owner.id != staff_id:
-                    raise StaffAlreadlyExistException(
-                        f"A staff member with email {payload.email} already exists"
-                    )
-
             update_data = payload.model_dump(exclude_unset=True)
 
             # Handle photo promotion if photos are included in the update payload
