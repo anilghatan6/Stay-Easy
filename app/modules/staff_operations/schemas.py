@@ -312,3 +312,28 @@ class FrontDeskSummaryResponse(BaseModel):
     total_available_rooms: int
     dirty_rooms: int
     occupied_rooms: int
+
+
+# ─────────────────────────── Room Availability Calendar ─────────────────────────
+
+
+class RoomCalendarDay(BaseModel):
+    date: date
+    status: str
+    booking_ref: Optional[str] = None
+    guest_name: Optional[str] = None
+
+
+class RoomCalendarRoom(BaseModel):
+    room_id: uuid.UUID
+    room_name: str
+    room_type: str
+    bed_type: str
+    floor_number: int
+    days: list[RoomCalendarDay]
+
+
+class RoomCalendarResponse(BaseModel):
+    start_date: date
+    end_date: date
+    rooms: list[RoomCalendarRoom]

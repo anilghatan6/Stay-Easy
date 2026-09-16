@@ -261,6 +261,40 @@ class StaffOperationsService:
             )
             raise ServiceException("Could not fetch front desk summary.")
 
+    async def get_room_calendar(
+        self,
+        property_id: uuid.UUID,
+        staff_user: User,
+        start_date: date,
+        end_date: date,
+        floor_number: Optional[int] = None,
+        room_status: Optional[RoomStatus] = None,
+    ) -> dict:
+        """Get room availability calendar for a date range (max 1 month)."""
+        logger.info(
+            f"[StaffOperationsService] Getting room calendar for property {property_id} "
+            f"from {start_date} to {end_date}"
+        )
+        try:
+            await self._verify_property_access(property_id, staff_user)
+
+            result = await self.staff_ops_repo.get_room_calendar(
+                property_id=property_id,
+                start_date=start_date,
+                end_date=end_date,
+                floor_number=floor_number,
+                room_status=room_status,
+            )
+            return result
+
+        except PermissionException:
+            raise
+        except Exception as e:
+            logger.error(
+                f"[StaffOperationsService] Error getting room calendar: {e}"
+            )
+            raise ServiceException("Could not fetch room calendar.")
+
     def _build_front_desk_booking(self, booking) -> dict:
         """Build a front desk booking response from a Booking object."""
         guest = None

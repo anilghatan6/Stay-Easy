@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime, timezone, timedelta
 from decimal import Decimal
 from typing import Optional
-from sqlalchemy import select, update, delete, func
+from sqlalchemy import select, update, delete, func, and_, or_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, joinedload
@@ -14,6 +14,7 @@ from app.modules.booking.models.booking_model import (
     MasterBookingStatus,
 )
 from app.modules.pms.models.rooms_model import Rooms, RoomStatus
+from app.modules.pms.models.rooms_model import RoomType, BedType
 from app.modules.pms.models.activity_log_model import PropertyActivityLog
 from app.modules.staff_mgmt.models.staffs_model import Staff, StaffProperty
 from app.modules.auth.models.users_model import User
@@ -638,5 +639,142 @@ class StaffOperationsRepository:
                 f"[StaffOperationsRepository] Failed to fetch front desk summary: {e}"
             )
             raise RepositoryException("Could not fetch front desk summary.")
+
+    async def get_room_calendar(
+        self,
+        property_id: uuid.UUID,
+        start_date: date,
+        end_date: date,
+        floor_number: Optional[int] = None,
+        room_status: Optional[RoomStatus] = None,
+    ) -> dict:
+        """Fetch room availability calendar: each room's status for each day in the range."""
+        logger.info(
+            f"[StaffOperationsRepository] Fetching room calendar for property {property_id} "
+            f"from {start_date} to {end_date}"
+        )
+        try:
+            # 1. Fetch all rooms for the property
+            room_filters = [Rooms.property_id == property_id]
+            if floor_number is not None:
+                room_filters.append(Rooms.floor_number == floor_number)
+            if room_status is not None:
+                room_filters.append(Rooms.status == room_status)
+
+            rooms_stmt = (
+                select(Rooms)
+                .where(*room_filters)
+                .options(
+                    joinedload(Rooms.room_type),
+                    joinedload(Rooms.bed_type),
+                )
+                .order_by(Rooms.floor_number.asc(), Rooms.room_name.asc())
+            )
+            rooms_result = await self.db.execute(rooms_stmt)
+            rooms = list(rooms_result.unique().scalars().all())
+
+            if not rooms:
+                return {
+                    "rooms": [],
+                    "start_date": start_date,
+                    "end_date": end_date,
+                }
+
+            room_ids = [r.id for r in rooms]
+
+            # 2. Fetch active bookings overlapping the date range
+            booking_stmt = (
+                select(Booking, BookingRoom.room_unit_id)
+                .join(BookingRoom, Booking.id == BookingRoom.booking_id)
+                .where(
+                    BookingRoom.room_unit_id.in_(room_ids),
+                    Booking.status.in_([
+                        MasterBookingStatus.PENDING,
+                        MasterBookingStatus.CONFIRMED,
+                        MasterBookingStatus.CHECKED_IN,
+                    ]),
+                    Booking.checkin_date < end_date,
+                    Booking.checkout_date > start_date,
+                )
+                .options(
+                    joinedload(Booking.guest),
+                    joinedload(Booking.booking_guest),
+                )
+            )
+            booking_result = await self.db.execute(booking_stmt)
+            booking_rows = booking_result.unique().all()
+
+            # 3. Build a lookup: room_id -> list of (checkin, checkout, ref_number, guest_name)
+            room_bookings: dict[uuid.UUID, list] = {}
+            for booking, room_unit_id in booking_rows:
+                guest_name = None
+                if booking.guest:
+                    guest_name = booking.guest.full_name
+                elif booking.booking_guest:
+                    guest_name = booking.booking_guest.full_name
+
+                if room_unit_id not in room_bookings:
+                    room_bookings[room_unit_id] = []
+                room_bookings[room_unit_id].append({
+                    "checkin": booking.checkin_date,
+                    "checkout": booking.checkout_date,
+                    "ref_number": booking.ref_number,
+                    "guest_name": guest_name,
+                })
+
+            # 4. Build the calendar matrix
+            num_days = (end_date - start_date).days
+            calendar_rooms = []
+
+            for room in rooms:
+                days = []
+                active_bookings = room_bookings.get(room.id, [])
+
+                for day_offset in range(num_days):
+                    current_date = start_date + timedelta(days=day_offset)
+
+                    # Check if any booking overlaps this specific date
+                    overlapping = None
+                    for b in active_bookings:
+                        if b["checkin"] <= current_date < b["checkout"]:
+                            overlapping = b
+                            break
+
+                    if overlapping:
+                        days.append({
+                            "date": current_date,
+                            "status": "BOOKED",
+                            "booking_ref": overlapping["ref_number"],
+                            "guest_name": overlapping["guest_name"],
+                        })
+                    else:
+                        # Use the room's current status
+                        days.append({
+                            "date": current_date,
+                            "status": room.status.value,
+                            "booking_ref": None,
+                            "guest_name": None,
+                        })
+
+                calendar_rooms.append({
+                    "room_id": room.id,
+                    "room_name": room.room_name,
+                    "room_type": room.room_type.room_type_name if room.room_type else "",
+                    "bed_type": room.bed_type.bed_name if room.bed_type else "",
+                    "floor_number": room.floor_number,
+                    "days": days,
+                })
+
+            return {
+                "rooms": calendar_rooms,
+                "start_date": start_date,
+                "end_date": end_date,
+            }
+
+        except SQLAlchemyError as e:
+            logger.error(
+                f"[StaffOperationsRepository] Failed to fetch room calendar: {e}"
+            )
+            raise RepositoryException("Could not fetch room calendar.")
 
         

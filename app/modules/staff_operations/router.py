@@ -1,7 +1,9 @@
 import uuid
+from datetime import date, timedelta
 from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import status as http_status
 
 from app.middlewares.auth_middlewares import CurrentStaff
 from app.modules.staff_operations.dependencies import get_staff_operations_service
@@ -20,6 +22,7 @@ from app.modules.staff_operations.schemas import (
     StaffCreateWalkinBookingResponse,
     StaffCancelBookingRequest,
     StaffCancelBookingResponse,
+    RoomCalendarResponse,
 )
 from app.modules.staff_operations.service import StaffOperationsService
 from app.modules.booking.models.booking_model import (
@@ -29,6 +32,7 @@ from app.modules.booking.models.booking_model import (
     PaymentMethod,
     BookingType,
 )
+from app.modules.pms.models.rooms_model import RoomStatus
 from app.utils.schemas import StandardResponse
 
 router = APIRouter(
@@ -349,3 +353,51 @@ async def get_front_desk_summary(
         staff_user=staff,
     )
     return StandardResponse(data=FrontDeskSummaryResponse(**result))
+
+
+# ─────────────────────────── Room Availability Calendar ─────────────────────────
+
+
+@router.get(
+    "/properties/{property_id}/room-calendar",
+    response_model=StandardResponse[RoomCalendarResponse],
+    description="Get room availability calendar showing each room's status for each day in a date range (max 1 month)",
+)
+async def get_room_calendar(
+    property_id: uuid.UUID,
+    staff: CurrentStaff,
+    start_date: Optional[date] = Query(None, description="Start date (defaults to today)"),
+    end_date: Optional[date] = Query(None, description="End date (defaults to start_date + 6 days)"),
+    floor_number: Optional[int] = Query(None, ge=0, le=1000, description="Filter by floor number"),
+    room_status: Optional[RoomStatus] = Query(None, description="Filter by current room status"),
+    staff_ops_service: StaffOperationsService = Depends(get_staff_operations_service),
+):
+    today = date.today()
+
+    if start_date is None:
+        start_date = today
+
+    if end_date is None:
+        end_date = start_date + timedelta(days=6)
+
+    if end_date <= start_date:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail="end_date must be after start_date",
+        )
+
+    if (end_date - start_date).days > 30:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail="Date range cannot exceed 31 days (1 month)",
+        )
+
+    result = await staff_ops_service.get_room_calendar(
+        property_id=property_id,
+        staff_user=staff,
+        start_date=start_date,
+        end_date=end_date,
+        floor_number=floor_number,
+        room_status=room_status,
+    )
+    return StandardResponse(data=RoomCalendarResponse(**result))
