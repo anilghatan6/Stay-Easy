@@ -12,6 +12,7 @@ from app.modules.pms.repositories.room_repo import RoomRepository
 from app.modules.pms.repositories.properties_repo import PropertyRepository
 from app.modules.pms.repositories.offers_repo import SpecialOfferRepository
 from app.modules.pms.repositories.discount_code_repo import DiscountCodeRepository
+from app.modules.folio.repository import FolioRepository
 from app.modules.pms.models.rooms_model import RoomStatus
 from app.modules.pms.models.activity_log_model import PropertyActivityLog
 from app.modules.booking.models.booking_model import (
@@ -45,6 +46,7 @@ class StaffOperationsService:
         offer_repo: SpecialOfferRepository,
         discount_code_repo: DiscountCodeRepository,
         redis_client,
+        folio_repo: FolioRepository,
     ):
         self.db = db
         self.staff_ops_repo = staff_ops_repo
@@ -54,6 +56,7 @@ class StaffOperationsService:
         self.offer_repo = offer_repo
         self.discount_code_repo = discount_code_repo
         self.redis = redis_client
+        self.folio_repo = folio_repo
 
     async def _log_activity(
         self,
@@ -171,61 +174,65 @@ class StaffOperationsService:
             )
             raise ServiceException("Could not fetch housekeeping activity logs.")
 
-    async def get_todays_arrivals(
+    async def get_expected_arrivals(
         self,
         property_id: uuid.UUID,
         staff_user: User,
-    ) -> list[dict]:
-        """Get all bookings checking in today for a property."""
+        skip: int = 0,
+        limit: int = 20,
+    ) -> tuple[list[dict], int]:
+        """Get all bookings with check-in date today or in the future (paginated)."""
         logger.info(
-            f"[StaffOperationsService] Getting today's arrivals for property {property_id}"
+            f"[StaffOperationsService] Getting expected arrivals for property {property_id}"
         )
         try:
             await self._verify_property_access(property_id, staff_user)
 
-            today = datetime.now(timezone.utc).date()
-            bookings = await self.staff_ops_repo.get_todays_arrivals(
+            bookings, total = await self.staff_ops_repo.get_expected_arrivals(
                 property_id=property_id,
-                today=today,
+                skip=skip,
+                limit=limit,
             )
 
-            return [self._build_front_desk_booking(b) for b in bookings]
+            return [self._build_front_desk_booking(b) for b in bookings], total
 
         except PermissionException:
             raise
         except Exception as e:
             logger.error(
-                f"[StaffOperationsService] Error getting today's arrivals: {e}"
+                f"[StaffOperationsService] Error getting expected arrivals: {e}"
             )
-            raise ServiceException("Could not fetch today's arrivals.")
+            raise ServiceException("Could not fetch expected arrivals.")
 
-    async def get_todays_departures(
+    async def get_occupied_bookings(
         self,
         property_id: uuid.UUID,
         staff_user: User,
-    ) -> list[dict]:
-        """Get all bookings checking out today for a property."""
+        skip: int = 0,
+        limit: int = 20,
+    ) -> tuple[list[dict], int]:
+        """Get all occupied bookings with check-out date today or later (paginated)."""
         logger.info(
-            f"[StaffOperationsService] Getting today's departures for property {property_id}"
+            f"[StaffOperationsService] Getting occupied bookings for property {property_id}"
         )
         try:
             await self._verify_property_access(property_id, staff_user)
 
-            today = datetime.now(timezone.utc).date()
-            bookings = await self.staff_ops_repo.get_todays_departures(
+            bookings, total = await self.staff_ops_repo.get_occupied_bookings(
                 property_id=property_id,
-                today=today,
+                skip=skip,
+                limit=limit,
             )
 
-            return [self._build_front_desk_booking(b) for b in bookings]
+            return [self._build_front_desk_booking(b) for b in bookings], total
 
         except PermissionException:
             raise
         except Exception as e:
             logger.error(
-                f"[StaffOperationsService] Error getting today's departures: {e}"
+                f"[StaffOperationsService] Error getting occupied bookings: {e}"
             )
-            raise ServiceException("Could not fetch today's departures.")
+            raise ServiceException("Could not fetch occupied bookings.")
 
     async def get_front_desk_summary(
         self,
@@ -425,9 +432,13 @@ class StaffOperationsService:
             raise ServiceException("Could not fetch booking details.")
 
     async def check_in_guest(
-        self, ref_number: str, staff_user: User
+        self,
+        ref_number: str,
+        staff_user: User,
+        payment_amount: Optional[float] = None,
+        payment_gateway: Optional[str] = None,
     ) -> dict:
-        """Check in a guest. Validates booking status and staff assignment."""
+        """Check in a guest. Validates booking status and staff assignment. Optionally records payment."""
         logger.info(f"[StaffOperationsService] Checking in {ref_number}")
         try:
             booking = await self.staff_ops_repo.get_booking_by_ref_with_details(ref_number)
@@ -454,6 +465,31 @@ class StaffOperationsService:
                     "Booking cannot be checked in. Status must be CONFIRMED."
                 )
 
+            # Record optional payment at check-in
+            if payment_amount is not None:
+                if payment_amount <= 0:
+                    raise BookingException("Payment amount must be positive")
+                if Decimal(str(payment_amount)) > booking.amount_due:
+                    raise BookingException(
+                        f"Payment amount ({payment_amount}) exceeds remaining balance ({booking.amount_due})"
+                    )
+
+                new_amount_paid = booking.amount_paid + Decimal(str(payment_amount))
+                new_amount_due = booking.total_amount - new_amount_paid
+                if new_amount_due <= Decimal("0"):
+                    new_amount_due = Decimal("0.00")
+                    new_payment_status = PaymentStatus.PAID
+                elif new_amount_paid > Decimal("0"):
+                    new_payment_status = PaymentStatus.PARTIAL
+                else:
+                    new_payment_status = PaymentStatus.UNPAID
+
+                booking.amount_paid = new_amount_paid
+                booking.amount_due = new_amount_due
+                booking.payment_status = new_payment_status
+                if payment_gateway:
+                    booking.payment_gateway = payment_gateway
+
             # Update room statuses to OCCUPIED
             staff_name = await self._get_staff_name(staff_user)
             room_ids = [br.room_unit_id for br in booking.booking_rooms]
@@ -477,6 +513,8 @@ class StaffOperationsService:
                 extra_data={
                     "guest_name": self._resolve_guest_name(booking),
                     "room_names": [br.room_unit.room_name for br in booking.booking_rooms if br.room_unit],
+                    "payment_amount": payment_amount,
+                    "payment_gateway": payment_gateway,
                 },
             )
 
@@ -493,6 +531,10 @@ class StaffOperationsService:
                 "property_name": property_obj.name,
                 "rooms": rooms_data,
                 "guest_name": self._resolve_guest_name(booking),
+                "amount_paid": float(booking.amount_paid),
+                "amount_due": float(booking.amount_due),
+                "payment_status": booking.payment_status.value,
+                "payment_gateway": booking.payment_gateway.value if booking.payment_gateway else None,
                 "message": "Guest checked in successfully",
             }
 
@@ -509,7 +551,7 @@ class StaffOperationsService:
     async def check_out_guest(
         self, ref_number: str, staff_user: User
     ) -> dict:
-        """Check out a guest. Validates booking status and staff assignment."""
+        """Check out a guest. Enforces full payment (booking + folio charges)."""
         logger.info(f"[StaffOperationsService] Checking out {ref_number}")
         try:
             booking = await self.staff_ops_repo.get_booking_by_ref_with_details(ref_number)
@@ -528,6 +570,23 @@ class StaffOperationsService:
                     raise BookingException(
                         f"Check-out date mismatch. Expected {booking.checkout_date}, got {today}"
                     )
+
+            # Calculate grand total: booking amount_due + folio charges
+            folio = await self.folio_repo.get_folio_by_booking_id(booking.id)
+            folio_charges_total = Decimal("0.00")
+            if folio and folio.charges:
+                folio_charges_total = sum(charge.amount for charge in folio.charges)
+
+            grand_total = booking.amount_due + folio_charges_total
+
+            # Reject check-out if there's an outstanding balance
+            if grand_total > Decimal("0"):
+                raise BookingException(
+                    f"Outstanding balance of {float(grand_total):.2f}. "
+                    f"Please settle {float(booking.amount_due):.2f} booking balance"
+                    + (f" + {float(folio_charges_total):.2f} folio charges" if folio_charges_total > 0 else "")
+                    + " before check-out."
+                )
 
             # Try atomic status transition
             checked_out = await self.staff_ops_repo.try_check_out_booking(ref_number)
@@ -560,6 +619,8 @@ class StaffOperationsService:
                     "guest_name": self._resolve_guest_name(booking),
                     "room_names": [br.room_unit.room_name for br in booking.booking_rooms if br.room_unit],
                     "amount_due": float(booking.amount_due),
+                    "folio_charges": float(folio_charges_total),
+                    "grand_total": float(booking.total_amount + folio_charges_total),
                 },
             )
 
@@ -569,6 +630,10 @@ class StaffOperationsService:
             rooms = [br.room_unit for br in booking.booking_rooms if br.room_unit]
             rooms_data = [self._build_room_info(r) for r in rooms]
 
+            total_amount = float(booking.total_amount)
+            folio_charges = float(folio_charges_total)
+            grand_total_val = total_amount + folio_charges
+
             return {
                 "ref_number": ref_number,
                 "status": MasterBookingStatus.CHECKED_OUT.value,
@@ -576,7 +641,12 @@ class StaffOperationsService:
                 "property_name": property_obj.name,
                 "rooms": rooms_data,
                 "guest_name": self._resolve_guest_name(booking),
+                "total_amount": total_amount,
+                "folio_charges": folio_charges,
+                "grand_total": grand_total_val,
+                "amount_paid": float(booking.amount_paid),
                 "amount_due": float(booking.amount_due),
+                "payment_status": booking.payment_status.value,
                 "message": "Guest checked out successfully",
             }
 

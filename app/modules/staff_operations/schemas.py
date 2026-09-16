@@ -65,6 +65,26 @@ class StaffBookingDetailResponse(BaseModel):
     created_at: datetime
 
 
+class CheckInPaymentRequest(BaseModel):
+    amount: Optional[float] = Field(None, gt=0, description="Amount to pay at check-in")
+    payment_gateway: Optional[str] = Field(
+        None,
+        max_length=20,
+        description="Payment gateway: STRIPE, RAZORPAY, KHALTI, ESEWA, BANK_TRANSFER, CASH, CARD",
+    )
+
+    @field_validator("payment_gateway", mode="before")
+    @classmethod
+    def uppercase_payment_gateway(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        valid_gateways = {"STRIPE", "RAZORPAY", "KHALTI", "ESEWA", "BANK_TRANSFER", "CASH", "CARD"}
+        v_upper = v.upper()
+        if v_upper not in valid_gateways:
+            raise ValueError(f"payment_gateway must be one of: {', '.join(sorted(valid_gateways))}")
+        return v_upper
+
+
 class CheckInResponse(BaseModel):
     ref_number: str
     status: str
@@ -72,6 +92,10 @@ class CheckInResponse(BaseModel):
     property_name: str
     rooms: list[RoomInfo]
     guest_name: str
+    amount_paid: float
+    amount_due: float
+    payment_status: str
+    payment_gateway: Optional[str] = None
     message: str
 
 
@@ -82,7 +106,12 @@ class CheckOutResponse(BaseModel):
     property_name: str
     rooms: list[RoomInfo]
     guest_name: str
+    total_amount: float
+    folio_charges: float
+    grand_total: float
+    amount_paid: float
     amount_due: float
+    payment_status: str
     message: str
 
 

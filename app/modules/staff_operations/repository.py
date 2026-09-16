@@ -423,24 +423,32 @@ class StaffOperationsRepository:
             )
             raise RepositoryException("Could not fetch activity logs.")
 
-    async def get_todays_arrivals(
-        self, property_id: uuid.UUID, today: date
-    ) -> list[Booking]:
-        """Fetch all bookings checking in today for a property."""
+    async def get_expected_arrivals(
+        self, property_id: uuid.UUID, skip: int = 0, limit: int = 20
+    ) -> tuple[list[Booking], int]:
+        """Fetch all bookings with check-in date today or in the future (paginated)."""
         logger.info(
-            f"[StaffOperationsRepository] Fetching today's arrivals for property {property_id}"
+            f"[StaffOperationsRepository] Fetching expected arrivals for property {property_id}"
         )
         try:
+            today = date.today()
+            base_filter = [
+                Booking.property_id == property_id,
+                Booking.checkin_date >= today,
+                Booking.status.in_([
+                    MasterBookingStatus.CONFIRMED,
+                    MasterBookingStatus.PENDING,
+                ]),
+            ]
+
+            count_result = await self.db.execute(
+                select(func.count()).select_from(Booking).where(*base_filter)
+            )
+            total = count_result.scalar() or 0
+
             stmt = (
                 select(Booking)
-                .where(
-                    Booking.property_id == property_id,
-                    Booking.checkin_date == today,
-                    Booking.status.in_([
-                        MasterBookingStatus.CONFIRMED,
-                        MasterBookingStatus.PENDING,
-                    ]),
-                )
+                .where(*base_filter)
                 .options(
                     joinedload(Booking.guest),
                     joinedload(Booking.booking_guest),
@@ -452,34 +460,42 @@ class StaffOperationsRepository:
                         joinedload(Rooms.bed_type),
                     ),
                 )
-                .order_by(Booking.created_at.asc())
+                .order_by(Booking.checkin_date.asc())
+                .offset(skip)
+                .limit(limit)
             )
             result = await self.db.execute(stmt)
-            return list(result.unique().scalars().all())
+            return list(result.unique().scalars().all()), total
 
         except SQLAlchemyError as e:
             logger.error(
-                f"[StaffOperationsRepository] Failed to fetch today's arrivals: {e}"
+                f"[StaffOperationsRepository] Failed to fetch expected arrivals: {e}"
             )
-            raise RepositoryException("Could not fetch today's arrivals.")
+            raise RepositoryException("Could not fetch expected arrivals.")
 
-    async def get_todays_departures(
-        self, property_id: uuid.UUID, today: date
-    ) -> list[Booking]:
-        """Fetch all bookings checking out today for a property."""
+    async def get_occupied_bookings(
+        self, property_id: uuid.UUID, skip: int = 0, limit: int = 20
+    ) -> tuple[list[Booking], int]:
+        """Fetch all occupied bookings (CHECKED_IN) with check-out date today or later (paginated)."""
         logger.info(
-            f"[StaffOperationsRepository] Fetching today's departures for property {property_id}"
+            f"[StaffOperationsRepository] Fetching occupied bookings for property {property_id}"
         )
         try:
+            today = date.today()
+            base_filter = [
+                Booking.property_id == property_id,
+                Booking.checkout_date >= today,
+                Booking.status == MasterBookingStatus.CHECKED_IN,
+            ]
+
+            count_result = await self.db.execute(
+                select(func.count()).select_from(Booking).where(*base_filter)
+            )
+            total = count_result.scalar() or 0
+
             stmt = (
                 select(Booking)
-                .where(
-                    Booking.property_id == property_id,
-                    Booking.checkout_date == today,
-                    Booking.status.in_([
-                        MasterBookingStatus.CHECKED_IN,
-                    ]),
-                )
+                .where(*base_filter)
                 .options(
                     joinedload(Booking.guest),
                     joinedload(Booking.booking_guest),
@@ -492,15 +508,17 @@ class StaffOperationsRepository:
                     ),
                 )
                 .order_by(Booking.checkout_date.asc())
+                .offset(skip)
+                .limit(limit)
             )
             result = await self.db.execute(stmt)
-            return list(result.unique().scalars().all())
+            return list(result.unique().scalars().all()), total
 
         except SQLAlchemyError as e:
             logger.error(
-                f"[StaffOperationsRepository] Failed to fetch today's departures: {e}"
+                f"[StaffOperationsRepository] Failed to fetch occupied bookings: {e}"
             )
-            raise RepositoryException("Could not fetch today's departures.")
+            raise RepositoryException("Could not fetch occupied bookings.")
 
     async def get_front_desk_summary(
         self, property_id: uuid.UUID, today: date

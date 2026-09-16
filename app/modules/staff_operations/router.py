@@ -7,6 +7,7 @@ from app.middlewares.auth_middlewares import CurrentStaff
 from app.modules.staff_operations.dependencies import get_staff_operations_service
 from app.modules.staff_operations.schemas import (
     ActivityLogResponse,
+    CheckInPaymentRequest,
     CheckInResponse,
     CheckOutResponse,
     EnumResponse,
@@ -54,10 +55,15 @@ async def check_in_guest(
     ref_number: str,
     staff: CurrentStaff,
     staff_ops_service: Annotated[StaffOperationsService, Depends(get_staff_operations_service)],
+    body: Optional[CheckInPaymentRequest] = None,
 ):
+    payment_amount = body.amount if body else None
+    payment_gateway = body.payment_gateway if body else None
     result = await staff_ops_service.check_in_guest(
         ref_number=ref_number,
         staff_user=staff,
+        payment_amount=payment_amount,
+        payment_gateway=payment_gateway,
     )
     return StandardResponse(data=CheckInResponse(**result))
 
@@ -265,41 +271,67 @@ async def get_housekeeping_activities(
     )
 
 
-# ─────────────────────────── Today's Arrivals / Departures ─────────────────────────
+# ─────────────────────────── Expected Arrivals / Occupied Bookings ─────────────────────────
 
 
 @router.get(
-    "/properties/{property_id}/today/arrivals",
+    "/properties/{property_id}/arrivals",
     response_model=StandardResponse[List[FrontDeskBookingResponse]],
-    description="Get all guests arriving today (check-in date is today)",
+    description="Get all bookings with check-in date today or in the future",
 )
-async def get_todays_arrivals(
+async def get_expected_arrivals(
     property_id: uuid.UUID,
     staff: CurrentStaff,
+    skip: int = Query(default=0, ge=0, description="Number of bookings to skip"),
+    limit: int = Query(default=20, ge=1, le=100, description="Max bookings to return"),
     staff_ops_service: StaffOperationsService = Depends(get_staff_operations_service),
 ):
-    result = await staff_ops_service.get_todays_arrivals(
+    result, total_count = await staff_ops_service.get_expected_arrivals(
         property_id=property_id,
         staff_user=staff,
+        skip=skip,
+        limit=limit,
     )
-    return StandardResponse(data=[FrontDeskBookingResponse(**b) for b in result])
+    has_more = skip + len(result) < total_count
+    return StandardResponse(
+        data=[FrontDeskBookingResponse(**b) for b in result],
+        meta={
+            "total": total_count,
+            "skip": skip,
+            "limit": limit,
+            "has_more": has_more,
+        },
+    )
 
 
 @router.get(
-    "/properties/{property_id}/today/departures",
+    "/properties/{property_id}/departures",
     response_model=StandardResponse[List[FrontDeskBookingResponse]],
-    description="Get all guests departing today (check-out date is today)",
+    description="Get all occupied bookings with check-out date today or later",
 )
-async def get_todays_departures(
+async def get_occupied_bookings(
     property_id: uuid.UUID,
     staff: CurrentStaff,
+    skip: int = Query(default=0, ge=0, description="Number of bookings to skip"),
+    limit: int = Query(default=20, ge=1, le=100, description="Max bookings to return"),
     staff_ops_service: StaffOperationsService = Depends(get_staff_operations_service),
 ):
-    result = await staff_ops_service.get_todays_departures(
+    result, total_count = await staff_ops_service.get_occupied_bookings(
         property_id=property_id,
         staff_user=staff,
+        skip=skip,
+        limit=limit,
     )
-    return StandardResponse(data=[FrontDeskBookingResponse(**b) for b in result])
+    has_more = skip + len(result) < total_count
+    return StandardResponse(
+        data=[FrontDeskBookingResponse(**b) for b in result],
+        meta={
+            "total": total_count,
+            "skip": skip,
+            "limit": limit,
+            "has_more": has_more,
+        },
+    )
 
 
 @router.get(
