@@ -106,11 +106,8 @@ class FolioService:
             if booking.property_id != property_id:
                 raise BookingException("Booking does not belong to this property")
 
-            # Only CHECKED_IN or CHECKED_OUT bookings can have folios
-            if booking.status not in (
-                MasterBookingStatus.CHECKED_IN,
-                MasterBookingStatus.CHECKED_OUT,
-            ):
+            # Only CHECKED_IN bookings can have folios
+            if booking.status not in (MasterBookingStatus.CHECKED_IN):
                 raise BookingException(
                     f"Cannot create folio for booking in status {booking.status}. "
                     "Guest must be checked in first."
