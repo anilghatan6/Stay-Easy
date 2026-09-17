@@ -337,3 +337,53 @@ class RoomCalendarResponse(BaseModel):
     start_date: date
     end_date: date
     rooms: list[RoomCalendarRoom]
+
+
+# ─────────────────────────── Checked-In Guests ─────────────────────────
+
+
+class CheckedInGuestItem(BaseModel):
+    guest_id: Optional[uuid.UUID] = None
+    booking_guest_id: Optional[uuid.UUID] = None
+    full_name: str
+    email: str
+    phone: Optional[str] = None
+    nationality: Optional[str] = None
+    ref_number: str
+    checkin_date: date
+    checkout_date: date
+
+
+# ─────────────────────────── Guest Bookings with Folio ─────────────────────────
+
+
+class GuestFolioInfo(BaseModel):
+    folio_id: uuid.UUID
+    status: str
+    subtotal: float
+    tax: float
+    discount: float
+    total: float
+    charges_count: int
+    settled_at: Optional[datetime] = None
+
+
+class GuestBookingDetail(BaseModel):
+    booking_id: uuid.UUID
+    ref_number: str
+    status: str
+    checkin_date: date
+    checkout_date: date
+    total_amount: float
+    amount_paid: float
+    amount_due: float
+    rooms: list[RoomInfo]
+    folio: Optional[GuestFolioInfo] = None
+
+
+class GuestBookingListResponse(BaseModel):
+    bookings: list[GuestBookingDetail]
+    total: int
+    skip: int
+    limit: int
+    has_more: bool

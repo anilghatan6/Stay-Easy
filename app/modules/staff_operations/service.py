@@ -1305,4 +1305,100 @@ class StaffOperationsService:
             raise ServiceException(
                 "Could not cancel booking. Please try again."
             )
-        
+
+    # ─────────────────────── Checked-In Guests ──────────────────────────────
+
+    async def get_checked_in_guests_by_property(
+        self,
+        property_id: uuid.UUID,
+        staff_user: User,
+        skip: int = 0,
+        limit: int = 20,
+    ) -> tuple[list[dict], int]:
+        """Get paginated list of guests with CHECKED_IN bookings at a property."""
+        logger.info(
+            f"[StaffOperationsService] Getting checked-in guests for property {property_id}"
+        )
+        try:
+            await self._verify_property_access(property_id, staff_user)
+            guests, total = await self.staff_ops_repo.get_checked_in_guests_by_property(
+                property_id=property_id, skip=skip, limit=limit
+            )
+            return guests, total
+
+        except PermissionException:
+            raise
+        except Exception as e:
+            logger.error(
+                f"[StaffOperationsService] Error getting checked-in guests for property {property_id}: {e}"
+            )
+            raise ServiceException("Could not fetch checked-in guests.")
+
+    # ─────────────────────── Guest Bookings with Folio ──────────────────────────────
+
+    async def get_guest_bookings_with_folios(
+        self,
+        property_id: uuid.UUID,
+        guest_id: uuid.UUID,
+        staff_user: User,
+        skip: int = 0,
+        limit: int = 20,
+    ) -> dict:
+        """Get paginated bookings for a specific guest at a property, with folio info."""
+        logger.info(
+            f"[StaffOperationsService] Getting bookings for guest {guest_id} at property {property_id}"
+        )
+        try:
+            await self._verify_property_access(property_id, staff_user)
+            bookings, total = await self.staff_ops_repo.get_bookings_by_guest_for_property(
+                guest_id=guest_id, property_id=property_id, skip=skip, limit=limit
+            )
+
+            booking_list = []
+            for booking in bookings:
+                rooms = [br.room_unit for br in booking.booking_rooms if br.room_unit]
+                rooms_data = [self._build_room_info(r) for r in rooms]
+
+                folio_data = None
+                if booking.folios:
+                    folio = booking.folios[0]
+                    folio_data = {
+                        "folio_id": folio.id,
+                        "status": folio.status.value if hasattr(folio.status, "value") else folio.status,
+                        "subtotal": float(folio.subtotal),
+                        "tax": float(folio.tax),
+                        "discount": float(folio.discount),
+                        "total": float(folio.total),
+                        "charges_count": len(folio.charges) if folio.charges else 0,
+                        "settled_at": folio.settled_at,
+                    }
+
+                booking_list.append({
+                    "booking_id": booking.id,
+                    "ref_number": booking.ref_number,
+                    "status": booking.status.value if hasattr(booking.status, "value") else booking.status,
+                    "checkin_date": booking.checkin_date,
+                    "checkout_date": booking.checkout_date,
+                    "total_amount": float(booking.total_amount),
+                    "amount_paid": float(booking.amount_paid),
+                    "amount_due": float(booking.amount_due),
+                    "rooms": rooms_data,
+                    "folio": folio_data,
+                })
+
+            has_more = skip + len(booking_list) < total
+            return {
+                "bookings": booking_list,
+                "total": total,
+                "skip": skip,
+                "limit": limit,
+                "has_more": has_more,
+            }
+
+        except PermissionException:
+            raise
+        except Exception as e:
+            logger.error(
+                f"[StaffOperationsService] Error getting bookings for guest {guest_id}: {e}"
+            )
+            raise ServiceException("Could not fetch guest bookings.")

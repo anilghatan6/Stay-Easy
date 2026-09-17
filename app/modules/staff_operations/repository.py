@@ -777,4 +777,138 @@ class StaffOperationsRepository:
             )
             raise RepositoryException("Could not fetch room calendar.")
 
+    async def get_checked_in_guests_by_property(
+        self, property_id: uuid.UUID, skip: int, limit: int
+    ) -> tuple[list[dict], int]:
+        """Get paginated list of guests with CHECKED_IN bookings at a property."""
+        logger.info(
+            f"[StaffOperationsRepository] Fetching checked-in guests for property {property_id}"
+        )
+        try:
+            base_filter = (
+                Booking.property_id == property_id,
+                Booking.status == MasterBookingStatus.CHECKED_IN,
+            )
+
+            count_result = await self.db.execute(
+                select(func.count(func.distinct(Booking.guest_id)))
+                .select_from(Booking)
+                .where(*base_filter, Booking.guest_id.isnot(None))
+            )
+            total = count_result.scalar() or 0
+
+            result = await self.db.execute(
+                select(
+                    Booking.guest_id.label("guest_id"),
+                    Booking.booking_guest_id.label("booking_guest_id"),
+                    Booking.ref_number.label("ref_number"),
+                    Booking.checkin_date.label("checkin_date"),
+                    Booking.checkout_date.label("checkout_date"),
+                )
+                .where(*base_filter, Booking.guest_id.isnot(None))
+                .group_by(
+                    Booking.guest_id,
+                    Booking.booking_guest_id,
+                    Booking.ref_number,
+                    Booking.checkin_date,
+                    Booking.checkout_date,
+                )
+                .order_by(Booking.checkin_date.desc())
+                .offset(skip)
+                .limit(limit)
+            )
+            rows = result.all()
+
+            guest_ids = [row.guest_id for row in rows if row.guest_id]
+            booking_guest_ids = [row.booking_guest_id for row in rows if row.booking_guest_id]
+
+            guest_map = {}
+            if guest_ids:
+                from app.modules.auth.models.guests_model import Guest
+                guest_result = await self.db.execute(
+                    select(Guest).where(Guest.id.in_(guest_ids))
+                )
+                for g in guest_result.scalars().all():
+                    guest_map[g.id] = g
+
+            booking_guest_map = {}
+            if booking_guest_ids:
+                bg_result = await self.db.execute(
+                    select(BookingGuest).where(BookingGuest.id.in_(booking_guest_ids))
+                )
+                for bg in bg_result.scalars().all():
+                    booking_guest_map[bg.id] = bg
+
+            guests = []
+            for row in rows:
+                guest = guest_map.get(row.guest_id)
+                booking_guest = booking_guest_map.get(row.booking_guest_id)
+                guests.append({
+                    "guest_id": row.guest_id,
+                    "booking_guest_id": row.booking_guest_id,
+                    "full_name": guest.full_name if guest else (booking_guest.full_name if booking_guest else "Unknown"),
+                    "email": guest.email if guest else (booking_guest.email if booking_guest else ""),
+                    "phone": guest.phone if guest else (booking_guest.phone if booking_guest else None),
+                    "nationality": guest.nationality if guest else (booking_guest.nationality if booking_guest else None),
+                    "ref_number": row.ref_number,
+                    "checkin_date": row.checkin_date,
+                    "checkout_date": row.checkout_date,
+                })
+
+            return guests, total
+
+        except SQLAlchemyError as e:
+            logger.error(
+                f"[StaffOperationsRepository] Failed to fetch checked-in guests: {e}"
+            )
+            raise RepositoryException("Could not fetch checked-in guests.")
+
+    async def get_bookings_by_guest_for_property(
+        self, guest_id: uuid.UUID, property_id: uuid.UUID, skip: int, limit: int
+    ) -> tuple[list, int]:
+        """Get paginated bookings for a specific guest at a property, with folio info."""
+        logger.info(
+            f"[StaffOperationsRepository] Fetching bookings for guest {guest_id} at property {property_id}"
+        )
+        try:
+            from app.modules.booking.models.folio_models import Folio
+
+            base_filter = (
+                Booking.guest_id == guest_id,
+                Booking.property_id == property_id,
+            )
+
+            count_result = await self.db.execute(
+                select(func.count(Booking.id))
+                .select_from(Booking)
+                .where(*base_filter)
+            )
+            total = count_result.scalar() or 0
+
+            result = await self.db.execute(
+                select(Booking)
+                .options(
+                    selectinload(Booking.booking_rooms)
+                    .joinedload(BookingRoom.room_unit)
+                    .options(
+                        joinedload(Rooms.room_type),
+                        joinedload(Rooms.bed_type),
+                    ),
+                    selectinload(Booking.folios),
+                )
+                .where(*base_filter)
+                .order_by(Booking.created_at.desc())
+                .offset(skip)
+                .limit(limit)
+            )
+            bookings = result.unique().scalars().all()
+
+            return bookings, total
+
+        except SQLAlchemyError as e:
+            logger.error(
+                f"[StaffOperationsRepository] Failed to fetch guest bookings: {e}"
+            )
+            raise RepositoryException("Could not fetch guest bookings.")
+
         

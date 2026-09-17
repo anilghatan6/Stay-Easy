@@ -31,6 +31,7 @@ from app.modules.staff_mgmt.models import *
 from app.modules.staff_mgmt.routers.staffs_router import router as staff_router
 
 from app.modules.staff_operations.router import router as staff_operations_router
+from app.modules.dashboard.router import router as dashboard_router
 
 from app.modules.folio.router import router as folio_router
 
@@ -118,6 +119,7 @@ app.include_router(search_router)
 app.include_router(booking_router)
 app.include_router(favorites_router)
 app.include_router(staff_operations_router)
+app.include_router(dashboard_router)
 app.include_router(folio_router)
 app.include_router(review_router)
 

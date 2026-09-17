@@ -12,9 +12,12 @@ from app.modules.staff_operations.schemas import (
     CheckInPaymentRequest,
     CheckInResponse,
     CheckOutResponse,
+    CheckedInGuestItem,
     EnumResponse,
     FrontDeskBookingResponse,
     FrontDeskSummaryResponse,
+    GuestBookingDetail,
+    GuestBookingListResponse,
     StaffBookingDetailResponse,
     ModifyBookingResponse,
     ModifyBookingRequest,
@@ -401,3 +404,60 @@ async def get_room_calendar(
         room_status=room_status,
     )
     return StandardResponse(data=RoomCalendarResponse(**result))
+
+
+# ─────────────────────────── Checked-In Guests ─────────────────────────
+
+
+@router.get(
+    "/properties/{property_id}/booking-guests",
+    description="Get all guests currently checked in at a property",
+)
+async def get_checked_in_guests(
+    property_id: uuid.UUID,
+    staff: CurrentStaff,
+    skip: int = Query(default=0, ge=0, description="Number of guests to skip"),
+    limit: int = Query(default=20, ge=1, le=100, description="Max guests to return"),
+    staff_ops_service: StaffOperationsService = Depends(get_staff_operations_service),
+):
+    result, total_count = await staff_ops_service.get_checked_in_guests_by_property(
+        property_id=property_id,
+        staff_user=staff,
+        skip=skip,
+        limit=limit,
+    )
+    has_more = skip + len(result) < total_count
+    return StandardResponse(
+        data=[CheckedInGuestItem(**g) for g in result],
+        meta={
+            "total": total_count,
+            "skip": skip,
+            "limit": limit,
+            "has_more": has_more,
+        },
+    )
+
+
+# ─────────────────────────── Guest Bookings with Folio ─────────────────────────
+
+
+@router.get(
+    "/properties/{property_id}/guests/{guest_id}/bookings",
+    description="Get all bookings and folio details for a specific guest at a property",
+)
+async def get_guest_bookings_with_folios(
+    property_id: uuid.UUID,
+    guest_id: uuid.UUID,
+    staff: CurrentStaff,
+    skip: int = Query(default=0, ge=0, description="Number of bookings to skip"),
+    limit: int = Query(default=20, ge=1, le=100, description="Max bookings to return"),
+    staff_ops_service: StaffOperationsService = Depends(get_staff_operations_service),
+):
+    result = await staff_ops_service.get_guest_bookings_with_folios(
+        property_id=property_id,
+        guest_id=guest_id,
+        staff_user=staff,
+        skip=skip,
+        limit=limit,
+    )
+    return StandardResponse(data=GuestBookingListResponse(**result))

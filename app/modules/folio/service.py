@@ -120,16 +120,9 @@ class FolioService:
             if existing:
                 raise BookingException("A folio already exists for this booking.")
 
-            # Determine guest_id — use booking.guest_id (from guests table)
-            guest_id = booking.guest_id
-            if guest_id is None:
-                raise BookingException(
-                    "Booking has no linked guest. Cannot create folio."
-                )
-
             folio = await self.folio_repo.create_folio(
                 booking_id=booking.id,
-                guest_id=guest_id,
+                guest_id=booking.guest_id,
                 tax=tax,
                 discount=discount,
             )

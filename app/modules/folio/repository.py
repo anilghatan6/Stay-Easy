@@ -26,7 +26,7 @@ class FolioRepository:
     async def create_folio(
         self,
         booking_id: uuid.UUID,
-        guest_id: uuid.UUID,
+        guest_id: uuid.UUID | None = None,
         tax: Decimal = Decimal("0.00"),
         discount: Decimal = Decimal("0.00"),
     ) -> Folio:
