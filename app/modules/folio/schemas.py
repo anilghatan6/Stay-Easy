@@ -51,7 +51,7 @@ class FolioResponse(BaseModel):
 
     id: uuid.UUID
     booking_id: uuid.UUID
-    guest_id: uuid.UUID
+    guest_id: Optional[uuid.UUID] = None
     status: str
     subtotal: Decimal
     tax: Decimal
@@ -68,7 +68,7 @@ class FolioDetailResponse(BaseModel):
 
     id: uuid.UUID
     booking_id: uuid.UUID
-    guest_id: uuid.UUID
+    guest_id: Optional[uuid.UUID] = None
     status: str
     subtotal: Decimal
     tax: Decimal

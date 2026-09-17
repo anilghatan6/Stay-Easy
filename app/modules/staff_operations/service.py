@@ -814,13 +814,15 @@ class StaffOperationsService:
             if staff_user.role != "admin":
                 await self._verify_staff_property_assignment(staff_user, booking.property_id)
 
-            if booking.status in (
+            # Only CONFIRMED, CHECKED_IN, CHECKED_OUT can be modified
+            if booking.status not in (
+                MasterBookingStatus.CONFIRMED,
+                MasterBookingStatus.CHECKED_IN,
                 MasterBookingStatus.CHECKED_OUT,
-                MasterBookingStatus.CANCELLED,
-                MasterBookingStatus.EXPIRED,
             ):
                 raise BookingException(
-                    f"Cannot modify booking in status {booking.status}"
+                    f"Cannot modify booking in status {booking.status}. "
+                    "Only confirmed, checked-in, or checked-out bookings can be modified."
                 )
 
             # CHECKED_IN bookings: only checkout_date (extension) is allowed
