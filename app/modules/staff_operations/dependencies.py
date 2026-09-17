@@ -11,6 +11,7 @@ from app.modules.pms.repositories.properties_repo import PropertyRepository
 from app.modules.pms.repositories.offers_repo import SpecialOfferRepository
 from app.modules.pms.repositories.discount_code_repo import DiscountCodeRepository
 from app.modules.folio.repository import FolioRepository
+from app.Images.image_services import ImageService
 
 
 def get_staff_operations_service(
@@ -24,6 +25,7 @@ def get_staff_operations_service(
     offer_repo = SpecialOfferRepository(db)
     discount_code_repo = DiscountCodeRepository(db)
     folio_repo = FolioRepository(db)
+    image_service = ImageService()
     return StaffOperationsService(
         db=db,
         staff_ops_repo=staff_ops_repo,
@@ -34,4 +36,5 @@ def get_staff_operations_service(
         discount_code_repo=discount_code_repo,
         redis_client=redis_client,
         folio_repo=folio_repo,
+        image_service=image_service,
     )

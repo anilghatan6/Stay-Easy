@@ -205,6 +205,10 @@ class Booking(Base, TimestampMixin):
         JSONB, nullable=True, default=None
     )
 
+    citizenship_photos: Mapped[Optional[dict]] = mapped_column(
+        JSONB, nullable=True, default=None
+    )
+
     checked_in_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True, default=None
     )

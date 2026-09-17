@@ -2,7 +2,7 @@ import uuid
 from datetime import date, timedelta
 from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, File, UploadFile
 from fastapi import status as http_status
 
 from app.middlewares.auth_middlewares import CurrentStaff
@@ -11,8 +11,10 @@ from app.modules.staff_operations.schemas import (
     ActivityLogResponse,
     CheckInPaymentRequest,
     CheckInResponse,
+    CheckOutPaymentRequest,
     CheckOutResponse,
     CheckedInGuestItem,
+    CitizenshipPhotosResponse,
     EnumResponse,
     FrontDeskBookingResponse,
     FrontDeskSummaryResponse,
@@ -75,15 +77,41 @@ async def check_in_guest(
     return StandardResponse(data=CheckInResponse(**result))
 
 
+@router.post(
+    "/check-in/{ref_number}/citizenship-photos",
+    response_model=StandardResponse[CitizenshipPhotosResponse],
+    description="Upload or update citizenship front/back photos for a booking",
+)
+async def upload_citizenship_photos(
+    ref_number: str,
+    staff: CurrentStaff,
+    staff_ops_service: Annotated[StaffOperationsService, Depends(get_staff_operations_service)],
+    front: Optional[UploadFile] = File(None, description="Front side of citizenship document"),
+    back: Optional[UploadFile] = File(None, description="Back side of citizenship document"),
+):
+    result = await staff_ops_service.upload_citizenship_photos(
+        ref_number=ref_number,
+        staff_user=staff,
+        front_file=front,
+        back_file=back,
+    )
+    return StandardResponse(data=CitizenshipPhotosResponse(**result["citizenship_photos"]))
+
+
 @router.post("/check-out/{ref_number}")
 async def check_out_guest(
     ref_number: str,
     staff: CurrentStaff,
     staff_ops_service: Annotated[StaffOperationsService, Depends(get_staff_operations_service)],
+    body: Optional[CheckOutPaymentRequest] = None,
 ):
+    payment_amount = body.amount if body else None
+    payment_gateway = body.payment_gateway if body else None
     result = await staff_ops_service.check_out_guest(
         ref_number=ref_number,
         staff_user=staff,
+        payment_amount=payment_amount,
+        payment_gateway=payment_gateway,
     )
     return StandardResponse(data=CheckOutResponse(**result))
 

@@ -85,6 +85,31 @@ class CheckInPaymentRequest(BaseModel):
         return v_upper
 
 
+class CheckOutPaymentRequest(BaseModel):
+    amount: float = Field(..., gt=0, description="Full remaining amount to pay at check-out (booking balance + folio charges)")
+    payment_gateway: Optional[str] = Field(
+        None,
+        max_length=20,
+        description="Payment gateway: STRIPE, RAZORPAY, KHALTI, ESEWA, BANK_TRANSFER, CASH, CARD",
+    )
+
+    @field_validator("payment_gateway", mode="before")
+    @classmethod
+    def uppercase_payment_gateway(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        valid_gateways = {"STRIPE", "RAZORPAY", "KHALTI", "ESEWA", "BANK_TRANSFER", "CASH", "CARD"}
+        v_upper = v.upper()
+        if v_upper not in valid_gateways:
+            raise ValueError(f"payment_gateway must be one of: {', '.join(sorted(valid_gateways))}")
+        return v_upper
+
+
+class CitizenshipPhotosResponse(BaseModel):
+    front: Optional[str] = None
+    back: Optional[str] = None
+
+
 class CheckInResponse(BaseModel):
     ref_number: str
     status: str

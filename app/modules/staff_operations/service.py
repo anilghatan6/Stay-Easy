@@ -13,6 +13,7 @@ from app.modules.pms.repositories.properties_repo import PropertyRepository
 from app.modules.pms.repositories.offers_repo import SpecialOfferRepository
 from app.modules.pms.repositories.discount_code_repo import DiscountCodeRepository
 from app.modules.folio.repository import FolioRepository
+from app.Images.image_services import ImageService
 from app.modules.pms.models.rooms_model import RoomStatus
 from app.modules.pms.models.activity_log_model import PropertyActivityLog
 from app.modules.booking.models.booking_model import (
@@ -47,6 +48,7 @@ class StaffOperationsService:
         discount_code_repo: DiscountCodeRepository,
         redis_client,
         folio_repo: FolioRepository,
+        image_service: ImageService,
     ):
         self.db = db
         self.staff_ops_repo = staff_ops_repo
@@ -57,6 +59,32 @@ class StaffOperationsService:
         self.discount_code_repo = discount_code_repo
         self.redis = redis_client
         self.folio_repo = folio_repo
+        self.image_service = image_service
+
+    @staticmethod
+    def _sanitize_extra_data(data: Optional[dict]) -> Optional[dict]:
+        """Recursively convert non-JSON-serializable types (date, datetime, UUID,
+        Decimal, etc.) to strings so psycopg can serialize the dict."""
+        if data is None:
+            return None
+        clean = {}
+        for k, v in data.items():
+            if isinstance(v, dict):
+                clean[k] = StaffOperationsService._sanitize_extra_data(v)
+            elif isinstance(v, list):
+                clean[k] = [
+                    StaffOperationsService._sanitize_extra_data(item)
+                    if isinstance(item, dict)
+                    else str(item)
+                    if isinstance(item, (date, datetime, uuid.UUID, Decimal))
+                    else item
+                    for item in v
+                ]
+            elif isinstance(v, (date, datetime, uuid.UUID, Decimal)):
+                clean[k] = str(v)
+            else:
+                clean[k] = v
+        return clean
 
     async def _log_activity(
         self,
@@ -79,7 +107,7 @@ class StaffOperationsService:
                 description=description,
                 booking_id=booking_id,
                 room_id=room_id,
-                extra_data=extra_data,
+                extra_data=self._sanitize_extra_data(extra_data),
             )
         )
 
@@ -583,7 +611,11 @@ class StaffOperationsService:
             raise ServiceException("Could not check in guest. Please try again.")
 
     async def check_out_guest(
-        self, ref_number: str, staff_user: User
+        self,
+        ref_number: str,
+        staff_user: User,
+        payment_amount: Optional[float] = None,
+        payment_gateway: Optional[str] = None,
     ) -> dict:
         """Check out a guest. Enforces full payment (booking + folio charges)."""
         logger.info(f"[StaffOperationsService] Checking out {ref_number}")
@@ -613,7 +645,43 @@ class StaffOperationsService:
 
             grand_total = booking.amount_due + folio_charges_total
 
-            # Reject check-out if there's an outstanding balance
+            # Record payment if provided
+            if payment_amount is not None:
+                if payment_amount <= 0:
+                    raise BookingException("Payment amount must be positive")
+                if Decimal(str(payment_amount)) > grand_total:
+                    raise BookingException(
+                        f"Payment amount ({payment_amount}) exceeds outstanding balance ({float(grand_total):.2f})"
+                    )
+
+                # Apply payment: first cover booking amount_due, then folio charges
+                remaining_payment = Decimal(str(payment_amount))
+
+                # 1. Pay off booking amount_due
+                if remaining_payment > Decimal("0") and booking.amount_due > Decimal("0"):
+                    booking_payment = min(remaining_payment, booking.amount_due)
+                    booking.amount_paid = booking.amount_paid + booking_payment
+                    booking.amount_due = booking.amount_due - booking_payment
+                    remaining_payment = remaining_payment - booking_payment
+
+                # 2. Pay off folio charges if any remaining payment
+                if remaining_payment > Decimal("0") and folio and folio.charges:
+                    # Settle the folio with the remaining payment
+                    await self.folio_repo.settle_folio(folio.id)
+
+                # Update payment status
+                if booking.amount_due <= Decimal("0") and (not folio or not folio.charges or remaining_payment >= Decimal("0")):
+                    booking.payment_status = PaymentStatus.PAID
+                else:
+                    booking.payment_status = PaymentStatus.PARTIAL
+
+                if payment_gateway:
+                    booking.payment_gateway = PaymentGateway(payment_gateway.upper()) if isinstance(payment_gateway, str) else payment_gateway
+
+            # Recalculate grand total after payment
+            grand_total = booking.amount_due + folio_charges_total
+
+            # Reject check-out if there's still an outstanding balance
             if grand_total > Decimal("0"):
                 raise BookingException(
                     f"Outstanding balance of {float(grand_total):.2f}. "
@@ -652,9 +720,11 @@ class StaffOperationsService:
                 extra_data={
                     "guest_name": self._resolve_guest_name(booking),
                     "room_names": [br.room_unit.room_name for br in booking.booking_rooms if br.room_unit],
+                    "amount_paid": float(payment_amount) if payment_amount else 0,
                     "amount_due": float(booking.amount_due),
                     "folio_charges": float(folio_charges_total),
                     "grand_total": float(booking.total_amount + folio_charges_total),
+                    "payment_gateway": payment_gateway,
                 },
             )
 
@@ -835,6 +905,12 @@ class StaffOperationsService:
                     "refund_due": float(refund_due) if refund_due > 0 else None,
                 },
             )
+
+            # Expire the stale ORM object — apply_booking_modification uses bulk
+            # UPDATE so the ORM object is out of sync with the DB.  Without this,
+            # SQLAlchemy will try to flush the stale ORM (including JSONB columns
+            # like gateway_payload that may contain non-serialisable date objects).
+            self.db.expire(booking)
 
             await self.db.commit()
             await self.db.refresh(updated)
@@ -1305,6 +1381,95 @@ class StaffOperationsService:
             raise ServiceException(
                 "Could not cancel booking. Please try again."
             )
+
+    # ─────────────────────── Citizenship Photos ──────────────────────────────
+
+    async def upload_citizenship_photos(
+        self,
+        ref_number: str,
+        staff_user: User,
+        front_file=None,
+        back_file=None,
+    ) -> dict:
+        """Upload/update citizenship photos for a booking. Available after check-in."""
+        logger.info(f"[StaffOperationsService] Uploading citizenship photos for {ref_number}")
+        try:
+            booking = await self.staff_ops_repo.get_booking_by_ref_with_details(ref_number)
+            if booking is None:
+                raise BookingException("Booking not found")
+
+            if staff_user.role != "admin":
+                await self._verify_staff_property_assignment(staff_user, booking.property_id)
+
+            if booking.status not in (
+                MasterBookingStatus.CHECKED_IN,
+                MasterBookingStatus.CHECKED_OUT,
+            ):
+                raise BookingException(
+                    "Citizenship photos can only be uploaded for checked-in or checked-out bookings."
+                )
+
+            if front_file is None and back_file is None:
+                raise BookingException("At least one of front or back image must be provided.")
+
+            current_photos = booking.citizenship_photos or {}
+            folder_name = f"bookings/{booking.id}/citizenship"
+
+            if front_file:
+                if not front_file.content_type.startswith("image/"):
+                    raise BookingException("Front file must be an image.")
+                front_url = await self.image_service._process_and_upload_single(
+                    folder_name=folder_name, file=front_file
+                )
+                current_photos["front"] = front_url
+
+            if back_file:
+                if not back_file.content_type.startswith("image/"):
+                    raise BookingException("Back file must be an image.")
+                back_url = await self.image_service._process_and_upload_single(
+                    folder_name=folder_name, file=back_file
+                )
+                current_photos["back"] = back_url
+
+            booking.citizenship_photos = current_photos
+
+            # Log activity
+            staff_name = await self._get_staff_name(staff_user)
+            uploaded_sides = []
+            if front_file:
+                uploaded_sides.append("front")
+            if back_file:
+                uploaded_sides.append("back")
+
+            await self._log_activity(
+                property_id=booking.property_id,
+                staff_id=staff_user.id,
+                staff_name=staff_name,
+                activity_type="CITIZENSHIP_PHOTOS_UPLOAD",
+                description=f"Citizenship photos ({', '.join(uploaded_sides)}) uploaded for {self._resolve_guest_name(booking)}",
+                booking_id=booking.id,
+            )
+
+            await self.db.commit()
+
+            return {
+                "ref_number": ref_number,
+                "citizenship_photos": {
+                    "front": current_photos.get("front"),
+                    "back": current_photos.get("back"),
+                },
+                "message": "Citizenship photos uploaded successfully",
+            }
+
+        except (BookingException, PermissionException):
+            await self.db.rollback()
+            raise
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(
+                f"[StaffOperationsService] Error uploading citizenship photos for {ref_number}: {e}"
+            )
+            raise ServiceException("Could not upload citizenship photos. Please try again.")
 
     # ─────────────────────── Checked-In Guests ──────────────────────────────
 
