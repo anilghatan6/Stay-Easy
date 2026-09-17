@@ -198,6 +198,7 @@ async def update_special_requests(
         ),
     ],
 )
+
 async def cancel_booking(
     ref_number: str,
     guest: CurrentGuest,

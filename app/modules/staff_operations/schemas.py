@@ -267,6 +267,8 @@ class StaffCreateWalkinBookingResponse(BaseModel):
 class StaffCancelBookingResponse(BaseModel):
     ref_number: str
     status: str
+    refund_amount: float = 0.0
+    refund_status: str = "none"
     message: str
 
 

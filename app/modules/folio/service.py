@@ -6,6 +6,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.folio.repository import FolioRepository
+from app.modules.booking.models.folio_models import Folio
 from app.modules.booking.models.booking_model import (
     Booking,
     MasterBookingStatus,

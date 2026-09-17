@@ -6,6 +6,8 @@ from app.config.redis_config import get_redis_client
 from app.modules.staff_operations.repository import StaffOperationsRepository
 from app.modules.staff_operations.service import StaffOperationsService
 from app.modules.booking.repositories.booking_repository import BookingRepository
+from app.modules.booking.services.payment_service import PaymentService
+from app.modules.booking.dependencies import get_payment_service
 from app.modules.pms.repositories.room_repo import RoomRepository
 from app.modules.pms.repositories.properties_repo import PropertyRepository
 from app.modules.pms.repositories.offers_repo import SpecialOfferRepository
@@ -17,6 +19,7 @@ from app.Images.image_services import ImageService
 def get_staff_operations_service(
     db: AsyncSession = Depends(get_db),
     redis_client=Depends(get_redis_client),
+    payment_service: PaymentService = Depends(get_payment_service),
 ) -> StaffOperationsService:
     staff_ops_repo = StaffOperationsRepository(db)
     booking_repo = BookingRepository(db)
@@ -37,4 +40,5 @@ def get_staff_operations_service(
         redis_client=redis_client,
         folio_repo=folio_repo,
         image_service=image_service,
+        payment_service=payment_service,
     )

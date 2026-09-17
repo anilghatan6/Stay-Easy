@@ -8,8 +8,9 @@ from app.utils.forex import convert_to_npr
 
 logger = LoggerFactory.get_logger(__name__)
 
-KHALTI_INITIATE_URL = "https://a.khalti.com/api/v2/epayment/initiate/"
-KHALTI_LOOKUP_URL = "https://a.khalti.com/api/v2/epayment/lookup/"
+KHALTI_BASE_URL = "https://a.khalti.com"
+KHALTI_INITIATE_URL = f"{KHALTI_BASE_URL}/api/v2/epayment/initiate/"
+KHALTI_LOOKUP_URL = f"{KHALTI_BASE_URL}/api/v2/epayment/lookup/"
 
 
 class KhaltiPaymentStrategy(PaymentStrategy):
@@ -81,6 +82,11 @@ class KhaltiPaymentStrategy(PaymentStrategy):
 
             data = response.json()
             logger.info(f"[KhaltiStrategy] Verification response for {ref_number}: {data}")
+
+            # Store transaction_id in gateway_payload for future refunds
+            if data.get("transaction_id"):
+                gateway_payload["transaction_id"] = data["transaction_id"]
+
             return data.get("status") == "Completed"
 
         except httpx.RequestError as e:
@@ -91,12 +97,76 @@ class KhaltiPaymentStrategy(PaymentStrategy):
             return False
 
     async def refund(self, ref_number: str, gateway_payload: dict, amount: Decimal | None = None) -> dict:
-        # Khalti does not expose a public refund API for merchants as of this integration —
-        # refunds must be processed manually through the Khalti merchant dashboard.
-        logger.warning(f"[KhaltiStrategy] Refund requested for {ref_number} — not supported via API")
-        raise PaymentGatewayError(
-            internal_detail="Khalti refunds must be processed manually through the Khalti merchant dashboard."
-        )
+        pidx = gateway_payload.get("pidx") or gateway_payload.get("payment_intent_id")
+        transaction_id = gateway_payload.get("transaction_id")
+
+        if not pidx and not transaction_id:
+            raise PaymentGatewayError(
+                internal_detail="Khalti refund failed: no pidx or transaction_id in gateway_payload"
+            )
+
+        # Resolve transaction_id via lookup if not already stored
+        if not transaction_id:
+            logger.info(f"[KhaltiStrategy] Resolving transaction_id via lookup for {ref_number}")
+            try:
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    response = await client.post(
+                        KHALTI_LOOKUP_URL, json={"pidx": pidx}, headers=self.headers
+                    )
+                if response.status_code != 200:
+                    raise PaymentGatewayError(
+                        internal_detail=f"Khalti lookup failed for refund: {response.text}"
+                    )
+                data = response.json()
+                transaction_id = data.get("transaction_id")
+                if not transaction_id:
+                    raise PaymentGatewayError(
+                        internal_detail=f"Khalti lookup returned no transaction_id for {ref_number}"
+                    )
+            except PaymentGatewayError:
+                raise
+            except Exception as e:
+                raise PaymentGatewayError(
+                    internal_detail=f"Khalti lookup error for refund: {e}"
+                )
+
+        # Build refund payload — amount in paisa, full refund if amount is None
+        refund_payload = {}
+        if amount is not None:
+            amount_paisa = int(amount * 100)
+            refund_payload["amount"] = amount_paisa
+
+        logger.info(f"[KhaltiStrategy] Processing refund for {ref_number} (txn: {transaction_id}, payload: {refund_payload})")
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    f"{KHALTI_BASE_URL}/api/merchant-transaction/{transaction_id}/refund/",
+                    json=refund_payload,
+                    headers=self.headers,
+                )
+
+            if response.status_code not in (200, 201):
+                logger.error(f"[KhaltiStrategy] Refund failed for {ref_number}: {response.text}")
+                raise PaymentGatewayError(
+                    internal_detail=f"Khalti refund failed: {response.text}"
+                )
+
+            data = response.json()
+            logger.info(f"[KhaltiStrategy] Refund successful for {ref_number}: {data}")
+            return {"status": "refunded", "detail": data.get("detail", "Refund processed")}
+
+        except PaymentGatewayError:
+            raise
+        except httpx.RequestError as e:
+            logger.error(f"[KhaltiStrategy] Network error processing refund for {ref_number}: {e}")
+            raise PaymentGatewayError(
+                internal_detail=f"Khalti refund network error: {e}"
+            )
+        except Exception as e:
+            logger.error(f"[KhaltiStrategy] Unexpected error processing refund for {ref_number}: {e}")
+            raise PaymentGatewayError(
+                internal_detail=f"Khalti refund error: {e}"
+            )
 
     async def cancel_intent(self, ref_number: str, intent_id: str) -> None:
         # Khalti has no cancel-intent concept — an un-completed pidx simply expires unused

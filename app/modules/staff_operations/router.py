@@ -2,7 +2,7 @@ import uuid
 from datetime import date, timedelta
 from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, Depends, Query, HTTPException, File, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, HTTPException, File, UploadFile
 from fastapi import status as http_status
 
 from app.middlewares.auth_middlewares import CurrentStaff
@@ -150,12 +150,14 @@ async def cancel_booking(
     ref_number: str,
     payload: StaffCancelBookingRequest,
     staff: CurrentStaff,
+    background_tasks: BackgroundTasks,
     staff_ops_service: Annotated[StaffOperationsService, Depends(get_staff_operations_service)],
 ):
     result = await staff_ops_service.cancel_booking(
         ref_number=ref_number,
         staff_user=staff,
         reason=payload.reason,
+        background_tasks=background_tasks,
     )
     return StandardResponse(data=StaffCancelBookingResponse(**result))
 

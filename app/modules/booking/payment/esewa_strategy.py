@@ -117,6 +117,12 @@ class EsewaPaymentStrategy(PaymentStrategy):
                 return False
 
             data = response.json()
+
+            # Store ref_id and transaction_code in gateway_payload for operator reference
+            if data.get("ref_id"):
+                gateway_payload["ref_id"] = data["ref_id"]
+                gateway_payload["transaction_code"] = data.get("transaction_code")
+
             return data.get("status") == "COMPLETE"
 
         except httpx.RequestError as e:
@@ -127,9 +133,16 @@ class EsewaPaymentStrategy(PaymentStrategy):
             return False
 
     async def refund(self, ref_number: str, gateway_payload: dict, amount: Decimal | None = None) -> dict:
-        logger.warning(f"[EsewaStrategy] Refund requested for {ref_number} — not supported via public API")
+        transaction_uuid = gateway_payload.get("transaction_uuid") or gateway_payload.get("payment_intent_id", "unknown")
+        ref_id = gateway_payload.get("ref_id", "unknown")
+        logger.warning(
+            f"[EsewaStrategy] Refund requested for {ref_number} — not supported via API. "
+            f"Transaction UUID: {transaction_uuid}, Ref ID: {ref_id}. "
+            f"Process manually via eSewa merchant portal."
+        )
         raise PaymentGatewayError(
-            "eSewa refunds must be processed manually through the eSewa merchant portal."
+            f"eSewa refunds must be processed manually through the eSewa merchant portal. "
+            f"Transaction UUID: {transaction_uuid}, Ref ID: {ref_id}."
         )
 
     async def cancel_intent(self, ref_number: str, intent_id: str) -> None:

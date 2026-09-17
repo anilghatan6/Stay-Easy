@@ -4,8 +4,11 @@ from decimal import Decimal
 import math
 import secrets
 from typing import Optional
+
+from fastapi import BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config.database_config import AsyncSessionLocal
 from app.modules.staff_operations.repository import StaffOperationsRepository
 from app.modules.booking.repositories.booking_repository import BookingRepository
 from app.modules.pms.repositories.room_repo import RoomRepository
@@ -24,14 +27,21 @@ from app.modules.booking.models.booking_model import (
 )
 from app.modules.auth.models.users_model import User
 from app.modules.booking.models.booking_modification_log import BookingModificationLog
+from app.modules.booking.services.payment_service import PaymentService
 from app.utils.exceptions import (
     BookingException,
     InvalidDateException,
+    PaymentGatewayError,
     PermissionException,
     ServiceException,
     RoomsUnavailableError,
 )
 from app.utils.logging import LoggerFactory
+from app.utils.refund_calculator import calculate_refund_amount
+from app.utils.mail_services import (
+    send_booking_cancelled_guest_email,
+    send_booking_cancelled_owner_email,
+)
 from app.modules.staff_operations.schemas import ModifyBookingRequest
 logger = LoggerFactory.get_logger(__name__)
 
@@ -49,6 +59,7 @@ class StaffOperationsService:
         redis_client,
         folio_repo: FolioRepository,
         image_service: ImageService,
+        payment_service: PaymentService,
     ):
         self.db = db
         self.staff_ops_repo = staff_ops_repo
@@ -60,6 +71,7 @@ class StaffOperationsService:
         self.redis = redis_client
         self.folio_repo = folio_repo
         self.image_service = image_service
+        self.payment_service = payment_service
 
     @staticmethod
     def _sanitize_extra_data(data: Optional[dict]) -> Optional[dict]:
@@ -1265,14 +1277,16 @@ class StaffOperationsService:
     # ─────────────────────── Cancel Booking ──────────────────────────────
 
     async def cancel_booking(
-        self, ref_number: str, staff_user: User, reason: str
+        self, ref_number: str, staff_user: User, reason: str,
+        background_tasks: BackgroundTasks,
     ) -> dict:
-        """Staff can cancel any PENDING, CONFIRMED, or EXPIRED booking."""
+        """Staff can cancel any PENDING or CONFIRMED booking.
+        Applies per-room cancellation policies for refund calculation."""
         logger.info(
             f"[StaffOperationsService] Cancelling booking {ref_number} by staff {staff_user.id}"
         )
         try:
-            # 1. Fetch booking with details
+            # 1. Fetch booking with room details (needed for cancellation policy)
             booking = await self.staff_ops_repo.get_booking_by_ref_with_details(
                 ref_number
             )
@@ -1295,12 +1309,20 @@ class StaffOperationsService:
                 )
                 raise BookingException(
                     f"Booking in status {current_status} cannot be cancelled. "
-                    "Only PENDING, CONFIRMED, or EXPIRED bookings can be cancelled."
+                    "Only PENDING or CONFIRMED bookings can be cancelled."
                 )
-            # 4. If guest has paid amount, set refund_due
-            refund_due = Decimal("0.00")
-            if booking.amount_paid > 0:
-                refund_due = booking.amount_paid
+
+            # 4. Calculate refund based on per-room cancellation policies
+            room_units = [br.room_unit for br in booking.booking_rooms]
+            if not room_units:
+                raise BookingException("No rooms found for this booking")
+
+            refund_amount, per_room_details = calculate_refund_amount(
+                booking, room_units
+            )
+            refund_due = Decimal(str(refund_amount))
+
+            if refund_due > 0:
                 await self.staff_ops_repo.set_refund_due_on_cancel(
                     ref_number, refund_due
                 )
@@ -1319,7 +1341,28 @@ class StaffOperationsService:
             # 6. Clear Redis soft-lock if present
             await self.redis.delete(f"booking:softlock:{booking.id}")
 
-            # 7. Write audit log
+            # 7. Determine refund status and schedule background refund
+            refund_status = "none"
+            if refund_due > 0:
+                payment_gateway = snapshot.get("payment_gateway")
+                payment_method = snapshot.get("payment_method")
+
+                if payment_method == "PAY_ON_ARRIVAL":
+                    refund_status = "none"
+                elif payment_gateway in ("STRIPE", "RAZORPAY", "KHALTI"):
+                    refund_status = "processed"
+                    background_tasks.add_task(
+                        self._process_refund_background,
+                        ref_number,
+                        payment_gateway,
+                        booking.gateway_payload,
+                        refund_due,
+                    )
+                else:
+                    # eSewa, CASH, BANK_TRANSFER — manual processing
+                    refund_status = "manual_required"
+
+            # 8. Write audit log
             before_snapshot = {
                 "status": snapshot["status"],
                 "total_amount": snapshot["total_amount"],
@@ -1342,7 +1385,7 @@ class StaffOperationsService:
                 )
             )
 
-            # Log cancellation activity
+            # 9. Log cancellation activity
             await self._log_activity(
                 property_id=booking.property_id,
                 staff_id=staff_user.id,
@@ -1353,20 +1396,37 @@ class StaffOperationsService:
                 extra_data={
                     "guest_name": self._resolve_guest_name(booking),
                     "reason": reason,
-                    "refund_due": float(refund_due) if refund_due > 0 else None,
+                    "refund_amount": float(refund_amount) if refund_amount > 0 else None,
+                    "refund_status": refund_status,
                 },
+            )
+
+            # 10. Schedule cancellation emails (owner + guest)
+            background_tasks.add_task(
+                self._send_cancellation_emails,
+                ref_number,
+                refund_amount,
+                refund_status,
+                per_room_details,
+                reason,
             )
 
             await self.db.commit()
 
             message = "Booking cancelled successfully."
             if refund_due > 0:
-                message += f" Refund of {refund_due} is owed to the guest — process via payment gateway."
+                if refund_status == "processed":
+                    message += f" Refund of {refund_due} is being processed automatically."
+                elif refund_status == "manual_required":
+                    message += f" Refund of {refund_due} is owed — process via payment gateway."
+                else:
+                    message += f" Refund of {refund_due} is owed (PAY_ON_ARRIVAL)."
 
             return {
                 "ref_number": ref_number,
                 "status": MasterBookingStatus.CANCELLED.value,
-                "refund_due": float(refund_due),
+                "refund_amount": float(refund_amount),
+                "refund_status": refund_status,
                 "message": message,
             }
 
@@ -1381,6 +1441,131 @@ class StaffOperationsService:
             raise ServiceException(
                 "Could not cancel booking. Please try again."
             )
+
+    async def _process_refund_background(
+        self,
+        ref_number: str,
+        gateway: str,
+        gateway_payload: dict | None,
+        refund_amount: Decimal,
+    ) -> None:
+        """Background task to process refund via payment gateway."""
+        logger.info(
+            f"[StaffOperationsService] Processing refund for {ref_number} via {gateway}"
+        )
+        if not gateway_payload:
+            logger.warning(
+                f"[StaffOperationsService] No gateway payload for {ref_number} — cannot process refund"
+            )
+            return
+
+        try:
+            async with AsyncSessionLocal() as session:
+                fresh_booking_repo = BookingRepository(session)
+                booking = await fresh_booking_repo.get_by_ref(ref_number)
+                if not booking:
+                    logger.error(
+                        f"[StaffOperationsService] Booking {ref_number} not found for refund"
+                    )
+                    return
+
+                result = await self.payment_service.refund(
+                    gateway=gateway,
+                    ref_number=ref_number,
+                    gateway_payload=gateway_payload,
+                    amount=refund_amount,
+                )
+                logger.info(
+                    f"[StaffOperationsService] Refund processed for {ref_number}: {result}"
+                )
+
+        except Exception as e:
+            logger.error(
+                f"[StaffOperationsService] Failed to process refund for {ref_number}: {e}"
+            )
+            # Refund failure is logged but doesn't affect the cancellation
+
+    async def _send_cancellation_emails(
+        self,
+        ref_number: str,
+        refund_amount: float,
+        refund_status: str,
+        per_room_details: list[dict],
+        reason: str,
+    ) -> None:
+        """Send cancellation notification emails to owner and guest."""
+        logger.info(
+            f"[StaffOperationsService] Sending cancellation emails for {ref_number}"
+        )
+        async with AsyncSessionLocal() as session:
+            try:
+                fresh_booking_repo = BookingRepository(session)
+                booking = await fresh_booking_repo.get_by_ref_with_room_details(
+                    ref_number
+                )
+
+                if booking is None:
+                    logger.error(
+                        f"[StaffOperationsService] Could not send cancellation emails — booking {ref_number} not found"
+                    )
+                    return
+
+                property_obj = booking.property
+                guest = booking.guest
+                booking_guest = booking.booking_guest
+                room_units = [br.room_unit for br in booking.booking_rooms]
+
+                # Resolve guest info
+                guest_name = (
+                    guest.full_name
+                    if guest
+                    else (booking_guest.full_name if booking_guest else "Guest")
+                )
+                guest_email = (
+                    guest.email
+                    if guest
+                    else (booking_guest.email if booking_guest else None)
+                )
+                guest_phone = (
+                    guest.phone
+                    if guest
+                    else (booking_guest.phone if booking_guest else None)
+                )
+
+                # 1. Send owner notification
+                await send_booking_cancelled_owner_email(
+                    to_email=property_obj.email,
+                    owner_name=property_obj.name,
+                    guest_name=guest_name,
+                    guest_email=guest_email or "",
+                    guest_phone=guest_phone or "",
+                    booking=booking,
+                    property_obj=property_obj,
+                    room_units=room_units,
+                    refund_amount=refund_amount,
+                    refund_status=refund_status,
+                    reason=reason,
+                    per_room_details=per_room_details,
+                )
+
+                # 2. Send guest confirmation
+                if guest_email:
+                    await send_booking_cancelled_guest_email(
+                        to_email=guest_email,
+                        guest_name=guest_name,
+                        booking=booking,
+                        property_obj=property_obj,
+                        room_units=room_units,
+                        refund_amount=refund_amount,
+                        refund_status=refund_status,
+                        per_room_details=per_room_details,
+                    )
+
+            except Exception as e:
+                logger.error(
+                    f"[StaffOperationsService] Failed to send cancellation emails for {ref_number}: {e}"
+                )
+                # Deliberately swallowed — runs after the response is already sent.
 
     # ─────────────────────── Citizenship Photos ──────────────────────────────
 
