@@ -19,7 +19,6 @@ from app.modules.staff_operations.schemas import (
     FrontDeskBookingResponse,
     FrontDeskSummaryResponse,
     GuestBookingDetail,
-    GuestBookingListResponse,
     StaffBookingDetailResponse,
     ModifyBookingResponse,
     ModifyBookingRequest,
@@ -472,22 +471,18 @@ async def get_checked_in_guests(
 
 
 @router.get(
-    "/properties/{property_id}/guests/{guest_id}/bookings",
-    description="Get all bookings and folio details for a specific guest at a property",
+    "/properties/{property_id}/bookings/{ref_number}/guest-folio",
+    description="Get booking and folio details by reference number",
 )
-async def get_guest_bookings_with_folios(
+async def get_guest_booking_with_folio(
     property_id: uuid.UUID,
-    guest_id: uuid.UUID,
+    ref_number: str,
     staff: CurrentStaff,
-    skip: int = Query(default=0, ge=0, description="Number of bookings to skip"),
-    limit: int = Query(default=20, ge=1, le=100, description="Max bookings to return"),
     staff_ops_service: StaffOperationsService = Depends(get_staff_operations_service),
 ):
-    result = await staff_ops_service.get_guest_bookings_with_folios(
+    result = await staff_ops_service.get_guest_booking_with_folio(
         property_id=property_id,
-        guest_id=guest_id,
+        ref_number=ref_number,
         staff_user=staff,
-        skip=skip,
-        limit=limit,
     )
-    return StandardResponse(data=GuestBookingListResponse(**result))
+    return StandardResponse(data=GuestBookingDetail(**result))

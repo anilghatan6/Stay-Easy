@@ -1688,69 +1688,59 @@ class StaffOperationsService:
 
     # ─────────────────────── Guest Bookings with Folio ──────────────────────────────
 
-    async def get_guest_bookings_with_folios(
+    async def get_guest_booking_with_folio(
         self,
         property_id: uuid.UUID,
-        guest_id: uuid.UUID,
+        ref_number: str,
         staff_user: User,
-        skip: int = 0,
-        limit: int = 20,
     ) -> dict:
-        """Get paginated bookings for a specific guest at a property, with folio info."""
+        """Get a single booking by reference number with folio info."""
         logger.info(
-            f"[StaffOperationsService] Getting bookings for guest {guest_id} at property {property_id}"
+            f"[StaffOperationsService] Getting booking {ref_number} at property {property_id}"
         )
         try:
             await self._verify_property_access(property_id, staff_user)
-            bookings, total = await self.staff_ops_repo.get_bookings_by_guest_for_property(
-                guest_id=guest_id, property_id=property_id, skip=skip, limit=limit
-            )
+            booking = await self.staff_ops_repo.get_booking_by_ref_with_details(ref_number)
 
-            booking_list = []
-            for booking in bookings:
-                rooms = [br.room_unit for br in booking.booking_rooms if br.room_unit]
-                rooms_data = [self._build_room_info(r) for r in rooms]
+            if booking is None or booking.property_id != property_id:
+                raise BookingException("Booking not found for this property")
 
-                folio_data = None
-                if booking.folios:
-                    folio = booking.folios[0]
-                    folio_data = {
-                        "folio_id": folio.id,
-                        "status": folio.status.value if hasattr(folio.status, "value") else folio.status,
-                        "subtotal": float(folio.subtotal),
-                        "tax": float(folio.tax),
-                        "discount": float(folio.discount),
-                        "total": float(folio.total),
-                        "charges_count": len(folio.charges) if folio.charges else 0,
-                        "settled_at": folio.settled_at,
-                    }
+            rooms = [br.room_unit for br in booking.booking_rooms if br.room_unit]
+            rooms_data = [self._build_room_info(r) for r in rooms]
 
-                booking_list.append({
-                    "booking_id": booking.id,
-                    "ref_number": booking.ref_number,
-                    "status": booking.status.value if hasattr(booking.status, "value") else booking.status,
-                    "checkin_date": booking.checkin_date,
-                    "checkout_date": booking.checkout_date,
-                    "total_amount": float(booking.total_amount),
-                    "amount_paid": float(booking.amount_paid),
-                    "amount_due": float(booking.amount_due),
-                    "rooms": rooms_data,
-                    "folio": folio_data,
-                })
+            folio_data = None
+            if booking.folios:
+                folio = booking.folios[0]
+                folio_data = {
+                    "folio_id": folio.id,
+                    "status": folio.status.value if hasattr(folio.status, "value") else folio.status,
+                    "subtotal": float(folio.subtotal),
+                    "tax": float(folio.tax),
+                    "discount": float(folio.discount),
+                    "total": float(folio.total),
+                    "charges_count": len(folio.charges) if folio.charges else 0,
+                    "settled_at": folio.settled_at,
+                }
 
-            has_more = skip + len(booking_list) < total
             return {
-                "bookings": booking_list,
-                "total": total,
-                "skip": skip,
-                "limit": limit,
-                "has_more": has_more,
+                "booking_id": booking.id,
+                "ref_number": booking.ref_number,
+                "status": booking.status.value if hasattr(booking.status, "value") else booking.status,
+                "checkin_date": booking.checkin_date,
+                "checkout_date": booking.checkout_date,
+                "total_amount": float(booking.total_amount),
+                "amount_paid": float(booking.amount_paid),
+                "amount_due": float(booking.amount_due),
+                "rooms": rooms_data,
+                "folio": folio_data,
             }
 
+        except BookingException:
+            raise
         except PermissionException:
             raise
         except Exception as e:
             logger.error(
-                f"[StaffOperationsService] Error getting bookings for guest {guest_id}: {e}"
+                f"[StaffOperationsService] Error getting booking {ref_number}: {e}"
             )
-            raise ServiceException("Could not fetch guest bookings.")
+            raise ServiceException("Could not fetch booking details.")

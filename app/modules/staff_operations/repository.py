@@ -59,9 +59,11 @@ class StaffOperationsRepository:
             raise RepositoryException("Could not verify staff assignment.")
 
     async def get_booking_by_ref_with_details(self, ref_number: str) -> Booking | None:
-        """Fetch booking with rooms, property, guest, and booking_guest for staff operations."""
+        """Fetch booking with rooms, property, guest, booking_guest, and folios for staff operations."""
         logger.info(f"[StaffOperationsRepository] Fetching booking {ref_number} for staff")
         try:
+            from app.modules.booking.models.folio_models import Folio
+
             stmt = (
                 select(Booking)
                 .options(
@@ -72,10 +74,10 @@ class StaffOperationsRepository:
                     .joinedload(BookingRoom.room_unit)
                     .options(
                     joinedload(Rooms.room_type),
-                    # Preloads the system_amenities relationship on the Rooms model
                     selectinload(Rooms.system_amenities),
                     joinedload(Rooms.bed_type),
-                )
+                ),
+                    selectinload(Booking.folios).selectinload(Folio.charges),
                 )
                 .where(Booking.ref_number == ref_number)
             )
@@ -427,15 +429,15 @@ class StaffOperationsRepository:
     async def get_expected_arrivals(
         self, property_id: uuid.UUID, skip: int = 0, limit: int = 20
     ) -> tuple[list[Booking], int]:
-        """Fetch all bookings with check-in date today or in the future (paginated)."""
+        """Fetch all bookings with check-in date today only (paginated)."""
         logger.info(
-            f"[StaffOperationsRepository] Fetching expected arrivals for property {property_id}"
+            f"[StaffOperationsRepository] Fetching arrivals for property {property_id}"
         )
         try:
             today = date.today()
             base_filter = [
                 Booking.property_id == property_id,
-                Booking.checkin_date >= today,
+                Booking.checkin_date == today,
                 Booking.status.in_([
                     MasterBookingStatus.CONFIRMED,
                     MasterBookingStatus.PENDING,
@@ -477,15 +479,15 @@ class StaffOperationsRepository:
     async def get_occupied_bookings(
         self, property_id: uuid.UUID, skip: int = 0, limit: int = 20
     ) -> tuple[list[Booking], int]:
-        """Fetch all occupied bookings (CHECKED_IN) with check-out date today or later (paginated)."""
+        """Fetch all occupied bookings (CHECKED_IN) with check-out date today only (paginated)."""
         logger.info(
-            f"[StaffOperationsRepository] Fetching occupied bookings for property {property_id}"
+            f"[StaffOperationsRepository] Fetching departures for property {property_id}"
         )
         try:
             today = date.today()
             base_filter = [
                 Booking.property_id == property_id,
-                Booking.checkout_date >= today,
+                Booking.checkout_date == today,
                 Booking.status == MasterBookingStatus.CHECKED_IN,
             ]
 
