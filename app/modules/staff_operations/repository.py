@@ -791,9 +791,8 @@ class StaffOperationsRepository:
             )
 
             count_result = await self.db.execute(
-                select(func.count(func.distinct(Booking.guest_id)))
-                .select_from(Booking)
-                .where(*base_filter, Booking.guest_id.isnot(None))
+                select(func.count()).select_from(Booking)
+                .where(*base_filter)
             )
             total = count_result.scalar() or 0
 
@@ -805,14 +804,7 @@ class StaffOperationsRepository:
                     Booking.checkin_date.label("checkin_date"),
                     Booking.checkout_date.label("checkout_date"),
                 )
-                .where(*base_filter, Booking.guest_id.isnot(None))
-                .group_by(
-                    Booking.guest_id,
-                    Booking.booking_guest_id,
-                    Booking.ref_number,
-                    Booking.checkin_date,
-                    Booking.checkout_date,
-                )
+                .where(*base_filter)
                 .order_by(Booking.checkin_date.desc())
                 .offset(skip)
                 .limit(limit)
