@@ -24,6 +24,7 @@ from app.modules.booking.models.booking_model import (
     PaymentMethod,
     PaymentStatus,
     BookingType,
+    PaymentGateway
 )
 from app.modules.auth.models.users_model import User
 from app.modules.booking.models.booking_modification_log import BookingModificationLog
