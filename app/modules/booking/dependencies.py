@@ -11,6 +11,8 @@ from app.modules.pms.repositories.discount_code_repo import DiscountCodeReposito
 from app.modules.booking.payment.factory import PaymentServiceFactory
 from app.modules.booking.services.payment_service import PaymentService
 from app.modules.booking.services.booking_service import BookingService
+from app.modules.notifications.dependencies import get_notification_service
+from app.modules.notifications.services.notification_service import NotificationService
 
 from fastapi import Depends
 from app.config.database_config import get_db
@@ -40,6 +42,7 @@ def get_booking_service(
     db: AsyncSession = Depends(get_db),
     redis_cli: AsyncRedis = Depends(get_redis_client),
     payment_service: PaymentService = Depends(get_payment_service),
+    notification_service: NotificationService = Depends(get_notification_service),
 ) -> BookingService:
     booking_repo = BookingRepository(db)
     room_repo = RoomRepository(db)
@@ -57,4 +60,5 @@ def get_booking_service(
         redis_client=redis_cli,
         offer_repo=offer_repo,
         discount_code_repo=discount_code_repo,
+        notification_service=notification_service,
     )

@@ -43,6 +43,8 @@ from app.utils.mail_services import (
     send_booking_cancelled_owner_email,
 )
 from app.modules.staff_operations.schemas import ModifyBookingRequest
+from app.modules.notifications.events import NotificationEvents
+from app.modules.notifications.models.notification_model import NotificationType
 logger = LoggerFactory.get_logger(__name__)
 
 
@@ -60,6 +62,7 @@ class StaffOperationsService:
         folio_repo: FolioRepository,
         image_service: ImageService,
         payment_service: PaymentService,
+        notification_service=None,
     ):
         self.db = db
         self.staff_ops_repo = staff_ops_repo
@@ -72,6 +75,7 @@ class StaffOperationsService:
         self.folio_repo = folio_repo
         self.image_service = image_service
         self.payment_service = payment_service
+        self.notification_service = notification_service
 
     @staticmethod
     def _sanitize_extra_data(data: Optional[dict]) -> Optional[dict]:
@@ -594,6 +598,23 @@ class StaffOperationsService:
 
             await self.db.commit()
 
+            # Fire notification
+            if self.notification_service:
+                room_names = ", ".join(
+                    [br.room_unit.room_name for br in booking.booking_rooms if br.room_unit]
+                )
+                await NotificationEvents.fire(
+                    notification_type=NotificationType.BOOKING_CHECKED_IN,
+                    notification_service=self.notification_service,
+                    property_id=booking.property_id,
+                    organization_id=property_obj.tenant_id,
+                    actor_user_id=staff_user.id,
+                    entity_id=booking.id,
+                    ref_number=booking.ref_number,
+                    guest_name=self._resolve_guest_name(booking),
+                    room_names=room_names,
+                )
+
             # Build response
             rooms = [br.room_unit for br in booking.booking_rooms if br.room_unit]
             rooms_data = [self._build_room_info(r) for r in rooms]
@@ -741,6 +762,37 @@ class StaffOperationsService:
             )
 
             await self.db.commit()
+
+            # Fire notifications
+            if self.notification_service:
+                room_names = ", ".join(
+                    [br.room_unit.room_name for br in booking.booking_rooms if br.room_unit]
+                )
+                guest_name = self._resolve_guest_name(booking)
+                # Check-out notification
+                await NotificationEvents.fire(
+                    notification_type=NotificationType.BOOKING_CHECKED_OUT,
+                    notification_service=self.notification_service,
+                    property_id=booking.property_id,
+                    organization_id=property_obj.tenant_id,
+                    actor_user_id=staff_user.id,
+                    entity_id=booking.id,
+                    ref_number=booking.ref_number,
+                    guest_name=guest_name,
+                    room_names=room_names,
+                )
+                # Room dirty notification
+                for br in booking.booking_rooms:
+                    if br.room_unit:
+                        await NotificationEvents.fire(
+                            notification_type=NotificationType.ROOM_DIRTY,
+                            notification_service=self.notification_service,
+                            property_id=booking.property_id,
+                            organization_id=property_obj.tenant_id,
+                            actor_user_id=staff_user.id,
+                            entity_id=br.room_unit.id,
+                            room_name=br.room_unit.room_name,
+                        )
 
             # Build response
             rooms = [br.room_unit for br in booking.booking_rooms if br.room_unit]
@@ -928,6 +980,20 @@ class StaffOperationsService:
 
             await self.db.commit()
             await self.db.refresh(updated)
+
+            # Fire modification notification
+            if self.notification_service:
+                property_obj = await self.property_repo.get_by_id(booking.property_id)
+                await NotificationEvents.fire(
+                    notification_type=NotificationType.BOOKING_MODIFIED,
+                    notification_service=self.notification_service,
+                    property_id=booking.property_id,
+                    organization_id=property_obj.tenant_id,
+                    actor_user_id=staff_user.id,
+                    entity_id=booking.id,
+                    ref_number=booking.ref_number,
+                    guest_name=self._resolve_guest_name(booking),
+                )
 
             message = "Booking updated successfully."
             if refund_due > 0:
@@ -1195,6 +1261,22 @@ class StaffOperationsService:
 
             await self.db.commit()
 
+            # Fire walk-in booking notification
+            if self.notification_service:
+                property_obj = await self.property_repo.get_by_id(payload.property_id)
+                room_names = ", ".join([r.room_name for r in requested_rooms])
+                await NotificationEvents.fire(
+                    notification_type=NotificationType.WALKIN_BOOKING_CREATED,
+                    notification_service=self.notification_service,
+                    property_id=payload.property_id,
+                    organization_id=property_obj.tenant_id,
+                    actor_user_id=staff_user.id,
+                    entity_id=booking.id,
+                    ref_number=booking.ref_number,
+                    guest_name=payload.guest_full_name,
+                    room_names=room_names,
+                )
+
             # 10b. Upload citizenship photos if provided
             citizenship_photos_data = None
             if front_file or back_file:
@@ -1440,6 +1522,21 @@ class StaffOperationsService:
             )
 
             await self.db.commit()
+
+            # Fire cancellation notification
+            if self.notification_service:
+                property_obj = await self.property_repo.get_by_id(booking.property_id)
+                await NotificationEvents.fire(
+                    notification_type=NotificationType.BOOKING_CANCELLED,
+                    notification_service=self.notification_service,
+                    property_id=booking.property_id,
+                    organization_id=property_obj.tenant_id,
+                    actor_user_id=staff_user.id,
+                    entity_id=booking.id,
+                    ref_number=booking.ref_number,
+                    guest_name=self._resolve_guest_name(booking),
+                    reason=reason,
+                )
 
             message = "Booking cancelled successfully."
             if refund_due > 0:

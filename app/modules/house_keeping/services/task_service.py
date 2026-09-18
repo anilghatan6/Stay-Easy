@@ -20,6 +20,8 @@ from app.utils.exceptions import (
     StaffNotFound,
 )
 from app.utils.logging import LoggerFactory
+from app.modules.notifications.events import NotificationEvents
+from app.modules.notifications.models.notification_model import NotificationType
 
 logger = LoggerFactory.get_logger(__name__)
 
@@ -32,12 +34,14 @@ class TaskService:
         prop_repo: PropertyRepository,
         room_repo: RoomRepository,
         staff_repo: StaffRepository,
+        notification_service=None,
     ):
         self.db = db
         self.task_repo = task_repo
         self.prop_repo = prop_repo
         self.room_repo = room_repo
         self.staff_repo = staff_repo
+        self.notification_service = notification_service
 
     async def _log_activity(
         self,
@@ -168,6 +172,21 @@ class TaskService:
             },
         )
         await self.db.commit()
+
+        # Fire task assigned notification
+        if self.notification_service:
+            prop = await self.prop_repo.get_by_id(property_id)
+            await NotificationEvents.fire(
+                notification_type=NotificationType.TASK_ASSIGNED,
+                notification_service=self.notification_service,
+                property_id=property_id,
+                organization_id=prop.tenant_id,
+                actor_user_id=assigned_by_id,
+                entity_id=task.id,
+                assigned_staff_id=payload.assigned_staff_id,
+                task_type=payload.task_type,
+                room_name=room.room_name,
+            )
 
         return self._to_response_dict(task, room.room_name, staff.full_name)
 

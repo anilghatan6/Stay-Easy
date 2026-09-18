@@ -13,7 +13,10 @@ from app.modules.housekeeping_mobile.services.maintenance_service import Mainten
 from app.modules.housekeeping_mobile.services.history_service import HistoryService
 from app.modules.housekeeping_mobile.services.cleaning_service import CleaningService
 from app.modules.pms.repositories.room_repo import RoomRepository
+from app.modules.pms.repositories.properties_repo import PropertyRepository
 from app.Images.image_services import ImageService
+from app.modules.notifications.dependencies import get_notification_service
+from app.modules.notifications.services.notification_service import NotificationService
 
 
 def get_mobile_task_repository(db: AsyncSession = Depends(get_db)) -> MobileTaskRepository:
@@ -36,6 +39,10 @@ def get_mobile_room_repository(db: AsyncSession = Depends(get_db)) -> RoomReposi
     return RoomRepository(db)
 
 
+def get_mobile_property_repository(db: AsyncSession = Depends(get_db)) -> PropertyRepository:
+    return PropertyRepository(db)
+
+
 def get_mobile_image_service() -> ImageService:
     return ImageService()
 
@@ -43,8 +50,10 @@ def get_mobile_image_service() -> ImageService:
 def get_mobile_task_service(
     db: AsyncSession = Depends(get_db),
     task_repo: MobileTaskRepository = Depends(get_mobile_task_repository),
+    notification_service: NotificationService = Depends(get_notification_service),
+    prop_repo: PropertyRepository = Depends(get_mobile_property_repository),
 ) -> MobileTaskService:
-    return MobileTaskService(db=db, task_repo=task_repo)
+    return MobileTaskService(db=db, task_repo=task_repo, notification_service=notification_service, prop_repo=prop_repo)
 
 
 def get_schedule_service(
@@ -86,6 +95,8 @@ def get_cleaning_service(
     task_repo: MobileTaskRepository = Depends(get_mobile_task_repository),
     room_repo: RoomRepository = Depends(get_mobile_room_repository),
     image_service: ImageService = Depends(get_mobile_image_service),
+    notification_service: NotificationService = Depends(get_notification_service),
+    prop_repo: PropertyRepository = Depends(get_mobile_property_repository),
 ) -> CleaningService:
     return CleaningService(
         db=db,
@@ -93,4 +104,6 @@ def get_cleaning_service(
         task_repo=task_repo,
         room_repo=room_repo,
         image_service=image_service,
+        notification_service=notification_service,
+        prop_repo=prop_repo,
     )

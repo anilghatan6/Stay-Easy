@@ -9,14 +9,19 @@ from app.modules.house_keeping.models.task_model import TaskStatus
 from app.modules.pms.models.activity_log_model import PropertyActivityLog
 from app.utils.exceptions import ServiceException
 from app.utils.logging import LoggerFactory
+from app.modules.notifications.events import NotificationEvents
+from app.modules.notifications.models.notification_model import NotificationType
+from app.modules.pms.repositories.properties_repo import PropertyRepository
 
 logger = LoggerFactory.get_logger(__name__)
 
 
 class MobileTaskService:
-    def __init__(self, db: AsyncSession, task_repo: MobileTaskRepository):
+    def __init__(self, db: AsyncSession, task_repo: MobileTaskRepository, notification_service=None, prop_repo=None):
         self.db = db
         self.task_repo = task_repo
+        self.notification_service = notification_service
+        self.prop_repo = prop_repo or PropertyRepository(db)
 
     async def _log_activity(
         self,
@@ -135,4 +140,30 @@ class MobileTaskService:
         )
         await self.db.commit()
         await self.db.refresh(updated_task)
+
+        # Fire notification based on new status
+        if self.notification_service:
+            prop = await self.prop_repo.get_by_id(property_id)
+            room_name = task.room.room_name if task.room else "Unknown"
+            notification_type = None
+            if new_status == TaskStatus.IN_PROGRESS:
+                notification_type = NotificationType.TASK_STARTED
+            elif new_status == TaskStatus.COMPLETED:
+                notification_type = NotificationType.TASK_COMPLETED
+            elif new_status == TaskStatus.CANCELLED:
+                notification_type = NotificationType.TASK_CANCELLED
+
+            if notification_type:
+                await NotificationEvents.fire(
+                    notification_type=notification_type,
+                    notification_service=self.notification_service,
+                    property_id=property_id,
+                    organization_id=prop.tenant_id,
+                    actor_user_id=staff_id,
+                    entity_id=task.id,
+                    task_type=task.task_type,
+                    room_name=room_name,
+                    staff_name=staff_name,
+                )
+
         return self._to_response_dict(updated_task)

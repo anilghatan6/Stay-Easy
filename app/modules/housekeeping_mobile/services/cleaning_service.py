@@ -16,6 +16,9 @@ from app.modules.pms.models.activity_log_model import PropertyActivityLog
 from app.Images.image_services import ImageService
 from app.utils.exceptions import ServiceException, RoomNotFoundException
 from app.utils.logging import LoggerFactory
+from app.modules.notifications.events import NotificationEvents
+from app.modules.notifications.models.notification_model import NotificationType
+from app.modules.pms.repositories.properties_repo import PropertyRepository
 
 logger = LoggerFactory.get_logger(__name__)
 
@@ -28,12 +31,16 @@ class CleaningService:
         task_repo: MobileTaskRepository,
         room_repo: RoomRepository,
         image_service: ImageService,
+        notification_service=None,
+        prop_repo=None,
     ):
         self.db = db
         self.cleaning_repo = cleaning_repo
         self.task_repo = task_repo
         self.room_repo = room_repo
         self.image_service = image_service
+        self.notification_service = notification_service
+        self.prop_repo = prop_repo or PropertyRepository(db)
 
     async def _log_activity(
         self,
@@ -211,6 +218,20 @@ class CleaningService:
 
         await self.db.commit()
         await self.db.refresh(submission)
+
+        # Fire cleaning submitted notification
+        if self.notification_service:
+            prop = await self.prop_repo.get_by_id(property_id)
+            await NotificationEvents.fire(
+                notification_type=NotificationType.CLEANING_SUBMITTED,
+                notification_service=self.notification_service,
+                property_id=property_id,
+                organization_id=prop.tenant_id,
+                actor_user_id=staff_id,
+                entity_id=submission.id,
+                room_name=room_name,
+            )
+
         return self._to_response_dict(submission)
 
     async def get_my_submissions(
@@ -319,4 +340,24 @@ class CleaningService:
 
         await self.db.commit()
         await self.db.refresh(updated)
+
+        # Fire cleaning review notification
+        if self.notification_service:
+            prop = await self.prop_repo.get_by_id(property_id)
+            notification_type = (
+                NotificationType.CLEANING_APPROVED
+                if status == CleaningSubmissionStatus.APPROVED
+                else NotificationType.CLEANING_REJECTED
+            )
+            await NotificationEvents.fire(
+                notification_type=notification_type,
+                notification_service=self.notification_service,
+                property_id=property_id,
+                organization_id=prop.tenant_id,
+                actor_user_id=supervisor_user_id,
+                entity_id=submission.id,
+                assigned_staff_id=submission.staff_id,
+                room_name=room_name,
+            )
+
         return self._to_response_dict(updated)

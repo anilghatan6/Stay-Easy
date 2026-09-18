@@ -7,6 +7,8 @@ from app.modules.house_keeping.services.task_service import TaskService
 from app.modules.pms.repositories.properties_repo import PropertyRepository
 from app.modules.pms.repositories.room_repo import RoomRepository
 from app.modules.staff_mgmt.repositories.staffs_repository import StaffRepository
+from app.modules.notifications.dependencies import get_notification_service
+from app.modules.notifications.services.notification_service import NotificationService
 
 
 def get_task_repository(db: AsyncSession = Depends(get_db)) -> TaskRepository:
@@ -31,6 +33,7 @@ def get_task_service(
     prop_repo: PropertyRepository = Depends(get_property_repository),
     room_repo: RoomRepository = Depends(get_room_repository),
     staff_repo: StaffRepository = Depends(get_staff_repository),
+    notification_service: NotificationService = Depends(get_notification_service),
 ) -> TaskService:
     return TaskService(
         db=db,
@@ -38,4 +41,5 @@ def get_task_service(
         prop_repo=prop_repo,
         room_repo=room_repo,
         staff_repo=staff_repo,
+        notification_service=notification_service,
     )

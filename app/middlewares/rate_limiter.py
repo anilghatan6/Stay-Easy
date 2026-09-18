@@ -95,7 +95,7 @@ class RateLimiter:
 
         except HTTPException:
             raise  # Do not catch our own 429 exceptions
-        except RedisError as e:
+        except Exception as e:
             logger.error(f"[RateLimiter] Redis error, failing open: {e}")
             return
 

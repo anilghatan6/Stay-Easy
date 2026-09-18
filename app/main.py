@@ -50,6 +50,11 @@ from app.modules.housekeeping_mobile.routers.swap_router import router as mobile
 from app.modules.housekeeping_mobile.routers.leave_router import router as mobile_leave_router
 from app.modules.housekeeping_mobile.routers.history_router import router as mobile_history_router
 from app.modules.housekeeping_mobile.routers.cleaning_router import router as mobile_cleaning_router
+
+from app.modules.notifications.models import *
+from app.modules.notifications.routers.notification_router import router as notification_router
+from app.modules.notifications.routers.websocket_router import router as websocket_router
+
 from app.middlewares.cors import configure_cors
 from app.utils.exception_handlers import register_exception_handlers
 from app.utils.expiry_loop import _expire_stale_bookings_loop
@@ -130,6 +135,9 @@ app.include_router(mobile_swap_router)
 app.include_router(mobile_leave_router)
 app.include_router(mobile_history_router)
 app.include_router(mobile_cleaning_router)
+
+app.include_router(notification_router)
+app.include_router(websocket_router)
 
 
 @app.get("/")

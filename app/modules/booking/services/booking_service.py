@@ -27,6 +27,7 @@ from app.modules.pms.repositories.discount_code_repo import DiscountCodeReposito
 from app.modules.pms.repositories.offers_repo import SpecialOfferRepository
 from app.modules.pms.repositories.properties_repo import PropertyRepository
 from app.modules.pms.repositories.room_repo import RoomRepository
+from app.modules.auth.repositories.guests_repo import GuestRepository
 from app.utils.exceptions import (
     BookingException,
     InvalidDateException,
@@ -52,6 +53,8 @@ from app.utils.refund_calculator import (
     calculate_single_room_refund,
 )
 from app.utils.url_validation import validate_khalti_return_url
+from app.modules.notifications.events import NotificationEvents
+from app.modules.notifications.models.notification_model import NotificationType
 
 logger = LoggerFactory.get_logger(__name__)
 SOFT_LOCK_TTL_SECONDS = settings.SOFT_LOCK_TTL_SECONDS
@@ -69,6 +72,7 @@ class BookingService:
         redis_client,
         offer_repo: SpecialOfferRepository,
         discount_code_repo: DiscountCodeRepository,
+        notification_service=None,
     ):
         self.booking_repo = booking_repo
         self.room_repo = room_repo
@@ -79,11 +83,16 @@ class BookingService:
         self.db = db
         self.offer_repo = offer_repo
         self.discount_code_repo = discount_code_repo
+        self.notification_service = notification_service
 
     # ─────────────────────────── private helpers ─────────────────────────────
 
     def _generate_ref_number(self) -> str:
         return f"BK-{secrets.token_hex(4).upper()}"
+
+    async def _get_guest(self, guest_id):
+        guest_repo = GuestRepository(self.db)
+        return await guest_repo.get_guest_by_id(str(guest_id))
 
     async def _wait_for_idempotent_result(self, key: str) -> dict:
         """Poll up to 1 second for a concurrent duplicate request to finish."""
@@ -341,6 +350,24 @@ class BookingService:
             )
             await self.db.commit()
 
+            # Fire booking created notification
+            if self.notification_service:
+                prop = await self.property_repo.get_by_id(property_id)
+                guest = await self._get_guest(guest_id)
+                room_names = ", ".join([r.room_name for r in requested_rooms])
+                await NotificationEvents.fire(
+                    notification_type=NotificationType.BOOKING_CREATED,
+                    notification_service=self.notification_service,
+                    property_id=property_id,
+                    organization_id=prop.tenant_id,
+                    actor_user_id=None,
+                    actor_guest_id=guest_id,
+                    entity_id=booking.id,
+                    ref_number=booking.ref_number,
+                    guest_name=guest.full_name if guest else "Guest",
+                    room_names=room_names,
+                )
+
             # All bookings start as PENDING with soft-lock
             await self.redis.set(
                 f"booking:softlock:{booking.id}", "pending", ex=SOFT_LOCK_TTL_SECONDS
@@ -393,7 +420,7 @@ class BookingService:
             return await self._wait_for_idempotent_result(idempotency_key)
 
         try:
-            booking = await self.booking_repo.get_by_ref(ref_number)
+            booking = await self.booking_repo.get_by_ref_with_details(ref_number)
 
             if booking is None or booking.guest_id != guest_id:
                 response = {"status": "NOT_FOUND", "message": "Booking not found"}
@@ -465,6 +492,26 @@ class BookingService:
             await self.db.commit()
             await self.redis.delete(f"booking:softlock:{booking.id}")
 
+            # Fire booking confirmed notification
+            if self.notification_service:
+                prop = await self.property_repo.get_by_id(booking.property_id)
+                guest = await self._get_guest(booking.guest_id)
+                room_names = ", ".join(
+                    [br.room_unit.room_name for br in booking.booking_rooms if br.room_unit]
+                )
+                await NotificationEvents.fire(
+                    notification_type=NotificationType.BOOKING_CONFIRMED,
+                    notification_service=self.notification_service,
+                    property_id=booking.property_id,
+                    organization_id=prop.tenant_id,
+                    actor_user_id=None,
+                    actor_guest_id=booking.guest_id,
+                    entity_id=booking.id,
+                    ref_number=booking.ref_number,
+                    guest_name=guest.full_name if guest else "Guest",
+                    room_names=room_names,
+                )
+
             response = {
                 "status": "CONFIRMED",
                 "message": "Booking confirmed successfully",
@@ -496,7 +543,7 @@ class BookingService:
         background_tasks: Optional[BackgroundTasks] = None,
     ) -> dict:
         try:
-            booking = await self.booking_repo.get_by_ref(ref_number)
+            booking = await self.booking_repo.get_by_ref_with_details(ref_number)
 
             if booking is None:
                 raise BookingException("Booking not found")
@@ -531,6 +578,25 @@ class BookingService:
                     amount_paid=Decimal("0.00"),
                     amount_due=booking.total_amount,
                 )
+                if self.notification_service:
+                    # prop = await self.property_repo.get_by_id(booking.property_id)
+                    guest = await self._get_guest(booking.guest_id)
+                    room_names = ", ".join(
+                        [br.room_unit.room_name for br in booking.booking_rooms if br.room_unit]
+                    )
+                    await NotificationEvents.fire(
+                        notification_type=NotificationType.BOOKING_CONFIRMED,
+                        notification_service=self.notification_service,
+                        property_id=booking.property_id,
+                        organization_id=property_obj.tenant_id,
+                        actor_user_id=None,
+                        actor_guest_id=booking.guest_id,
+                        entity_id=booking.id,
+                        ref_number=booking.ref_number,
+                        guest_name=guest.full_name if guest else "Guest",
+                        room_names=room_names,
+                    )
+
                 await self.db.commit()
 
                 # Clear soft-lock
@@ -1053,6 +1119,26 @@ class BookingService:
 
             # 11. Commit
             await self.db.commit()
+
+            # Fire booking cancelled notification
+            if self.notification_service:
+                prop = await self.property_repo.get_by_id(booking.property_id)
+                guest = await self._get_guest(booking.guest_id)
+                room_names = ", ".join(
+                    [br.room_unit.room_name for br in booking.booking_rooms if br.room_unit]
+                )
+                await NotificationEvents.fire(
+                    notification_type=NotificationType.BOOKING_CANCELLED,
+                    notification_service=self.notification_service,
+                    property_id=booking.property_id,
+                    organization_id=prop.tenant_id,
+                    actor_user_id=None,
+                    actor_guest_id=booking.guest_id,
+                    entity_id=booking.id,
+                    ref_number=booking.ref_number,
+                    guest_name=guest.full_name if guest else "Guest",
+                    reason=reason if 'reason' in dir() else "Guest cancellation",
+                )
 
             return {
                 "ref_number": ref_number,

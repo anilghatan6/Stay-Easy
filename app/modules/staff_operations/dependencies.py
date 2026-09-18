@@ -14,12 +14,19 @@ from app.modules.pms.repositories.offers_repo import SpecialOfferRepository
 from app.modules.pms.repositories.discount_code_repo import DiscountCodeRepository
 from app.modules.folio.repository import FolioRepository
 from app.Images.image_services import ImageService
+from app.modules.notifications.dependencies import (
+    get_notification_service,
+    get_notification_dispatcher,
+)
+from app.modules.notifications.services.notification_service import NotificationService
+from app.modules.notifications.services.notification_dispatcher import ConnectionManager
 
 
 def get_staff_operations_service(
     db: AsyncSession = Depends(get_db),
     redis_client=Depends(get_redis_client),
     payment_service: PaymentService = Depends(get_payment_service),
+    notification_service: NotificationService = Depends(get_notification_service),
 ) -> StaffOperationsService:
     staff_ops_repo = StaffOperationsRepository(db)
     booking_repo = BookingRepository(db)
@@ -41,4 +48,5 @@ def get_staff_operations_service(
         folio_repo=folio_repo,
         image_service=image_service,
         payment_service=payment_service,
+        notification_service=notification_service,
     )
