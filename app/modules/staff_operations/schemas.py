@@ -199,6 +199,8 @@ class StaffCreateWalkinBookingRequest(BaseModel):
     @classmethod
     def uppercase_payment_method(cls, v: str) -> str:
         valid_methods = {"ONLINE", "ADVANCE", "PAY_ON_ARRIVAL"}
+        if isinstance(v, str) and v.strip().lower() in ("", "none", "null", "string"):
+            return "PAY_ON_ARRIVAL"
         v_upper = v.upper()
         if v_upper not in valid_methods:
             raise ValueError(
@@ -209,7 +211,7 @@ class StaffCreateWalkinBookingRequest(BaseModel):
     @field_validator("payment_gateway", mode="before")
     @classmethod
     def uppercase_gateway(cls, v: str | None) -> str | None:
-        if v is None:
+        if v is None or (isinstance(v, str) and v.strip().lower() in ("", "none", "null", "string")):
             return None
         payment_gateways = { "KHALTI", "ESEWA", "BANK_TRANSFER", "CASH", "CARD"}
         v_upper = v.upper()
