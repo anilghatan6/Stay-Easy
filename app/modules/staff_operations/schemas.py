@@ -66,7 +66,7 @@ class StaffBookingDetailResponse(BaseModel):
 
 
 class CheckInPaymentRequest(BaseModel):
-    amount: Optional[float] = Field(None, gt=0, description="Amount to pay at check-in")
+    amount: Optional[float] = Field(None, ge=0, description="Amount to pay at check-in")
     payment_gateway: Optional[str] = Field(
         None,
         max_length=20,
@@ -86,7 +86,7 @@ class CheckInPaymentRequest(BaseModel):
 
 
 class CheckOutPaymentRequest(BaseModel):
-    amount: float = Field(..., gt=0, description="Full remaining amount to pay at check-out (booking balance + folio charges)")
+    amount: float = Field(..., ge=0, description="Full remaining amount to pay at check-out (booking balance + folio charges)")
     payment_gateway: Optional[str] = Field(
         None,
         max_length=20,
