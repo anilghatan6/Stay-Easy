@@ -541,7 +541,7 @@ class StaffOperationsService:
 
             # Record optional payment at check-in
             if payment_amount is not None:
-                if payment_amount <= 0:
+                if payment_amount < 0:
                     raise BookingException("Payment amount must be positive")
                 if Decimal(str(payment_amount)) > booking.amount_due:
                     raise BookingException(
@@ -550,7 +550,7 @@ class StaffOperationsService:
 
                 new_amount_paid = booking.amount_paid + Decimal(str(payment_amount))
                 new_amount_due = booking.total_amount - new_amount_paid
-                if new_amount_due <= Decimal("0"):
+                if new_amount_due < Decimal("0"):
                     new_amount_due = Decimal("0.00")
                     new_payment_status = PaymentStatus.PAID
                 elif new_amount_paid > Decimal("0"):
@@ -659,7 +659,7 @@ class StaffOperationsService:
 
             # Record payment if provided
             if payment_amount is not None:
-                if payment_amount <= 0:
+                if payment_amount < 0:
                     raise BookingException("Payment amount must be positive")
                 if Decimal(str(payment_amount)) > grand_total:
                     raise BookingException(
