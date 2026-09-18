@@ -993,7 +993,7 @@ class StaffOperationsService:
     # ─────────────────────── Walk-in Booking ─────────────────────────────
 
     async def create_walkin_booking(
-        self, staff_user: User, payload
+        self, staff_user: User, payload, front_file=None, back_file=None
     ) -> dict:
         """Create a booking for a walk-in guest with contact info."""
         logger.info(
@@ -1195,6 +1195,31 @@ class StaffOperationsService:
 
             await self.db.commit()
 
+            # 10b. Upload citizenship photos if provided
+            citizenship_photos_data = None
+            if front_file or back_file:
+                citizenship_photos_data = {}
+                folder_name = f"bookings/{booking.id}/citizenship"
+
+                if front_file:
+                    if not front_file.content_type.startswith("image/"):
+                        raise BookingException("Front file must be an image.")
+                    front_url = await self.image_service._process_and_upload_single(
+                        folder_name=folder_name, file=front_file
+                    )
+                    citizenship_photos_data["front"] = front_url
+
+                if back_file:
+                    if not back_file.content_type.startswith("image/"):
+                        raise BookingException("Back file must be an image.")
+                    back_url = await self.image_service._process_and_upload_single(
+                        folder_name=folder_name, file=back_file
+                    )
+                    citizenship_photos_data["back"] = back_url
+
+                booking.citizenship_photos = citizenship_photos_data
+                await self.db.commit()
+
             # 11. Handle soft-lock / confirm
             if payment_method_str == "PAY_ON_ARRIVAL":
                 # Already confirmed, clear soft-lock
@@ -1257,6 +1282,7 @@ class StaffOperationsService:
                     "phone": booking_guest.phone,
                     "nationality": booking_guest.nationality,
                 },
+                "citizenship_photos": citizenship_photos_data,
                 "created_at": booking.created_at,
             }
 

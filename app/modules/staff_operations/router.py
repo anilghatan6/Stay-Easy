@@ -2,7 +2,7 @@ import uuid
 from datetime import date, timedelta
 from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, HTTPException, File, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, HTTPException, File, Form, UploadFile
 from fastapi import status as http_status
 
 from app.middlewares.auth_middlewares import CurrentStaff
@@ -133,13 +133,64 @@ async def modify_booking(
     status_code=201,
 )
 async def create_walkin_booking(
-    payload: StaffCreateWalkinBookingRequest,
-    staff: CurrentStaff,
-    staff_ops_service: Annotated[StaffOperationsService, Depends(get_staff_operations_service)],
+    idempotency_key: str = Form(...),
+    property_id: uuid.UUID = Form(...),
+    room_ids: str = Form(..., description='JSON array of room UUIDs, e.g. ["uuid1","uuid2"]'),
+    check_in: date = Form(...),
+    check_out: date = Form(...),
+    adults: int = Form(...),
+    children: int = Form(0),
+    guest_full_name: str = Form(...),
+    guest_email: str = Form(...),
+    guest_phone: Optional[str] = Form(None),
+    guest_nationality: Optional[str] = Form(None),
+    coupon_code: Optional[str] = Form(None),
+    payment_method: str = Form("PAY_ON_ARRIVAL"),
+    payment_gateway: Optional[str] = Form(None),
+    amount_paid: float = Form(0.0),
+    advance_amount: Optional[float] = Form(None),
+    special_requests: Optional[str] = Form(None),
+    front: Optional[UploadFile] = File(None, description="Front side of citizenship document"),
+    back: Optional[UploadFile] = File(None, description="Back side of citizenship document"),
+    staff: CurrentStaff = None,
+    staff_ops_service: StaffOperationsService = Depends(get_staff_operations_service),
 ):
+    import json
+    import re
+
+    room_ids_clean = room_ids.strip()
+    try:
+        parsed_room_ids = json.loads(room_ids_clean)
+    except json.JSONDecodeError:
+        parsed_room_ids = [r.strip() for r in re.split(r"[,;\s]+", room_ids_clean) if r.strip()]
+
+    if isinstance(parsed_room_ids, str):
+        parsed_room_ids = [parsed_room_ids]
+
+    payload = StaffCreateWalkinBookingRequest(
+        idempotency_key=idempotency_key,
+        property_id=property_id,
+        room_ids=parsed_room_ids,
+        check_in=check_in,
+        check_out=check_out,
+        adults=adults,
+        children=children,
+        guest_full_name=guest_full_name,
+        guest_email=guest_email,
+        guest_phone=guest_phone,
+        guest_nationality=guest_nationality,
+        coupon_code=coupon_code,
+        payment_method=payment_method,
+        payment_gateway=payment_gateway,
+        amount_paid=amount_paid,
+        advance_amount=advance_amount,
+        special_requests=special_requests,
+    )
     result = await staff_ops_service.create_walkin_booking(
         staff_user=staff,
         payload=payload,
+        front_file=front,
+        back_file=back,
     )
     return StandardResponse(data=StaffCreateWalkinBookingResponse(**result))
 

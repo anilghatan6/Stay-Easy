@@ -238,6 +238,11 @@ class StaffCancelBookingRequest(BaseModel):
     reason: str = Field(..., min_length=1, max_length=500)
 
 
+class WalkinCitizenshipPhotosInfo(BaseModel):
+    front: Optional[str] = None
+    back: Optional[str] = None
+
+
 class StaffCreateWalkinBookingResponse(BaseModel):
     booking_id: uuid.UUID
     ref_number: str
@@ -261,6 +266,7 @@ class StaffCreateWalkinBookingResponse(BaseModel):
     property: PropertyInfo
     rooms: list[RoomInfo]
     booking_guest: BookingGuestInfo
+    citizenship_photos: Optional[WalkinCitizenshipPhotosInfo] = None
     created_at: datetime
 
 
