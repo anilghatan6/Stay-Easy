@@ -6,7 +6,7 @@ from typing import Optional, Sequence
 from sqlalchemy import select, update, func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload
 
 from app.modules.booking.models.folio_models import Folio, FolioCharge
 from app.modules.booking.models.booking_model import Booking, BookingRoom
@@ -99,7 +99,13 @@ class FolioRepository:
                 select(Folio)
                 .join(Booking, Booking.id == Folio.booking_id)
                 .where(Booking.property_id == property_id)
-                .options(selectinload(Folio.charges))
+                .options(
+                    selectinload(Folio.charges),
+                    joinedload(Folio.booking)
+                    .joinedload(Booking.guest),
+                    joinedload(Folio.booking)
+                    .joinedload(Booking.booking_guest),
+                )
                 .order_by(Folio.created_at.desc())
                 .offset(skip)
                 .limit(limit)

@@ -276,10 +276,22 @@ class FolioService:
 
             folios_data = []
             for folio in folios:
+                guest_name = None
+                guest_email = None
+                if folio.booking:
+                    if folio.booking.guest:
+                        guest_name = folio.booking.guest.full_name
+                        guest_email = folio.booking.guest.email
+                    elif folio.booking.booking_guest:
+                        guest_name = folio.booking.booking_guest.full_name
+                        guest_email = folio.booking.booking_guest.email
+
                 folios_data.append({
                     "id": folio.id,
                     "booking_id": folio.booking_id,
                     "guest_id": folio.guest_id,
+                    "guest_name": guest_name,
+                    "guest_email": guest_email,
                     "status": folio.status.value,
                     "subtotal": float(folio.subtotal),
                     "tax": float(folio.tax),

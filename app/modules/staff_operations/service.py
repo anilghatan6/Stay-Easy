@@ -1724,6 +1724,22 @@ class StaffOperationsService:
 
             return {
                 "booking_id": booking.id,
+                "guest_name": self._resolve_guest_name(booking),
+                "guest_email": (
+                    booking.guest.email if booking.guest
+                    else booking.booking_guest.email if booking.booking_guest
+                    else ""
+                ),
+                "guest_phone" : (
+                    booking.guest.phone if booking.guest
+                    else booking.booking_guest.phone if booking.booking_guest
+                    else None
+                ),
+                "guest_nationality": (
+                    booking.guest.nationality if booking.guest
+                    else booking.booking_guest.nationality if booking.booking_guest
+                    else None
+                ),
                 "ref_number": booking.ref_number,
                 "status": booking.status.value if hasattr(booking.status, "value") else booking.status,
                 "checkin_date": booking.checkin_date,

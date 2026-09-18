@@ -52,6 +52,8 @@ class FolioResponse(BaseModel):
     id: uuid.UUID
     booking_id: uuid.UUID
     guest_id: Optional[uuid.UUID] = None
+    guest_name: Optional[str] = None
+    guest_email: Optional[str] = None
     status: str
     subtotal: Decimal
     tax: Decimal

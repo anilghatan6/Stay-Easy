@@ -397,6 +397,10 @@ class GuestFolioInfo(BaseModel):
 
 class GuestBookingDetail(BaseModel):
     booking_id: uuid.UUID
+    guest_name: str
+    guest_email: str
+    guest_phone: Optional[str] = None
+    guest_nationality: Optional[str] = None
     ref_number: str
     status: str
     checkin_date: date
