@@ -230,7 +230,9 @@ class StaffOperationsRepository:
             "total_amount": str(booking.total_amount),
             "amount_paid": str(booking.amount_paid),
             "amount_due": str(booking.amount_due),
-            "payment_status": booking.payment_status.value,
+            "payment_status": booking.payment_status.value
+            if hasattr(booking.payment_status, "value")
+            else booking.payment_status,
         }
 
         old_room_ids = [br.room_unit_id for br in booking.booking_rooms]

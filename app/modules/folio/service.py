@@ -5,13 +5,15 @@ from typing import Optional
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.folio.repository import FolioRepository
-from app.modules.booking.models.folio_models import Folio
+from app.modules.auth.models.users_model import User
 from app.modules.booking.models.booking_model import (
     Booking,
     MasterBookingStatus,
+    PaymentGateway,
+    PaymentStatus,
 )
-from app.modules.auth.models.users_model import User
+from app.modules.booking.models.folio_models import Folio
+from app.modules.folio.repository import FolioRepository
 from app.modules.staff_mgmt.models.staffs_model import Staff, StaffProperty
 from app.utils.exceptions import (
     BookingException,
@@ -69,9 +71,11 @@ class FolioService:
         return staff_name or staff_user.full_name or staff_user.email
 
     def _recalculate_folio_totals(self, folio) -> tuple[Decimal, Decimal]:
-        """Recalculate subtotal and total from charges + tax - discount."""
+        """Recalculate subtotal and total from charges with percentage-based tax/discount."""
         subtotal = sum(charge.amount for charge in folio.charges)
-        total = subtotal + folio.tax - folio.discount
+        tax_amount = subtotal * (folio.tax / Decimal("100"))
+        discount_amount = subtotal * (folio.discount / Decimal("100"))
+        total = subtotal + tax_amount - discount_amount
         if total < Decimal("0.00"):
             total = Decimal("0.00")
         return subtotal, total
@@ -96,6 +100,7 @@ class FolioService:
 
             # Fetch booking
             from sqlalchemy import select
+
             result = await self.db.execute(
                 select(Booking).where(Booking.ref_number == ref_number)
             )
@@ -127,6 +132,7 @@ class FolioService:
 
             # Auto-add room charges based on booked rooms and nights
             from sqlalchemy.orm import selectinload
+
             result = await self.db.execute(
                 select(Booking)
                 .where(Booking.id == booking.id)
@@ -138,6 +144,7 @@ class FolioService:
             for br in booking_with_rooms.booking_rooms:
                 # Fetch room base_rate
                 from app.modules.pms.models.rooms_model import Rooms
+
                 room_result = await self.db.execute(
                     select(Rooms).where(Rooms.id == br.room_unit_id)
                 )
@@ -173,7 +180,9 @@ class FolioService:
                     "amount": float(c.amount),
                     "category": c.category,
                     "posted_by": c.posted_by,
-                    "posted_by_name": staff_name if c.posted_by == staff_user.id else await self.folio_repo.get_staff_name_by_id(c.posted_by),
+                    "posted_by_name": staff_name
+                    if c.posted_by == staff_user.id
+                    else await self.folio_repo.get_staff_name_by_id(c.posted_by),
                     "posted_at": c.posted_at,
                 }
                 for c in folio.charges
@@ -227,26 +236,46 @@ class FolioService:
             charges_response = []
             for c in folio.charges:
                 staff_name = await self.folio_repo.get_staff_name_by_id(c.posted_by)
-                charges_response.append({
-                    "id": c.id,
-                    "folio_id": c.folio_id,
-                    "description": c.description,
-                    "amount": float(c.amount),
-                    "category": c.category,
-                    "posted_by": c.posted_by,
-                    "posted_by_name": staff_name,
-                    "posted_at": c.posted_at,
-                })
+                charges_response.append(
+                    {
+                        "id": c.id,
+                        "folio_id": c.folio_id,
+                        "description": c.description,
+                        "amount": float(c.amount),
+                        "category": c.category,
+                        "posted_by": c.posted_by,
+                        "posted_by_name": staff_name,
+                        "posted_at": c.posted_at,
+                    }
+                )
+
+            # Recalculate from charges to ensure accuracy
+            subtotal = (
+                sum(c.amount for c in folio.charges)
+                if folio.charges
+                else Decimal("0.00")
+            )
+            tax_amount = subtotal * (folio.tax / Decimal("100"))
+            discount_amount = subtotal * (folio.discount / Decimal("100"))
+            total = subtotal + tax_amount - discount_amount
+            if total < Decimal("0.00"):
+                total = Decimal("0.00")
+
+            remaining_balance = total - booking.amount_paid
+            if remaining_balance < Decimal("0.00"):
+                remaining_balance = Decimal("0.00")
 
             return {
                 "id": folio.id,
                 "booking_id": folio.booking_id,
                 "guest_id": folio.guest_id,
                 "status": folio.status.value,
-                "subtotal": float(folio.subtotal),
+                "subtotal": float(subtotal),
                 "tax": float(folio.tax),
                 "discount": float(folio.discount),
-                "total": float(folio.total),
+                "total": float(total),
+                "amount_paid": float(booking.amount_paid),
+                "remaining_balance": float(remaining_balance),
                 "settled_at": folio.settled_at,
                 "charges": charges_response,
                 "created_at": folio.created_at,
@@ -278,6 +307,7 @@ class FolioService:
             for folio in folios:
                 guest_name = None
                 guest_email = None
+                amount_paid = 0.0
                 if folio.booking:
                     if folio.booking.guest:
                         guest_name = folio.booking.guest.full_name
@@ -285,23 +315,44 @@ class FolioService:
                     elif folio.booking.booking_guest:
                         guest_name = folio.booking.booking_guest.full_name
                         guest_email = folio.booking.booking_guest.email
+                    amount_paid = float(folio.booking.amount_paid)
 
-                folios_data.append({
-                    "id": folio.id,
-                    "booking_id": folio.booking_id,
-                    "guest_id": folio.guest_id,
-                    "guest_name": guest_name,
-                    "guest_email": guest_email,
-                    "status": folio.status.value,
-                    "subtotal": float(folio.subtotal),
-                    "tax": float(folio.tax),
-                    "discount": float(folio.discount),
-                    "total": float(folio.total),
-                    "settled_at": folio.settled_at,
-                    "charges_count": len(folio.charges),
-                    "created_at": folio.created_at,
-                    "updated_at": folio.updated_at,
-                })
+                # Recalculate from charges to ensure accuracy
+                subtotal = (
+                    sum(c.amount for c in folio.charges)
+                    if folio.charges
+                    else Decimal("0.00")
+                )
+                tax_amount = subtotal * (folio.tax / Decimal("100"))
+                discount_amount = subtotal * (folio.discount / Decimal("100"))
+                folio_total = subtotal + tax_amount - discount_amount
+                if folio_total < Decimal("0.00"):
+                    folio_total = Decimal("0.00")
+
+                remaining_balance = folio_total - Decimal(str(amount_paid))
+                if remaining_balance < Decimal("0.00"):
+                    remaining_balance = Decimal("0.00")
+
+                folios_data.append(
+                    {
+                        "id": folio.id,
+                        "booking_id": folio.booking_id,
+                        "guest_id": folio.guest_id,
+                        "guest_name": guest_name,
+                        "guest_email": guest_email,
+                        "status": folio.status.value,
+                        "subtotal": float(subtotal),
+                        "tax": float(folio.tax),
+                        "discount": float(folio.discount),
+                        "total": float(folio_total),
+                        "amount_paid": amount_paid,
+                        "remaining_balance": float(remaining_balance),
+                        "settled_at": folio.settled_at,
+                        "charges_count": len(folio.charges),
+                        "created_at": folio.created_at,
+                        "updated_at": folio.updated_at,
+                    }
+                )
 
             has_more = skip + len(folios) < total
 
@@ -353,10 +404,11 @@ class FolioService:
                 folio_id, new_tax, new_discount
             )
 
-            # Recalculate totals
-            subtotal, total = self._recalculate_folio_totals(folio)
-            # Override with new tax/discount for total calc
-            total = subtotal + new_tax - new_discount
+            # Recalculate subtotal from charges, apply new tax/discount percentages
+            subtotal = sum(charge.amount for charge in folio.charges)
+            tax_amount = subtotal * (new_tax / Decimal("100"))
+            discount_amount = subtotal * (new_discount / Decimal("100"))
+            total = subtotal + tax_amount - discount_amount
             if total < Decimal("0.00"):
                 total = Decimal("0.00")
             await self.folio_repo.update_folio_totals(folio_id, subtotal, total)
@@ -381,12 +433,19 @@ class FolioService:
             logger.error(f"[FolioService] Error updating folio: {e}")
             raise ServiceException("Could not update folio.")
 
-    async def settle_folio(
+    # ─────────────────────── FOLIO PAYMENTS ─────────────────────────
+
+    async def pay_folio(
         self,
         folio_id: uuid.UUID,
         staff_user: User,
+        amount: Decimal,
+        payment_gateway: str,
     ) -> dict:
-        logger.info(f"[FolioService] Settling folio {folio_id}")
+        """Record a payment against a folio, reducing the outstanding balance."""
+        logger.info(
+            f"[FolioService] Recording payment of {amount} for folio {folio_id}"
+        )
         try:
             folio = await self.folio_repo.get_folio_by_id(folio_id)
             if folio is None:
@@ -394,7 +453,7 @@ class FolioService:
 
             if folio.status.value not in ("OPEN", "PARTIALLY_PAID"):
                 raise BookingException(
-                    f"Cannot settle folio in status {folio.status.value}"
+                    f"Cannot accept payment for folio in status {folio.status.value}"
                 )
 
             booking_result = await self.db.execute(
@@ -406,70 +465,95 @@ class FolioService:
 
             await self._verify_staff_property_access(staff_user, booking.property_id)
 
-            await self.folio_repo.settle_folio(folio_id)
-            await self.db.commit()
+            if amount <= Decimal("0.00"):
+                raise BookingException("Payment amount must be positive.")
 
-            folio = await self.folio_repo.get_folio_by_id(folio_id)
+            # Recalculate folio total from charges (don't trust stale DB value)
+            subtotal = (
+                sum(c.amount for c in folio.charges)
+                if folio.charges
+                else Decimal("0.00")
+            )
+            tax_amount = subtotal * (folio.tax / Decimal("100"))
+            discount_amount = subtotal * (folio.discount / Decimal("100"))
+            total = subtotal + tax_amount - discount_amount
+            if total < Decimal("0.00"):
+                total = Decimal("0.00")
 
-            return {
-                "id": folio.id,
-                "status": folio.status.value,
-                "total": float(folio.total),
-                "settled_at": folio.settled_at,
-                "message": "Folio settled successfully.",
-            }
+            # Update folio totals in DB to stay in sync
+            await self.folio_repo.update_folio_totals(folio_id, subtotal, total)
 
-        except (BookingException, PermissionException):
-            raise
-        except Exception as e:
-            await self.db.rollback()
-            logger.error(f"[FolioService] Error settling folio: {e}")
-            raise ServiceException("Could not settle folio.")
+            # Outstanding = folio total minus what guest already paid
+            outstanding = total - booking.amount_paid
+            if outstanding < Decimal("0.00"):
+                outstanding = Decimal("0.00")
 
-    async def waive_folio(
-        self,
-        folio_id: uuid.UUID,
-        staff_user: User,
-    ) -> dict:
-        logger.info(f"[FolioService] Waiving folio {folio_id}")
-        try:
-            folio = await self.folio_repo.get_folio_by_id(folio_id)
-            if folio is None:
-                raise BookingException("Folio not found")
-
-            if folio.status.value not in ("OPEN", "PARTIALLY_PAID"):
+            if amount > outstanding:
                 raise BookingException(
-                    f"Cannot waive folio in status {folio.status.value}"
+                    f"Payment amount ({float(amount):.2f}) exceeds outstanding balance ({float(outstanding):.2f}). "
+                    f"Folio total: {float(total):.2f}, already paid: {float(booking.amount_paid):.2f}"
                 )
 
-            booking_result = await self.db.execute(
-                select(Booking).where(Booking.id == folio.booking_id)
-            )
-            booking = booking_result.scalar_one_or_none()
-            if booking is None:
-                raise BookingException("Associated booking not found")
+            # Update booking payment tracking
+            booking.amount_paid = booking.amount_paid + amount
+            booking.amount_due = booking.total_amount - booking.amount_paid
+            if booking.amount_due < Decimal("0.00"):
+                booking.amount_due = Decimal("0.00")
 
-            await self._verify_staff_property_access(staff_user, booking.property_id)
+            # Update payment status
+            if booking.amount_due <= Decimal("0.00"):
+                booking.payment_status = PaymentStatus.PAID
+            elif booking.amount_paid > Decimal("0.00"):
+                booking.payment_status = PaymentStatus.PARTIAL
+            else:
+                booking.payment_status = PaymentStatus.UNPAID
 
-            await self.folio_repo.waive_folio(folio_id)
+            if payment_gateway:
+                booking.payment_gateway = (
+                    PaymentGateway(payment_gateway.upper())
+                    if isinstance(payment_gateway, str)
+                    else payment_gateway
+                )
+
+            # If folio is fully paid, mark as PAID; otherwise PARTIALLY_PAID
+            new_outstanding = total - booking.amount_paid
+            if new_outstanding <= Decimal("0.00"):
+                await self.folio_repo.settle_folio(folio_id)
+            elif folio.status.value == "OPEN":
+                await self.folio_repo.mark_partially_paid(folio_id)
+
             await self.db.commit()
 
             folio = await self.folio_repo.get_folio_by_id(folio_id)
+            remaining_balance = total - booking.amount_paid
 
             return {
-                "id": folio.id,
-                "status": folio.status.value,
-                "total": float(folio.total),
-                "settled_at": folio.settled_at,
-                "message": "Folio waived successfully.",
+                "folio_id": folio.id,
+                "folio_status": folio.status.value
+                if hasattr(folio.status, "value")
+                else folio.status,
+                "folio_total": float(folio.total),
+                "amount_paid": float(booking.amount_paid),
+                "remaining_balance": float(remaining_balance),
+                "payment_status": booking.payment_status.value
+                if hasattr(booking.payment_status, "value")
+                else booking.payment_status,
+                "payment_gateway": booking.payment_gateway
+                if isinstance(booking.payment_gateway, str)
+                else booking.payment_gateway.value
+                if booking.payment_gateway
+                else None,
+                "message": f"Payment of {float(amount):.2f} recorded successfully.",
             }
 
         except (BookingException, PermissionException):
             raise
         except Exception as e:
             await self.db.rollback()
-            logger.error(f"[FolioService] Error waiving folio: {e}")
-            raise ServiceException("Could not waive folio.")
+            logger.error(
+                f"[FolioService] Error recording payment for folio {folio_id}: {e}"
+            )
+            raise ServiceException("Could not record payment.")
 
     # ─────────────────────── CHARGE CRUD ─────────────────────────
 
@@ -487,10 +571,6 @@ class FolioService:
             if folio is None:
                 raise BookingException("Folio not found")
 
-            if folio.status.value not in ("OPEN", "PARTIALLY_PAID"):
-                raise BookingException(
-                    f"Cannot add charge to folio in status {folio.status.value}"
-                )
 
             booking_result = await self.db.execute(
                 select(Booking).where(Booking.id == folio.booking_id)
@@ -498,6 +578,12 @@ class FolioService:
             booking = booking_result.scalar_one_or_none()
             if booking is None:
                 raise BookingException("Associated booking not found")
+
+            if booking.status not in (MasterBookingStatus.CHECKED_IN):
+                raise BookingException(
+                    f"Cannot add charge to folio for booking in status {booking.status}. "
+                    "Guest must be checked in first."
+                )
 
             await self._verify_staff_property_access(staff_user, booking.property_id)
 
@@ -516,14 +602,6 @@ class FolioService:
             folio = await self.folio_repo.get_folio_by_id(folio_id)
             subtotal, total = self._recalculate_folio_totals(folio)
             await self.folio_repo.update_folio_totals(folio_id, subtotal, total)
-
-            # Update folio status based on total
-            new_status = "OPEN"
-            if total > Decimal("0.00") and folio.status.value == "OPEN":
-                new_status = "PARTIALLY_PAID"
-            await self.db.execute(
-                update(Folio).where(Folio.id == folio_id).values(status=new_status)
-            )
 
             await self.db.commit()
 
@@ -574,16 +652,18 @@ class FolioService:
             charges_response = []
             for c in charges:
                 staff_name = await self.folio_repo.get_staff_name_by_id(c.posted_by)
-                charges_response.append({
-                    "id": c.id,
-                    "folio_id": c.folio_id,
-                    "description": c.description,
-                    "amount": float(c.amount),
-                    "category": c.category,
-                    "posted_by": c.posted_by,
-                    "posted_by_name": staff_name,
-                    "posted_at": c.posted_at,
-                })
+                charges_response.append(
+                    {
+                        "id": c.id,
+                        "folio_id": c.folio_id,
+                        "description": c.description,
+                        "amount": float(c.amount),
+                        "category": c.category,
+                        "posted_by": c.posted_by,
+                        "posted_by_name": staff_name,
+                        "posted_at": c.posted_at,
+                    }
+                )
 
             return charges_response
 
@@ -608,17 +688,18 @@ class FolioService:
             if folio is None:
                 raise BookingException("Folio not found")
 
-            if folio.status.value not in ("OPEN", "PARTIALLY_PAID"):
-                raise BookingException(
-                    f"Cannot update charge on folio in status {folio.status.value}"
-                )
-
             booking_result = await self.db.execute(
                 select(Booking).where(Booking.id == folio.booking_id)
             )
             booking = booking_result.scalar_one_or_none()
             if booking is None:
                 raise BookingException("Associated booking not found")
+
+            if booking.status not in (MasterBookingStatus.CHECKED_IN):
+                raise BookingException(
+                    f"Cannot update charge for booking in status {booking.status}. "
+                    "Guest must be checked in first."
+                )
 
             await self._verify_staff_property_access(staff_user, booking.property_id)
 
@@ -645,7 +726,9 @@ class FolioService:
 
             # Fetch updated charge
             updated_charge = await self.folio_repo.get_charge_by_id(folio_id, charge_id)
-            staff_name = await self.folio_repo.get_staff_name_by_id(updated_charge.posted_by)
+            staff_name = await self.folio_repo.get_staff_name_by_id(
+                updated_charge.posted_by
+            )
 
             return {
                 "id": updated_charge.id,
@@ -679,17 +762,18 @@ class FolioService:
             if folio is None:
                 raise BookingException("Folio not found")
 
-            if folio.status.value not in ("OPEN", "PARTIALLY_PAID"):
-                raise BookingException(
-                    f"Cannot delete charge on folio in status {folio.status.value}"
-                )
-
             booking_result = await self.db.execute(
                 select(Booking).where(Booking.id == folio.booking_id)
             )
             booking = booking_result.scalar_one_or_none()
             if booking is None:
                 raise BookingException("Associated booking not found")
+
+            if booking.status not in (MasterBookingStatus.CHECKED_IN):
+                raise BookingException(
+                    f"Cannot delete charge for booking in status {booking.status}. "
+                    "Guest must be checked in first."
+                )
 
             await self._verify_staff_property_access(staff_user, booking.property_id)
 

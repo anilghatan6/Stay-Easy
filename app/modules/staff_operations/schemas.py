@@ -192,7 +192,6 @@ class StaffCreateWalkinBookingRequest(BaseModel):
     payment_method: str = Field(default="PAY_ON_ARRIVAL", max_length=20)
     payment_gateway: Optional[str] = Field(None, max_length=20)
     amount_paid: Decimal = Field(default=Decimal("0.00"), ge=0)
-    advance_amount: Optional[Decimal] = Field(None, ge=0)
     special_requests: Optional[str] = Field(None, max_length=1000)
 
     @field_validator("payment_method", mode="before")
@@ -259,7 +258,6 @@ class StaffCreateWalkinBookingResponse(BaseModel):
     payment_status: str
     amount_paid: float
     amount_due: float
-    advance_amount: Optional[float] = None
     total_amount: float
     subtotal: float
     coupon_code: Optional[str] = None
@@ -397,10 +395,15 @@ class GuestFolioInfo(BaseModel):
     status: str
     subtotal: float
     tax: float
+    tax_amount: float
     discount: float
+    discount_amount: float
     total: float
+    amount_paid: float = 0.0
+    remaining_balance: float = 0.0
     charges_count: int
     settled_at: Optional[datetime] = None
+    charges: Optional[list[dict]] = None  # List of folio charges, each charge is a dict with details
 
 
 class GuestBookingDetail(BaseModel):

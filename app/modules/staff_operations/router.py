@@ -148,7 +148,6 @@ async def create_walkin_booking(
     payment_method: str = Form("PAY_ON_ARRIVAL"),
     payment_gateway: Optional[str] = Form(None),
     amount_paid: float = Form(0.0),
-    advance_amount: Optional[float] = Form(None),
     special_requests: Optional[str] = Form(None),
     front: Optional[UploadFile] = File(None, description="Front side of citizenship document"),
     back: Optional[UploadFile] = File(None, description="Back side of citizenship document"),
@@ -183,7 +182,6 @@ async def create_walkin_booking(
         payment_method=payment_method,
         payment_gateway=payment_gateway,
         amount_paid=amount_paid,
-        advance_amount=advance_amount,
         special_requests=special_requests,
     )
     result = await staff_ops_service.create_walkin_booking(

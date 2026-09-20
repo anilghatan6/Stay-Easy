@@ -7,13 +7,25 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class CreateFolioRequest(BaseModel):
-    tax: Decimal = Field(default=Decimal("0.00"), ge=0, decimal_places=2)
-    discount: Decimal = Field(default=Decimal("0.00"), ge=0, decimal_places=2)
+    tax: Decimal = Field(
+        default=Decimal("0.00"), ge=0, le=100, decimal_places=2,
+        description="Tax percentage (e.g., 18 for 18%)",
+    )
+    discount: Decimal = Field(
+        default=Decimal("0.00"), ge=0, le=100, decimal_places=2,
+        description="Discount percentage (e.g., 10 for 10%)",
+    )
 
 
 class UpdateFolioRequest(BaseModel):
-    tax: Optional[Decimal] = Field(None, ge=0, decimal_places=2)
-    discount: Optional[Decimal] = Field(None, ge=0, decimal_places=2)
+    tax: Optional[Decimal] = Field(
+        None, ge=0, le=100, decimal_places=2,
+        description="Tax percentage (e.g., 18 for 18%)",
+    )
+    discount: Optional[Decimal] = Field(
+        None, ge=0, le=100, decimal_places=2,
+        description="Discount percentage (e.g., 10 for 10%)",
+    )
 
 
 class AddChargeRequest(BaseModel):
@@ -31,6 +43,27 @@ class UpdateChargeRequest(BaseModel):
     description: Optional[str] = Field(None, min_length=1, max_length=255)
     amount: Optional[Decimal] = Field(None, decimal_places=2)
     category: Optional[str] = Field(None, min_length=1, max_length=50)
+
+
+class PayFolioRequest(BaseModel):
+    amount: Decimal = Field(..., gt=0, decimal_places=2, description="Payment amount")
+    payment_gateway: str = Field(
+        ...,
+        min_length=1,
+        max_length=30,
+        description="Payment gateway: CASH, CARD, STRIPE, RAZORPAY, KHALTI, ESEWA, BANK_TRANSFER",
+    )
+
+
+class PayFolioResponse(BaseModel):
+    folio_id: uuid.UUID
+    folio_status: str
+    folio_total: float
+    amount_paid: float
+    remaining_balance: float
+    payment_status: str
+    payment_gateway: Optional[str] = None
+    message: str
 
 
 class FolioChargeResponse(BaseModel):
@@ -59,6 +92,8 @@ class FolioResponse(BaseModel):
     tax: Decimal
     discount: Decimal
     total: Decimal
+    amount_paid: float = 0.0
+    remaining_balance: float = 0.0
     settled_at: Optional[datetime] = None
     charges_count: int = 0
     created_at: datetime
@@ -76,6 +111,8 @@ class FolioDetailResponse(BaseModel):
     tax: Decimal
     discount: Decimal
     total: Decimal
+    amount_paid: float = 0.0
+    remaining_balance: float = 0.0
     settled_at: Optional[datetime] = None
     charges: List[FolioChargeResponse] = Field(default_factory=list)
     created_at: datetime

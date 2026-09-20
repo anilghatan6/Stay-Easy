@@ -166,6 +166,18 @@ class FolioRepository:
             logger.error(f"[FolioRepository] Failed to settle folio: {e}")
             raise RepositoryException("Failed to settle folio.")
 
+    async def mark_partially_paid(self, folio_id: uuid.UUID) -> None:
+        logger.info(f"[FolioRepository] Marking folio {folio_id} as PARTIALLY_PAID")
+        try:
+            await self.db.execute(
+                update(Folio)
+                .where(Folio.id == folio_id)
+                .values(status="PARTIALLY_PAID")
+            )
+        except SQLAlchemyError as e:
+            logger.error(f"[FolioRepository] Failed to mark folio as PARTIALLY_PAID: {e}")
+            raise RepositoryException("Failed to update folio status.")
+
     async def waive_folio(self, folio_id: uuid.UUID) -> None:
         logger.info(f"[FolioRepository] Waiving folio {folio_id}")
         try:

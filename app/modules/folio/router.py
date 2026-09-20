@@ -14,6 +14,8 @@ from app.modules.folio.schemas import (
     FolioDetailResponse,
     FolioListResponse,
     FolioResponse,
+    PayFolioRequest,
+    PayFolioResponse,
     UpdateChargeRequest,
     UpdateFolioRequest,
 )
@@ -131,50 +133,33 @@ async def update_folio(
     return StandardResponse(data=FolioResponse(**result))
 
 
+# ─────────────────────── PAYMENT ENDPOINTS ─────────────────────────
+
+
 @router.post(
-    "/folios/{folio_id}/settle",
-    response_model=StandardResponse[FolioResponse],
-    status_code=status.HTTP_200_OK,
-    summary="Settle a folio (mark as PAID)",
+    "/folios/{folio_id}/payments",
+    response_model=StandardResponse[PayFolioResponse],
+    status_code=status.HTTP_201_CREATED,
+    summary="Record a payment against a folio",
     dependencies=[
         Depends(bypass_global_limit),
-        Depends(RateLimiter(max_requests=10, window_seconds=60, scope="folio/settle")),
+        Depends(RateLimiter(max_requests=30, window_seconds=60, scope="folio/pay")),
     ],
 )
-async def settle_folio(
+async def pay_folio(
     folio_id: uuid.UUID,
+    body: PayFolioRequest,
     staff: CurrentStaff,
     folio_service: FolioService = Depends(get_folio_service),
 ):
     verify_tenant(staff)
-    result = await folio_service.settle_folio(
+    result = await folio_service.pay_folio(
         folio_id=folio_id,
         staff_user=staff,
+        amount=body.amount,
+        payment_gateway=body.payment_gateway,
     )
-    return StandardResponse(data=FolioResponse(**result))
-
-
-@router.post(
-    "/folios/{folio_id}/waive",
-    response_model=StandardResponse[FolioResponse],
-    status_code=status.HTTP_200_OK,
-    summary="Waive a folio balance",
-    dependencies=[
-        Depends(bypass_global_limit),
-        Depends(RateLimiter(max_requests=10, window_seconds=60, scope="folio/waive")),
-    ],
-)
-async def waive_folio(
-    folio_id: uuid.UUID,
-    staff: CurrentStaff,
-    folio_service: FolioService = Depends(get_folio_service),
-):
-    verify_tenant(staff)
-    result = await folio_service.waive_folio(
-        folio_id=folio_id,
-        staff_user=staff,
-    )
-    return StandardResponse(data=FolioResponse(**result))
+    return StandardResponse(data=PayFolioResponse(**result))
 
 
 # ─────────────────────── CHARGE ENDPOINTS ─────────────────────────

@@ -1,51 +1,52 @@
-import uuid
-from datetime import date, datetime, timezone, timedelta
-from decimal import Decimal
 import math
 import secrets
+import uuid
+from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Optional
 
 from fastapi import BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.database_config import AsyncSessionLocal
-from app.modules.staff_operations.repository import StaffOperationsRepository
-from app.modules.booking.repositories.booking_repository import BookingRepository
-from app.modules.pms.repositories.room_repo import RoomRepository
-from app.modules.pms.repositories.properties_repo import PropertyRepository
-from app.modules.pms.repositories.offers_repo import SpecialOfferRepository
-from app.modules.pms.repositories.discount_code_repo import DiscountCodeRepository
-from app.modules.folio.repository import FolioRepository
 from app.Images.image_services import ImageService
-from app.modules.pms.models.rooms_model import RoomStatus
-from app.modules.pms.models.activity_log_model import PropertyActivityLog
+from app.modules.auth.models.users_model import User
 from app.modules.booking.models.booking_model import (
+    BookingType,
     MasterBookingStatus,
+    PaymentGateway,
     PaymentMethod,
     PaymentStatus,
-    BookingType,
-    PaymentGateway
 )
-from app.modules.auth.models.users_model import User
 from app.modules.booking.models.booking_modification_log import BookingModificationLog
+from app.modules.booking.repositories.booking_repository import BookingRepository
 from app.modules.booking.services.payment_service import PaymentService
+from app.modules.folio.repository import FolioRepository
+from app.modules.notifications.events import NotificationEvents
+from app.modules.notifications.models.notification_model import NotificationType
+from app.modules.pms.models.activity_log_model import PropertyActivityLog
+from app.modules.pms.models.rooms_model import RoomStatus
+from app.modules.pms.repositories.discount_code_repo import DiscountCodeRepository
+from app.modules.pms.repositories.offers_repo import SpecialOfferRepository
+from app.modules.pms.repositories.properties_repo import PropertyRepository
+from app.modules.pms.repositories.room_repo import RoomRepository
+from app.modules.staff_operations.repository import StaffOperationsRepository
+from app.modules.staff_operations.schemas import ModifyBookingRequest
 from app.utils.exceptions import (
     BookingException,
     InvalidDateException,
     PaymentGatewayError,
     PermissionException,
-    ServiceException,
     RoomsUnavailableError,
+    ServiceException,
 )
 from app.utils.logging import LoggerFactory
-from app.utils.refund_calculator import calculate_refund_amount
 from app.utils.mail_services import (
     send_booking_cancelled_guest_email,
     send_booking_cancelled_owner_email,
 )
-from app.modules.staff_operations.schemas import ModifyBookingRequest
-from app.modules.notifications.events import NotificationEvents
-from app.modules.notifications.models.notification_model import NotificationType
+from app.utils.refund_calculator import calculate_refund_amount
+
 logger = LoggerFactory.get_logger(__name__)
 
 
@@ -335,9 +336,7 @@ class StaffOperationsService:
         except PermissionException:
             raise
         except Exception as e:
-            logger.error(
-                f"[StaffOperationsService] Error getting room calendar: {e}"
-            )
+            logger.error(f"[StaffOperationsService] Error getting room calendar: {e}")
             raise ServiceException("Could not fetch room calendar.")
 
     def _build_front_desk_booking(self, booking) -> dict:
@@ -364,8 +363,12 @@ class StaffOperationsService:
             {
                 "room_id": br.room_unit.id,
                 "room_name": br.room_unit.room_name,
-                "room_type": br.room_unit.room_type.room_type_name if br.room_unit.room_type else "",
-                "bed_type": br.room_unit.bed_type.bed_name if br.room_unit.bed_type else "",
+                "room_type": br.room_unit.room_type.room_type_name
+                if br.room_unit.room_type
+                else "",
+                "bed_type": br.room_unit.bed_type.bed_name
+                if br.room_unit.bed_type
+                else "",
                 "base_rate": float(br.room_unit.base_rate),
             }
             for br in booking.booking_rooms
@@ -375,8 +378,12 @@ class StaffOperationsService:
         return {
             "booking_id": booking.id,
             "ref_number": booking.ref_number,
-            "status": booking.status.value if hasattr(booking.status, "value") else booking.status,
-            "booking_type": booking.booking_type.value if hasattr(booking.booking_type, "value") else booking.booking_type,
+            "status": booking.status.value
+            if hasattr(booking.status, "value")
+            else booking.status,
+            "booking_type": booking.booking_type.value
+            if hasattr(booking.booking_type, "value")
+            else booking.booking_type,
             "guest": guest,
             "rooms": rooms,
             "checkin_date": booking.checkin_date,
@@ -384,12 +391,17 @@ class StaffOperationsService:
             "number_of_adults": booking.number_of_adults,
             "number_of_children": booking.number_of_children,
             "special_requests": booking.special_requests,
-            "payment_method": booking.payment_method.value if hasattr(booking.payment_method, "value") else booking.payment_method,
-            "payment_status": booking.payment_status.value if hasattr(booking.payment_status, "value") else booking.payment_status,
-            "payment_gateway": booking.payment_gateway.value if booking.payment_gateway and hasattr(booking.payment_gateway, "value") else booking.payment_gateway,
+            "payment_method": booking.payment_method.value
+            if hasattr(booking.payment_method, "value")
+            else booking.payment_method,
+            "payment_status": booking.payment_status.value
+            if hasattr(booking.payment_status, "value")
+            else booking.payment_status,
+            "payment_gateway": booking.payment_gateway.value
+            if booking.payment_gateway and hasattr(booking.payment_gateway, "value")
+            else booking.payment_gateway,
             "amount_paid": float(booking.amount_paid),
             "amount_due": float(booking.amount_due),
-            "advance_amount": float(booking.advance_amount) if booking.advance_amount else None,
             "total_amount": float(booking.total_amount),
             "created_at": booking.created_at,
         }
@@ -406,9 +418,7 @@ class StaffOperationsService:
             staff_record.id, property_id
         )
         if not assigned:
-            raise PermissionException(
-                "You are not assigned to this property"
-            )
+            raise PermissionException("You are not assigned to this property")
 
     def _build_room_info(self, room) -> dict:
         return {
@@ -458,18 +468,20 @@ class StaffOperationsService:
             "always_allow_check_in_out": property_obj.always_allow_check_in_out,
         }
 
-    async def get_booking_for_staff(
-        self, ref_number: str, staff_user: User
-    ) -> dict:
+    async def get_booking_for_staff(self, ref_number: str, staff_user: User) -> dict:
         """Get booking detail for staff, verifying property assignment."""
         logger.info(f"[StaffOperationsService] Getting booking {ref_number} for staff")
         try:
-            booking = await self.staff_ops_repo.get_booking_by_ref_with_details(ref_number)
+            booking = await self.staff_ops_repo.get_booking_by_ref_with_details(
+                ref_number
+            )
             if booking is None:
                 raise BookingException("Booking not found")
 
             if staff_user.role != "admin":
-                await self._verify_staff_property_assignment(staff_user, booking.property_id)
+                await self._verify_staff_property_assignment(
+                    staff_user, booking.property_id
+                )
 
             rooms = [br.room_unit for br in booking.booking_rooms if br.room_unit]
             rooms_data = [self._build_room_info(r) for r in rooms]
@@ -477,10 +489,18 @@ class StaffOperationsService:
             return {
                 "booking_id": booking.id,
                 "ref_number": booking.ref_number,
-                "status": booking.status.value if hasattr(booking.status, "value") else booking.status,
-                "booking_type": booking.booking_type.value if hasattr(booking.booking_type, "value") else booking.booking_type,
-                "payment_status": booking.payment_status.value if hasattr(booking.payment_status, "value") else booking.payment_status,
-                "payment_method": booking.payment_method.value if hasattr(booking.payment_method, "value") else booking.payment_method,
+                "status": booking.status.value
+                if hasattr(booking.status, "value")
+                else booking.status,
+                "booking_type": booking.booking_type.value
+                if hasattr(booking.booking_type, "value")
+                else booking.booking_type,
+                "payment_status": booking.payment_status.value
+                if hasattr(booking.payment_status, "value")
+                else booking.payment_status,
+                "payment_method": booking.payment_method.value
+                if hasattr(booking.payment_method, "value")
+                else booking.payment_method,
                 "amount_paid": float(booking.amount_paid),
                 "amount_due": float(booking.amount_due),
                 "refund_due": float(booking.refund_due),
@@ -495,8 +515,12 @@ class StaffOperationsService:
                 "coupon_discount": float(booking.coupon_discount),
                 "property": self._build_property_info(booking.property),
                 "rooms": rooms_data,
-                "guest": self._build_guest_info(booking) if not booking.booking_guest else None,
-                "booking_guest": self._build_guest_info(booking) if booking.booking_guest else None,
+                "guest": self._build_guest_info(booking)
+                if not booking.booking_guest
+                else None,
+                "booking_guest": self._build_guest_info(booking)
+                if booking.booking_guest
+                else None,
                 "total_amount": float(booking.total_amount),
                 "subtotal": float(booking.subtotal),
                 "created_at": booking.created_at,
@@ -520,12 +544,16 @@ class StaffOperationsService:
         """Check in a guest. Validates booking status and staff assignment. Optionally records payment."""
         logger.info(f"[StaffOperationsService] Checking in {ref_number}")
         try:
-            booking = await self.staff_ops_repo.get_booking_by_ref_with_details(ref_number)
+            booking = await self.staff_ops_repo.get_booking_by_ref_with_details(
+                ref_number
+            )
             if booking is None:
                 raise BookingException("Booking not found")
 
             if staff_user.role != "admin":
-                await self._verify_staff_property_assignment(staff_user, booking.property_id)
+                await self._verify_staff_property_assignment(
+                    staff_user, booking.property_id
+                )
 
             property_obj = booking.property
             today = datetime.now(timezone.utc).date()
@@ -574,7 +602,8 @@ class StaffOperationsService:
             room_ids = [br.room_unit_id for br in booking.booking_rooms]
             if room_ids:
                 await self.staff_ops_repo.update_rooms_status(
-                    room_ids, RoomStatus.OCCUPIED,
+                    room_ids,
+                    RoomStatus.OCCUPIED,
                     property_id=booking.property_id,
                     staff_id=staff_user.id,
                     staff_name=staff_name,
@@ -591,18 +620,49 @@ class StaffOperationsService:
                 booking_id=booking.id,
                 extra_data={
                     "guest_name": self._resolve_guest_name(booking),
-                    "room_names": [br.room_unit.room_name for br in booking.booking_rooms if br.room_unit],
+                    "room_names": [
+                        br.room_unit.room_name
+                        for br in booking.booking_rooms
+                        if br.room_unit
+                    ],
                     "payment_amount": payment_amount,
                     "payment_gateway": payment_gateway,
                 },
             )
 
+            # Build response before commit so rollback works on any error
+            rooms = [br.room_unit for br in booking.booking_rooms if br.room_unit]
+            rooms_data = [self._build_room_info(r) for r in rooms]
+
+            response = {
+                "ref_number": ref_number,
+                "status": MasterBookingStatus.CHECKED_IN.value,
+                "checked_in_at": checked_in.checked_in_at,
+                "property_name": property_obj.name,
+                "rooms": rooms_data,
+                "guest_name": self._resolve_guest_name(booking),
+                "amount_paid": float(booking.amount_paid),
+                "amount_due": float(booking.amount_due),
+                "payment_status": booking.payment_status.value
+                if hasattr(booking.payment_status, "value")
+                else booking.payment_status,
+                "payment_gateway": booking.payment_gateway.value
+                if booking.payment_gateway
+                and hasattr(booking.payment_gateway, "value")
+                else booking.payment_gateway,
+                "message": "Guest checked in successfully",
+            }
+
             await self.db.commit()
 
-            # Fire notification
+            # Fire notification (after commit, fire-and-forget)
             if self.notification_service:
                 room_names = ", ".join(
-                    [br.room_unit.room_name for br in booking.booking_rooms if br.room_unit]
+                    [
+                        br.room_unit.room_name
+                        for br in booking.booking_rooms
+                        if br.room_unit
+                    ]
                 )
                 await NotificationEvents.fire(
                     notification_type=NotificationType.BOOKING_CHECKED_IN,
@@ -616,23 +676,7 @@ class StaffOperationsService:
                     room_names=room_names,
                 )
 
-            # Build response
-            rooms = [br.room_unit for br in booking.booking_rooms if br.room_unit]
-            rooms_data = [self._build_room_info(r) for r in rooms]
-
-            return {
-                "ref_number": ref_number,
-                "status": MasterBookingStatus.CHECKED_IN.value,
-                "checked_in_at": checked_in.checked_in_at,
-                "property_name": property_obj.name,
-                "rooms": rooms_data,
-                "guest_name": self._resolve_guest_name(booking),
-                "amount_paid": float(booking.amount_paid),
-                "amount_due": float(booking.amount_due),
-                "payment_status": booking.payment_status.value,
-                "payment_gateway": booking.payment_gateway.value if booking.payment_gateway else None,
-                "message": "Guest checked in successfully",
-            }
+            return response
 
         except (BookingException, PermissionException):
             await self.db.rollback()
@@ -651,78 +695,103 @@ class StaffOperationsService:
         payment_amount: Optional[float] = None,
         payment_gateway: Optional[str] = None,
     ) -> dict:
-        """Check out a guest. Enforces full payment (booking + folio charges)."""
+        """Check out a guest. Enforces full payment before check-out."""
         logger.info(f"[StaffOperationsService] Checking out {ref_number}")
         try:
-            booking = await self.staff_ops_repo.get_booking_by_ref_with_details(ref_number)
+            booking = await self.staff_ops_repo.get_booking_by_ref_with_details(
+                ref_number
+            )
             if booking is None:
                 raise BookingException("Booking not found")
 
             if staff_user.role != "admin":
-                await self._verify_staff_property_assignment(staff_user, booking.property_id)
+                await self._verify_staff_property_assignment(
+                    staff_user, booking.property_id
+                )
 
             property_obj = booking.property
-            today = datetime.now(timezone.utc).date()
 
-            # Validate check-out date (unless always_allow_check_in_out is set)
-            if not property_obj.always_allow_check_in_out:
-                if booking.checkout_date != today:
-                    raise BookingException(
-                        f"Check-out date mismatch. Expected {booking.checkout_date}, got {today}"
-                    )
-
-            # Calculate grand total: booking amount_due + folio charges
+            # Calculate outstanding based on whether folio exists
             folio = await self.folio_repo.get_folio_by_booking_id(booking.id)
-            folio_charges_total = Decimal("0.00")
-            if folio and folio.charges:
-                folio_charges_total = sum(charge.amount for charge in folio.charges)
 
-            grand_total = booking.amount_due + folio_charges_total
+            if folio:
+                # Recalculate folio total from charges (don't trust stale DB value)
+                subtotal = sum(c.amount for c in folio.charges) if folio.charges else Decimal("0.00")
+                tax_amount = subtotal * (folio.tax / Decimal("100"))
+                discount_amount = subtotal * (folio.discount / Decimal("100"))
+                folio_total = subtotal + tax_amount - discount_amount
+                if folio_total < Decimal("0.00"):
+                    folio_total = Decimal("0.00")
+
+                outstanding = folio_total - booking.amount_paid
+                if outstanding < Decimal("0.00"):
+                    outstanding = Decimal("0.00")
+            else:
+                # No folio: just pay remaining booking balance (room only)
+                outstanding = booking.amount_due
 
             # Record payment if provided
             if payment_amount is not None:
                 if payment_amount < 0:
                     raise BookingException("Payment amount must be positive")
-                if Decimal(str(payment_amount)) > grand_total:
+
+                if Decimal(str(payment_amount)) > outstanding:
                     raise BookingException(
-                        f"Payment amount ({payment_amount}) exceeds outstanding balance ({float(grand_total):.2f})"
+                        f"Payment amount ({payment_amount}) exceeds outstanding balance ({float(outstanding):.2f}). "
+                        f"Guest cannot pay more than they owe."
                     )
 
-                # Apply payment: first cover booking amount_due, then folio charges
-                remaining_payment = Decimal(str(payment_amount))
+                payment = Decimal(str(payment_amount))
 
-                # 1. Pay off booking amount_due
-                if remaining_payment > Decimal("0") and booking.amount_due > Decimal("0"):
-                    booking_payment = min(remaining_payment, booking.amount_due)
-                    booking.amount_paid = booking.amount_paid + booking_payment
-                    booking.amount_due = booking.amount_due - booking_payment
-                    remaining_payment = remaining_payment - booking_payment
-
-                # 2. Pay off folio charges if any remaining payment
-                if remaining_payment > Decimal("0") and folio and folio.charges:
-                    # Settle the folio with the remaining payment
-                    await self.folio_repo.settle_folio(folio.id)
+                # Update booking payment tracking
+                booking.amount_paid = booking.amount_paid + payment
+                booking.amount_due = booking.total_amount - booking.amount_paid
+                if booking.amount_due < Decimal("0.00"):
+                    booking.amount_due = Decimal("0.00")
 
                 # Update payment status
-                if booking.amount_due <= Decimal("0") and (not folio or not folio.charges or remaining_payment >= Decimal("0")):
+                if booking.amount_due <= Decimal("0.00"):
                     booking.payment_status = PaymentStatus.PAID
-                else:
+                elif booking.amount_paid > Decimal("0.00"):
                     booking.payment_status = PaymentStatus.PARTIAL
+                else:
+                    booking.payment_status = PaymentStatus.UNPAID
 
                 if payment_gateway:
-                    booking.payment_gateway = PaymentGateway(payment_gateway.upper()) if isinstance(payment_gateway, str) else payment_gateway
+                    booking.payment_gateway = (
+                        PaymentGateway(payment_gateway.upper())
+                        if isinstance(payment_gateway, str)
+                        else payment_gateway
+                    )
 
-            # Recalculate grand total after payment
-            grand_total = booking.amount_due + folio_charges_total
+                # If folio exists and fully paid, mark folio as PAID
+                if folio:
+                    new_outstanding = folio_total - booking.amount_paid
+                    if new_outstanding <= Decimal("0.00"):
+                        await self.folio_repo.settle_folio(folio.id)
+
+            # Recalculate outstanding after payment
+            if folio:
+                outstanding = folio_total - booking.amount_paid
+                if outstanding < Decimal("0.00"):
+                    outstanding = Decimal("0.00")
+            else:
+                outstanding = booking.amount_due
 
             # Reject check-out if there's still an outstanding balance
-            if grand_total > Decimal("0"):
-                raise BookingException(
-                    f"Outstanding balance of {float(grand_total):.2f}. "
-                    f"Please settle {float(booking.amount_due):.2f} booking balance"
-                    + (f" + {float(folio_charges_total):.2f} folio charges" if folio_charges_total > 0 else "")
-                    + " before check-out."
-                )
+            if outstanding > Decimal("0"):
+                if folio:
+                    raise BookingException(
+                        f"Outstanding folio balance of {float(outstanding):.2f}. "
+                        f"Folio total: {float(folio_total):.2f}, "
+                        f"already paid: {float(booking.amount_paid):.2f}. "
+                        f"Please record payment before check-out."
+                    )
+                else:
+                    raise BookingException(
+                        f"Outstanding booking balance of {float(outstanding):.2f}. "
+                        f"Please settle before check-out."
+                    )
 
             # Try atomic status transition
             checked_out = await self.staff_ops_repo.try_check_out_booking(ref_number)
@@ -736,7 +805,8 @@ class StaffOperationsService:
             room_ids = [br.room_unit_id for br in booking.booking_rooms]
             if room_ids:
                 await self.staff_ops_repo.update_rooms_status(
-                    room_ids, RoomStatus.DIRTY,
+                    room_ids,
+                    RoomStatus.DIRTY,
                     property_id=booking.property_id,
                     staff_id=staff_user.id,
                     staff_name=staff_name,
@@ -744,6 +814,8 @@ class StaffOperationsService:
                 )
 
             # Log check-out activity
+            grand_total = float(folio_total) if folio else float(booking.total_amount)
+
             await self._log_activity(
                 property_id=booking.property_id,
                 staff_id=staff_user.id,
@@ -753,24 +825,53 @@ class StaffOperationsService:
                 booking_id=booking.id,
                 extra_data={
                     "guest_name": self._resolve_guest_name(booking),
-                    "room_names": [br.room_unit.room_name for br in booking.booking_rooms if br.room_unit],
+                    "room_names": [
+                        br.room_unit.room_name
+                        for br in booking.booking_rooms
+                        if br.room_unit
+                    ],
                     "amount_paid": float(payment_amount) if payment_amount else 0,
                     "amount_due": float(booking.amount_due),
-                    "folio_charges": float(folio_charges_total),
-                    "grand_total": float(booking.total_amount + folio_charges_total),
+                    "folio_total": folio_total,
+                    "grand_total": grand_total,
                     "payment_gateway": payment_gateway,
                 },
             )
 
+            # Build response before commit so rollback works on any error
+            rooms = [br.room_unit for br in booking.booking_rooms if br.room_unit]
+            rooms_data = [self._build_room_info(r) for r in rooms]
+
+            response = {
+                "ref_number": ref_number,
+                "status": MasterBookingStatus.CHECKED_OUT.value,
+                "checked_out_at": checked_out.checked_out_at,
+                "property_name": property_obj.name,
+                "rooms": rooms_data,
+                "guest_name": self._resolve_guest_name(booking),
+                "total_amount": grand_total,
+                "folio_charges": folio_total,
+                "grand_total": grand_total,
+                "amount_paid": float(booking.amount_paid),
+                "amount_due": float(booking.amount_due),
+                "payment_status": booking.payment_status.value
+                if hasattr(booking.payment_status, "value")
+                else booking.payment_status,
+                "message": "Guest checked out successfully",
+            }
+
             await self.db.commit()
 
-            # Fire notifications
+            # Fire notifications (after commit, fire-and-forget)
             if self.notification_service:
                 room_names = ", ".join(
-                    [br.room_unit.room_name for br in booking.booking_rooms if br.room_unit]
+                    [
+                        br.room_unit.room_name
+                        for br in booking.booking_rooms
+                        if br.room_unit
+                    ]
                 )
                 guest_name = self._resolve_guest_name(booking)
-                # Check-out notification
                 await NotificationEvents.fire(
                     notification_type=NotificationType.BOOKING_CHECKED_OUT,
                     notification_service=self.notification_service,
@@ -782,7 +883,6 @@ class StaffOperationsService:
                     guest_name=guest_name,
                     room_names=room_names,
                 )
-                # Room dirty notification
                 for br in booking.booking_rooms:
                     if br.room_unit:
                         await NotificationEvents.fire(
@@ -795,29 +895,7 @@ class StaffOperationsService:
                             room_name=br.room_unit.room_name,
                         )
 
-            # Build response
-            rooms = [br.room_unit for br in booking.booking_rooms if br.room_unit]
-            rooms_data = [self._build_room_info(r) for r in rooms]
-
-            total_amount = float(booking.total_amount)
-            folio_charges = float(folio_charges_total)
-            grand_total_val = total_amount + folio_charges
-
-            return {
-                "ref_number": ref_number,
-                "status": MasterBookingStatus.CHECKED_OUT.value,
-                "checked_out_at": checked_out.checked_out_at,
-                "property_name": property_obj.name,
-                "rooms": rooms_data,
-                "guest_name": self._resolve_guest_name(booking),
-                "total_amount": total_amount,
-                "folio_charges": folio_charges,
-                "grand_total": grand_total_val,
-                "amount_paid": float(booking.amount_paid),
-                "amount_due": float(booking.amount_due),
-                "payment_status": booking.payment_status.value,
-                "message": "Guest checked out successfully",
-            }
+            return response
 
         except (BookingException, PermissionException):
             await self.db.rollback()
@@ -828,7 +906,6 @@ class StaffOperationsService:
                 f"[StaffOperationsService] Error checking out {ref_number}: {e}"
             )
             raise ServiceException("Could not check out guest. Please try again.")
-
 
     async def _calculate_stay_total(
         self,
@@ -860,12 +937,16 @@ class StaffOperationsService:
     ) -> dict:
         logger.info(f"[StaffOperationsService] Modifying booking {ref_number}")
         try:
-            booking = await self.staff_ops_repo.get_booking_by_ref_with_details(ref_number)
+            booking = await self.staff_ops_repo.get_booking_by_ref_with_details(
+                ref_number
+            )
             if booking is None:
                 raise BookingException("Booking not found")
 
             if staff_user.role != "admin":
-                await self._verify_staff_property_assignment(staff_user, booking.property_id)
+                await self._verify_staff_property_assignment(
+                    staff_user, booking.property_id
+                )
 
             # Only CONFIRMED, CHECKED_IN, CHECKED_OUT can be modified
             if booking.status not in (
@@ -893,10 +974,13 @@ class StaffOperationsService:
             new_adults = payload.number_of_adults or booking.number_of_adults
             new_children = payload.number_of_children or booking.number_of_children
 
-            dates_changed = (new_checkin != booking.checkin_date) or (new_checkout != booking.checkout_date)
+            dates_changed = (new_checkin != booking.checkin_date) or (
+                new_checkout != booking.checkout_date
+            )
             rooms_changed = payload.room_unit_ids is not None
             occupants_changed = (
-                payload.number_of_adults is not None or payload.number_of_children is not None
+                payload.number_of_adults is not None
+                or payload.number_of_children is not None
             )
 
             # 1. Capacity check — only needed if rooms or occupant counts changed
@@ -908,16 +992,25 @@ class StaffOperationsService:
             # 2. Availability check — only needed if dates or rooms actually changed
             if dates_changed or rooms_changed:
                 conflicts = await self.staff_ops_repo.check_rooms_available(
-                    new_room_ids, new_checkin, new_checkout, exclude_booking_id=booking.id
+                    new_room_ids,
+                    new_checkin,
+                    new_checkout,
+                    exclude_booking_id=booking.id,
                 )
                 if conflicts:
-                    raise BookingException(f"Room(s) unavailable for selected dates: {conflicts}")
+                    raise BookingException(
+                        f"Room(s) unavailable for selected dates: {conflicts}"
+                    )
 
             # 3. Recalculate pricing
             new_subtotal = await self._calculate_stay_total(
-                room_ids=new_room_ids, checkin_date=new_checkin, checkout_date=new_checkout
+                room_ids=new_room_ids,
+                checkin_date=new_checkin,
+                checkout_date=new_checkout,
             )
-            new_total = new_subtotal - booking.special_offer_discount - booking.coupon_discount
+            new_total = (
+                new_subtotal - booking.special_offer_discount - booking.coupon_discount
+            )
             if new_total < 0:
                 new_total = Decimal("0.00")
 
@@ -1010,7 +1103,9 @@ class StaffOperationsService:
                 "amount_paid": updated.amount_paid,
                 "amount_due": updated.amount_due,
                 "refund_due": updated.refund_due,
-                "payment_status": updated.payment_status.value,
+                "payment_status": updated.payment_status.value
+                if hasattr(updated.payment_status, "value")
+                else updated.payment_status,
                 "message": message,
             }
 
@@ -1048,7 +1143,8 @@ class StaffOperationsService:
         insufficient = [
             room
             for room in rooms
-            if room.max_adults < adults_per_room or room.max_children < children_per_room
+            if room.max_adults < adults_per_room
+            or room.max_children < children_per_room
         ]
 
         if insufficient:
@@ -1090,9 +1186,7 @@ class StaffOperationsService:
                 payload.room_ids
             )
             if len(requested_rooms) != rooms_needed:
-                raise RoomsUnavailableError(
-                    "Some rooms are invalid or do not exist."
-                )
+                raise RoomsUnavailableError("Some rooms are invalid or do not exist.")
             if any(r.property_id != payload.property_id for r in requested_rooms):
                 raise RoomsUnavailableError(
                     "Some rooms do not belong to the selected property."
@@ -1101,7 +1195,10 @@ class StaffOperationsService:
             # 4. Capacity check
             total_max_adults = sum(r.max_adults for r in requested_rooms)
             total_max_children = sum(r.max_children for r in requested_rooms)
-            if payload.adults > total_max_adults or payload.children > total_max_children:
+            if (
+                payload.adults > total_max_adults
+                or payload.children > total_max_children
+            ):
                 raise RoomsUnavailableError(
                     "The selected room(s) cannot accommodate the total number of guests."
                 )
@@ -1126,9 +1223,7 @@ class StaffOperationsService:
             )
 
             # 7. Calculate pricing
-            subtotal = Decimal(
-                str(sum(r.base_rate for r in requested_rooms) * nights)
-            )
+            subtotal = Decimal(str(sum(r.base_rate for r in requested_rooms) * nights))
             active_offers = await self.offer_repo.get_active_offers(
                 payload.property_id, payload.check_in, payload.check_out
             )
@@ -1136,9 +1231,7 @@ class StaffOperationsService:
             remaining = subtotal
             for offer in active_offers:
                 offer_discount = min(
-                    remaining
-                    * Decimal(str(offer.discount_percentage))
-                    / Decimal(100),
+                    remaining * Decimal(str(offer.discount_percentage)) / Decimal(100),
                     remaining,
                 )
                 special_offer_discount += offer_discount
@@ -1180,41 +1273,29 @@ class StaffOperationsService:
             # 9. Determine payment status
             payment_method_str = payload.payment_method.upper()
             payment_method_enum = PaymentMethod(payment_method_str)
-            amount_paid = Decimal(str(payload.amount_paid)) if payload.amount_paid else Decimal("0.00")
-            advance_amount = Decimal(str(payload.advance_amount)) if payload.advance_amount else None
+            amount_paid = (
+                Decimal(str(payload.amount_paid))
+                if payload.amount_paid
+                else Decimal("0.00")
+            )
 
-            # For PAY_ON_ARRIVAL, confirm immediately
-            if payment_method_str == "PAY_ON_ARRIVAL":
-                booking_status = MasterBookingStatus.CONFIRMED
-                amount_due = total_amount - amount_paid
-                payment_status = (
-                    PaymentStatus.PAID
-                    if amount_due <= Decimal("0")
-                    else PaymentStatus.UNPAID
-                    if amount_paid == Decimal("0")
-                    else PaymentStatus.PARTIAL
-                )
-            else:
-                booking_status = MasterBookingStatus.PENDING
-                if payment_method_str == "ADVANCE" and advance_amount:
-                    amount_due = total_amount - advance_amount
-                    payment_status = (
-                        PaymentStatus.PARTIAL
-                        if amount_paid > Decimal("0")
-                        else PaymentStatus.UNPAID
-                    )
-                else:
-                    amount_due = total_amount - amount_paid
-                    payment_status = (
-                        PaymentStatus.PAID
-                        if amount_due <= Decimal("0")
-                        else PaymentStatus.UNPAID
-                        if amount_paid == Decimal("0")
-                        else PaymentStatus.PARTIAL
-                    )
-
+            amount_due = total_amount - amount_paid
             if amount_due < Decimal("0"):
                 amount_due = Decimal("0.00")
+
+            # For PAY_ON_ARRIVAL, confirm immediately; otherwise PENDING
+            if payment_method_str == "PAY_ON_ARRIVAL":
+                booking_status = MasterBookingStatus.CONFIRMED
+            else:
+                booking_status = MasterBookingStatus.PENDING
+
+            payment_status = (
+                PaymentStatus.PAID
+                if amount_due <= Decimal("0")
+                else PaymentStatus.UNPAID
+                if amount_paid == Decimal("0")
+                else PaymentStatus.PARTIAL
+            )
 
             # 10. Create booking record
             booking = await self.booking_repo.create_booking(
@@ -1235,7 +1316,6 @@ class StaffOperationsService:
                 payment_status=payment_status,
                 amount_paid=amount_paid,
                 amount_due=amount_due,
-                advance_amount=advance_amount,
                 coupon_code=coupon_code,
                 coupon_discount=coupon_discount,
                 special_requests=payload.special_requests,
@@ -1310,6 +1390,7 @@ class StaffOperationsService:
             else:
                 # Set soft-lock for PENDING bookings
                 from app.config.settings_config import settings
+
                 SOFT_LOCK_TTL_SECONDS = settings.SOFT_LOCK_TTL_SECONDS
                 await self.redis.set(
                     f"booking:softlock:{booking.id}",
@@ -1344,7 +1425,6 @@ class StaffOperationsService:
                 "payment_status": payment_status.value,
                 "amount_paid": float(amount_paid),
                 "amount_due": float(amount_due),
-                "advance_amount": float(advance_amount) if advance_amount else None,
                 "total_amount": float(total_amount),
                 "subtotal": float(subtotal),
                 "coupon_code": coupon_code,
@@ -1388,7 +1468,10 @@ class StaffOperationsService:
     # ─────────────────────── Cancel Booking ──────────────────────────────
 
     async def cancel_booking(
-        self, ref_number: str, staff_user: User, reason: str,
+        self,
+        ref_number: str,
+        staff_user: User,
+        reason: str,
         background_tasks: BackgroundTasks,
     ) -> dict:
         """Staff can cancel any PENDING or CONFIRMED booking.
@@ -1443,7 +1526,8 @@ class StaffOperationsService:
             room_ids = [br.room_unit_id for br in booking.booking_rooms]
             if room_ids:
                 await self.staff_ops_repo.update_rooms_status(
-                    room_ids, RoomStatus.AVAILABLE,
+                    room_ids,
+                    RoomStatus.AVAILABLE,
                     property_id=booking.property_id,
                     staff_id=staff_user.id,
                     staff_name=staff_name,
@@ -1507,7 +1591,9 @@ class StaffOperationsService:
                 extra_data={
                     "guest_name": self._resolve_guest_name(booking),
                     "reason": reason,
-                    "refund_amount": float(refund_amount) if refund_amount > 0 else None,
+                    "refund_amount": float(refund_amount)
+                    if refund_amount > 0
+                    else None,
                     "refund_status": refund_status,
                 },
             )
@@ -1542,7 +1628,9 @@ class StaffOperationsService:
             message = "Booking cancelled successfully."
             if refund_due > 0:
                 if refund_status == "processed":
-                    message += f" Refund of {refund_due} is being processed automatically."
+                    message += (
+                        f" Refund of {refund_due} is being processed automatically."
+                    )
                 elif refund_status == "manual_required":
                     message += f" Refund of {refund_due} is owed — process via payment gateway."
                 else:
@@ -1564,9 +1652,7 @@ class StaffOperationsService:
             logger.error(
                 f"[StaffOperationsService] Error cancelling booking {ref_number}: {e}"
             )
-            raise ServiceException(
-                "Could not cancel booking. Please try again."
-            )
+            raise ServiceException("Could not cancel booking. Please try again.")
 
     async def _process_refund_background(
         self,
@@ -1703,14 +1789,20 @@ class StaffOperationsService:
         back_file=None,
     ) -> dict:
         """Upload/update citizenship photos for a booking. Available after check-in."""
-        logger.info(f"[StaffOperationsService] Uploading citizenship photos for {ref_number}")
+        logger.info(
+            f"[StaffOperationsService] Uploading citizenship photos for {ref_number}"
+        )
         try:
-            booking = await self.staff_ops_repo.get_booking_by_ref_with_details(ref_number)
+            booking = await self.staff_ops_repo.get_booking_by_ref_with_details(
+                ref_number
+            )
             if booking is None:
                 raise BookingException("Booking not found")
 
             if staff_user.role != "admin":
-                await self._verify_staff_property_assignment(staff_user, booking.property_id)
+                await self._verify_staff_property_assignment(
+                    staff_user, booking.property_id
+                )
 
             if booking.status not in (
                 MasterBookingStatus.CHECKED_IN,
@@ -1721,7 +1813,9 @@ class StaffOperationsService:
                 )
 
             if front_file is None and back_file is None:
-                raise BookingException("At least one of front or back image must be provided.")
+                raise BookingException(
+                    "At least one of front or back image must be provided."
+                )
 
             current_photos = booking.citizenship_photos or {}
             folder_name = f"bookings/{booking.id}/citizenship"
@@ -1780,7 +1874,9 @@ class StaffOperationsService:
             logger.error(
                 f"[StaffOperationsService] Error uploading citizenship photos for {ref_number}: {e}"
             )
-            raise ServiceException("Could not upload citizenship photos. Please try again.")
+            raise ServiceException(
+                "Could not upload citizenship photos. Please try again."
+            )
 
     # ─────────────────────── Checked-In Guests ──────────────────────────────
 
@@ -1824,7 +1920,9 @@ class StaffOperationsService:
         )
         try:
             await self._verify_property_access(property_id, staff_user)
-            booking = await self.staff_ops_repo.get_booking_by_ref_with_details(ref_number)
+            booking = await self.staff_ops_repo.get_booking_by_ref_with_details(
+                ref_number
+            )
 
             if booking is None or booking.property_id != property_id:
                 raise BookingException("Booking not found for this property")
@@ -1835,37 +1933,69 @@ class StaffOperationsService:
             folio_data = None
             if booking.folios:
                 folio = booking.folios[0]
+                subtotal = sum(c.amount for c in folio.charges) if folio.charges else Decimal("0.00")
+                tax_amount = subtotal * (folio.tax / Decimal("100"))
+                discount_amount = subtotal * (folio.discount / Decimal("100"))
+                total = subtotal + tax_amount - discount_amount
+                if total < Decimal("0.00"):
+                    total = Decimal("0.00")
+                remaining_balance = total - booking.amount_paid
+                if remaining_balance < Decimal("0.00"):
+                    remaining_balance = Decimal("0.00")
                 folio_data = {
                     "folio_id": folio.id,
-                    "status": folio.status.value if hasattr(folio.status, "value") else folio.status,
-                    "subtotal": float(folio.subtotal),
+                    "status": folio.status.value
+                    if hasattr(folio.status, "value")
+                    else folio.status,
+                    "subtotal": float(subtotal),
                     "tax": float(folio.tax),
+                    "tax_amount": float(tax_amount),
                     "discount": float(folio.discount),
-                    "total": float(folio.total),
+                    "discount_amount": float(discount_amount),
+                    "total": float(total),
+                    "amount_paid": float(booking.amount_paid),
+                    "remaining_balance": float(remaining_balance),
                     "charges_count": len(folio.charges) if folio.charges else 0,
                     "settled_at": folio.settled_at,
+                    "charges": [
+                        {
+                            "charge_id": c.id,
+                            "description": c.description,
+                            "amount": float(c.amount),
+                            "created_at": c.created_at,
+                        }
+                        for c in folio.charges
+                    ],
                 }
 
             return {
                 "booking_id": booking.id,
                 "guest_name": self._resolve_guest_name(booking),
                 "guest_email": (
-                    booking.guest.email if booking.guest
-                    else booking.booking_guest.email if booking.booking_guest
+                    booking.guest.email
+                    if booking.guest
+                    else booking.booking_guest.email
+                    if booking.booking_guest
                     else ""
                 ),
-                "guest_phone" : (
-                    booking.guest.phone if booking.guest
-                    else booking.booking_guest.phone if booking.booking_guest
+                "guest_phone": (
+                    booking.guest.phone
+                    if booking.guest
+                    else booking.booking_guest.phone
+                    if booking.booking_guest
                     else None
                 ),
                 "guest_nationality": (
-                    booking.guest.nationality if booking.guest
-                    else booking.booking_guest.nationality if booking.booking_guest
+                    booking.guest.nationality
+                    if booking.guest
+                    else booking.booking_guest.nationality
+                    if booking.booking_guest
                     else None
                 ),
                 "ref_number": booking.ref_number,
-                "status": booking.status.value if hasattr(booking.status, "value") else booking.status,
+                "status": booking.status.value
+                if hasattr(booking.status, "value")
+                else booking.status,
                 "checkin_date": booking.checkin_date,
                 "checkout_date": booking.checkout_date,
                 "total_amount": float(booking.total_amount),
