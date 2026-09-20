@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from decimal import Decimal
 
 
@@ -290,6 +290,8 @@ class EnumResponse(BaseModel):
 
 
 class ActivityLogResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: uuid.UUID
     staff_name: str
     activity_type: str
