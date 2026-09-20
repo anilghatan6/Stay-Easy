@@ -221,7 +221,6 @@ class NotificationEvents:
         message = template["message_template"].format(**template_kwargs)
 
         # Resolve recipients for target-based templates
-        recipient_user_ids = None
         roles = None
         target = template.get("target")
 

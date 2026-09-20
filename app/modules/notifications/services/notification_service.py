@@ -109,6 +109,8 @@ class NotificationService:
         }
         await self.dispatcher.broadcast_to_property(property_id, payload)
 
+        await self.db.commit()
+
         logger.info(
             f"[NotificationService] Created {notification_type.value} for property {property_id}, "
             f"{len(recipient_user_ids)} recipients"
