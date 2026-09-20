@@ -571,7 +571,6 @@ class FolioService:
             if folio is None:
                 raise BookingException("Folio not found")
 
-
             booking_result = await self.db.execute(
                 select(Booking).where(Booking.id == folio.booking_id)
             )
@@ -587,8 +586,20 @@ class FolioService:
 
             await self._verify_staff_property_access(staff_user, booking.property_id)
 
+            if folio.status.value == "WAIVED":
+                raise BookingException("Cannot add charges to a waived folio.")
+
             if amount <= Decimal("0.00"):
                 raise BookingException("Charge amount must be positive.")
+
+            # Calculate new totals before adding the charge
+            old_subtotal = sum(c.amount for c in folio.charges)
+            new_subtotal = old_subtotal + amount
+            tax_amount = new_subtotal * (folio.tax / Decimal("100"))
+            discount_amount = new_subtotal * (folio.discount / Decimal("100"))
+            new_total = new_subtotal + tax_amount - discount_amount
+            if new_total < Decimal("0.00"):
+                new_total = Decimal("0.00")
 
             charge = await self.folio_repo.add_charge(
                 folio_id=folio_id,
@@ -598,10 +609,10 @@ class FolioService:
                 posted_by=staff_user.id,
             )
 
-            # Recalculate totals
-            folio = await self.folio_repo.get_folio_by_id(folio_id)
-            subtotal, total = self._recalculate_folio_totals(folio)
-            await self.folio_repo.update_folio_totals(folio_id, subtotal, total)
+            await self.folio_repo.update_folio_totals(folio_id, new_subtotal, new_total)
+
+            if folio.status.value == "PAID":
+                await self.folio_repo.mark_partially_paid(folio_id)
 
             await self.db.commit()
 
@@ -616,8 +627,8 @@ class FolioService:
                 "posted_by": charge.posted_by,
                 "posted_by_name": staff_name,
                 "posted_at": charge.posted_at,
-                "folio_subtotal": float(subtotal),
-                "folio_total": float(total),
+                "folio_subtotal": float(new_subtotal),
+                "folio_total": float(new_total),
             }
 
         except (BookingException, PermissionException):
@@ -703,12 +714,25 @@ class FolioService:
 
             await self._verify_staff_property_access(staff_user, booking.property_id)
 
+            if folio.status.value == "WAIVED":
+                raise BookingException("Cannot update charges on a waived folio.")
+
             charge = await self.folio_repo.get_charge_by_id(folio_id, charge_id)
             if charge is None:
                 raise BookingException("Charge not found.")
 
             if amount is not None and amount <= Decimal("0.00"):
                 raise BookingException("Charge amount must be positive.")
+
+            # Calculate new totals before updating the charge
+            old_subtotal = sum(c.amount for c in folio.charges)
+            new_charge_amount = amount if amount is not None else charge.amount
+            new_subtotal = old_subtotal - charge.amount + new_charge_amount
+            tax_amount = new_subtotal * (folio.tax / Decimal("100"))
+            discount_amount = new_subtotal * (folio.discount / Decimal("100"))
+            new_total = new_subtotal + tax_amount - discount_amount
+            if new_total < Decimal("0.00"):
+                new_total = Decimal("0.00")
 
             await self.folio_repo.update_charge(
                 charge_id=charge_id,
@@ -717,10 +741,10 @@ class FolioService:
                 category=category,
             )
 
-            # Recalculate totals
-            folio = await self.folio_repo.get_folio_by_id(folio_id)
-            subtotal, total = self._recalculate_folio_totals(folio)
-            await self.folio_repo.update_folio_totals(folio_id, subtotal, total)
+            await self.folio_repo.update_folio_totals(folio_id, new_subtotal, new_total)
+
+            if folio.status.value == "PAID" and new_total > folio.total:
+                await self.folio_repo.mark_partially_paid(folio_id)
 
             await self.db.commit()
 
@@ -739,8 +763,8 @@ class FolioService:
                 "posted_by": updated_charge.posted_by,
                 "posted_by_name": staff_name,
                 "posted_at": updated_charge.posted_at,
-                "folio_subtotal": float(subtotal),
-                "folio_total": float(total),
+                "folio_subtotal": float(new_subtotal),
+                "folio_total": float(new_total),
             }
 
         except (BookingException, PermissionException):
@@ -777,22 +801,36 @@ class FolioService:
 
             await self._verify_staff_property_access(staff_user, booking.property_id)
 
+            if folio.status.value == "WAIVED":
+                raise BookingException("Cannot delete charges from a waived folio.")
+
+            # Get charge amount before deleting
+            charge = await self.folio_repo.get_charge_by_id(folio_id, charge_id)
+            if charge is None:
+                raise BookingException("Charge not found.")
+
+            # Calculate new totals before deleting the charge
+            old_subtotal = sum(c.amount for c in folio.charges)
+            new_subtotal = old_subtotal - charge.amount
+            tax_amount = new_subtotal * (folio.tax / Decimal("100"))
+            discount_amount = new_subtotal * (folio.discount / Decimal("100"))
+            new_total = new_subtotal + tax_amount - discount_amount
+            if new_total < Decimal("0.00"):
+                new_total = Decimal("0.00")
+
             deleted = await self.folio_repo.delete_charge(folio_id, charge_id)
             if not deleted:
                 raise BookingException("Charge not found.")
 
-            # Recalculate totals
-            folio = await self.folio_repo.get_folio_by_id(folio_id)
-            subtotal, total = self._recalculate_folio_totals(folio)
-            await self.folio_repo.update_folio_totals(folio_id, subtotal, total)
+            await self.folio_repo.update_folio_totals(folio_id, new_subtotal, new_total)
 
             await self.db.commit()
 
             return {
                 "folio_id": folio_id,
                 "deleted_charge_id": charge_id,
-                "folio_subtotal": float(subtotal),
-                "folio_total": float(total),
+                "folio_subtotal": float(new_subtotal),
+                "folio_total": float(new_total),
                 "message": "Charge deleted successfully.",
             }
 

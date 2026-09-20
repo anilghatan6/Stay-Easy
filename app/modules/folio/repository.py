@@ -172,7 +172,7 @@ class FolioRepository:
             await self.db.execute(
                 update(Folio)
                 .where(Folio.id == folio_id)
-                .values(status="PARTIALLY_PAID")
+                .values(status="PARTIALLY_PAID", settled_at=None)
             )
         except SQLAlchemyError as e:
             logger.error(f"[FolioRepository] Failed to mark folio as PARTIALLY_PAID: {e}")

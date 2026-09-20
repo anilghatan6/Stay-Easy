@@ -5,7 +5,7 @@ import redis.asyncio as aioredis
 from asgi_correlation_id import CorrelationIdMiddleware
 
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI
 from app.config.database_config import engine, Base
 from app.modules.auth.models import *
 from app.modules.auth.routers.guests_router import router as guest_router
@@ -59,7 +59,7 @@ from app.middlewares.cors import configure_cors
 from app.utils.exception_handlers import register_exception_handlers
 from app.utils.expiry_loop import _expire_stale_bookings_loop
 
-from app.middlewares.rate_limiter import RateLimiter
+from app.middlewares.rate_limiter import RateLimiterMiddleware
 from app.config.redis_config import redis_pool
 from app.utils.logging import LoggerFactory
 
@@ -88,14 +88,11 @@ async def lifespan(app: FastAPI):
     await engine.dispose()
 
 
-global_limiter = RateLimiter(max_requests=150, window_seconds=60, scope="global")
-
 app = FastAPI(
     lifespan=lifespan,
     title="ServerIQ API",
     version="1.0.0",
     root_path="/api/v1",
-    dependencies=[Depends(global_limiter)],
 )
 
 
@@ -105,6 +102,7 @@ configure_cors(app)
 
 # Wrap the FastAPI app with the middleware
 app.add_middleware(CorrelationIdMiddleware)
+app.add_middleware(RateLimiterMiddleware, max_requests=150, window_seconds=60, scope="global")
 
 # ── Inner layer: Routes ──
 app.include_router(guest_router)

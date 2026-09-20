@@ -2,6 +2,9 @@ import time
 import uuid
 from typing import Callable, Optional
 from fastapi import Request, HTTPException, status
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
+from starlette.websockets import WebSocket
 import redis.asyncio as aioredis
 from redis.exceptions import RedisError
 
@@ -29,6 +32,65 @@ def _get_rate_limit_key(request: Request) -> str:
     return f"ip:{request.client.host if request.client else '127.0.0.1'}"
 
 
+class RateLimiterMiddleware(BaseHTTPMiddleware):
+    """Middleware-based rate limiter that skips WebSocket connections."""
+    def __init__(self, app, max_requests: int = 150, window_seconds: int = 60, scope: str = "global"):
+        super().__init__(app)
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self.scope = scope
+
+    async def dispatch(self, request: Request, call_next):
+        # Skip rate limiting for WebSocket connections
+        if request.scope.get("type") == "websocket":
+            return await call_next(request)
+
+        # Skip if flagged
+        if getattr(request.state, f"skip_{self.scope}", False):
+            return await call_next(request)
+
+        redis_client: Optional[aioredis.Redis] = getattr(
+            request.app.state, "redis_client", None
+        )
+        if redis_client is None:
+            return await call_next(request)
+
+        identity = _get_rate_limit_key(request)
+        redis_key = f"ratelimit:{self.scope}:{identity}:{request.url.path}"
+
+        now = time.time()
+        window_start = now - self.window_seconds
+        unique_member = f"{now}:{uuid.uuid4().hex}"
+
+        try:
+            pipe = redis_client.pipeline()
+            pipe.zremrangebyscore(redis_key, 0, window_start)
+            pipe.zcard(redis_key)
+            results = await pipe.execute()
+            current_count = results[1]
+
+            if current_count >= self.max_requests:
+                oldest = await redis_client.zrange(redis_key, 0, 0, withscores=True)
+                retry_after = self.window_seconds
+                if oldest:
+                    retry_after = max(1, int(oldest[0][1] + self.window_seconds - now))
+                return Response(
+                    content=f"Too many requests. Try again in {retry_after} seconds.",
+                    status_code=429,
+                    headers={"Retry-After": str(retry_after)},
+                )
+
+            pipe = redis_client.pipeline()
+            pipe.zadd(redis_key, {unique_member: now})
+            pipe.expire(redis_key, self.window_seconds)
+            await pipe.execute()
+
+        except Exception as e:
+            logger.error(f"[RateLimiter] Redis error, failing open: {e}")
+
+        return await call_next(request)
+
+
 class RateLimiter:
     """Sliding-window rate limiter backed by Redis sorted sets."""
     def __init__(
@@ -44,6 +106,10 @@ class RateLimiter:
         self.scope = scope
 
     async def __call__(self, request: Request) -> None:
+
+        # Skip rate limiting for WebSocket connections
+        if getattr(request.scope, "type", "") == "websocket":
+            return
 
         if getattr(request.state, f"skip_{self.scope}", False):
             return  # Bypass execution completely

@@ -30,7 +30,7 @@ class UpdateFolioRequest(BaseModel):
 
 class AddChargeRequest(BaseModel):
     description: str = Field(..., min_length=1, max_length=255)
-    amount: Decimal = Field(..., decimal_places=2)
+    amount: Decimal = Field(...,gt=Decimal("0.00"), decimal_places=2)
     category: str = Field(
         ...,
         min_length=1,
@@ -41,7 +41,7 @@ class AddChargeRequest(BaseModel):
 
 class UpdateChargeRequest(BaseModel):
     description: Optional[str] = Field(None, min_length=1, max_length=255)
-    amount: Optional[Decimal] = Field(None, decimal_places=2)
+    amount: Optional[Decimal] = Field(None, gt=Decimal("0.00"), decimal_places=2)
     category: Optional[str] = Field(None, min_length=1, max_length=50)
 
 

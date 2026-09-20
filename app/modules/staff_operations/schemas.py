@@ -38,6 +38,7 @@ class PropertyInfo(BaseModel):
 
 
 class StaffBookingDetailResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     booking_id: uuid.UUID
     ref_number: str
     status: str
@@ -106,11 +107,15 @@ class CheckOutPaymentRequest(BaseModel):
 
 
 class CitizenshipPhotosResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     front: Optional[str] = None
     back: Optional[str] = None
 
 
 class CheckInResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     ref_number: str
     status: str
     checked_in_at: datetime
@@ -125,6 +130,8 @@ class CheckInResponse(BaseModel):
 
 
 class CheckOutResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     ref_number: str
     status: str
     checked_out_at: datetime
@@ -158,6 +165,8 @@ class ModifyBookingRequest(BaseModel):
 
 
 class ModifyBookingResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     ref_number: str
     checkin_date: date
     checkout_date: date
@@ -245,6 +254,8 @@ class WalkinCitizenshipPhotosInfo(BaseModel):
 
 
 class StaffCreateWalkinBookingResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     booking_id: uuid.UUID
     ref_number: str
     status: str
@@ -271,6 +282,8 @@ class StaffCreateWalkinBookingResponse(BaseModel):
 
 
 class StaffCancelBookingResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     ref_number: str
     status: str
     refund_amount: float = 0.0
@@ -282,6 +295,8 @@ class StaffCancelBookingResponse(BaseModel):
 
 
 class EnumResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     value: str
     label: str
 
@@ -314,6 +329,8 @@ class FrontDeskGuestInfo(BaseModel):
 
 
 class FrontDeskBookingResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     booking_id: uuid.UUID
     ref_number: str
     status: str
@@ -339,6 +356,8 @@ class FrontDeskBookingResponse(BaseModel):
 
 
 class FrontDeskSummaryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     todays_arrivals: int
     todays_departures: int
     todays_checked_in: int
@@ -366,12 +385,14 @@ class RoomCalendarRoom(BaseModel):
     bed_type: str
     floor_number: int
     days: list[RoomCalendarDay]
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RoomCalendarResponse(BaseModel):
     start_date: date
     end_date: date
     rooms: list[RoomCalendarRoom]
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ─────────────────────────── Checked-In Guests ─────────────────────────
@@ -426,6 +447,8 @@ class GuestBookingDetail(BaseModel):
 
 
 class GuestBookingListResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     bookings: list[GuestBookingDetail]
     total: int
     skip: int
