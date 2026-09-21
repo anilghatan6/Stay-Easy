@@ -125,3 +125,15 @@ class FolioListResponse(BaseModel):
     skip: int
     limit: int
     has_more: bool
+
+
+class UpdatedFolioResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    status: str
+    subtotal: Decimal
+    tax: Decimal
+    discount: Decimal
+    total: Decimal
+    

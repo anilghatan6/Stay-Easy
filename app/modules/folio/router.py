@@ -18,6 +18,7 @@ from app.modules.folio.schemas import (
     PayFolioResponse,
     UpdateChargeRequest,
     UpdateFolioRequest,
+    UpdatedFolioResponse
 )
 from app.modules.folio.service import FolioService
 from app.utils.schemas import StandardResponse
@@ -109,7 +110,7 @@ async def list_folios(
 
 @router.patch(
     "/folios/{folio_id}",
-    response_model=StandardResponse[FolioResponse],
+    response_model=StandardResponse[UpdatedFolioResponse],
     status_code=status.HTTP_200_OK,
     summary="Update folio tax and discount",
     dependencies=[
@@ -130,7 +131,7 @@ async def update_folio(
         tax=body.tax,
         discount=body.discount,
     )
-    return StandardResponse(data=FolioResponse(**result))
+    return StandardResponse(data=UpdatedFolioResponse(**result))
 
 
 # ─────────────────────── PAYMENT ENDPOINTS ─────────────────────────
