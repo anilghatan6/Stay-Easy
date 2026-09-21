@@ -167,7 +167,6 @@ class UserService:
         try:
             email = credentials["email"].strip()
             password = credentials["password"].strip()
-            logger.info(f"password: {password}")
             user = await self.user_repository.get_user_by_email(email)
             if not user or not self.auth_service.verify_password(
                 password, user.hashed_password

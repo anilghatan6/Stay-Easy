@@ -24,13 +24,18 @@ class ReviewRepository:
         """Find a CHECKED_OUT booking for this guest at this property."""
         logger.info("[ReviewRepository] Finding checked-out booking for guest")
         try:
-            stmt = select(Booking).where(
-                Booking.property_id == property_id,
-                Booking.guest_id == guest_id,
-                Booking.status == MasterBookingStatus.CHECKED_OUT,
+            stmt = (
+                select(Booking)
+                .where(
+                    Booking.property_id == property_id,
+                    Booking.guest_id == guest_id,
+                    Booking.status == MasterBookingStatus.CHECKED_OUT,
+                )
+                .order_by(Booking.updated_at.desc())  # Order by most recent stay
+                .limit(1)
             )
             result = await self.db.execute(stmt)
-            return result.scalar_one_or_none()
+            return result.scalar()
         except SQLAlchemyError as e:
             logger.error(f"[ReviewRepository] Failed to find booking: {e}")
             raise RepositoryException("Could not verify booking history.")
