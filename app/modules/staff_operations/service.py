@@ -704,6 +704,12 @@ class StaffOperationsService:
             if booking is None:
                 raise BookingException("Booking not found")
 
+            if booking.status == MasterBookingStatus.CHECKED_OUT:
+                raise BookingException("Booking is already checked out")
+
+            if booking.status == MasterBookingStatus.CANCELLED:
+                raise BookingException("Cannot check out a cancelled booking")
+
             if staff_user.role != "admin":
                 await self._verify_staff_property_assignment(
                     staff_user, booking.property_id
