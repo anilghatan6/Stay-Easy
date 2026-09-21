@@ -150,6 +150,7 @@ class NotificationRepository:
                 .values(is_read=True, read_at=datetime.now(UTC))
             )
             result = await self.db.execute(stmt)
+            await self.db.commit()
             return result.rowcount > 0
         except SQLAlchemyError as e:
             logger.error(f"[NotificationRepository] Failed to mark as read: {e}")
@@ -175,6 +176,7 @@ class NotificationRepository:
                 .values(is_read=True, read_at=datetime.now(UTC))
             )
             result = await self.db.execute(stmt)
+            await self.db.commit()
             return result.rowcount
         except SQLAlchemyError as e:
             logger.error(f"[NotificationRepository] Failed to mark all as read: {e}")
