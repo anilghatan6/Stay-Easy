@@ -180,6 +180,43 @@ class ReviewService:
             logger.error(f"[ReviewService] Error getting reviews: {e}")
             raise ServiceException("Could not fetch reviews. Please try again.")
 
+    async def get_reviews_for_guest(
+        self, guest: Guest, skip: int, limit: int
+    ) -> dict:
+        """Get paginated reviews for a guest with property details."""
+        logger.info(f"[ReviewService] Getting reviews for guest {guest.id}")
+        try:
+            reviews, total = await self.review_repo.get_reviews_by_guest(
+                guest.id, skip, limit
+            )
+
+            review_items = []
+            for r in reviews:
+                prop = r.property
+                review_items.append({
+                    "id": r.id,
+                    "rating": r.rating,
+                    "comment": r.comment,
+                    "is_edited": r.is_edited,
+                    "created_at": r.created_at,
+                    "updated_at": r.updated_at,
+                    "property": {
+                        "id": prop.id,
+                        "name": prop.name,
+                        "city": prop.city,
+                        "country": prop.country,
+                        "photos": prop.photos,
+                    } if prop else None,
+                })
+
+            return {
+                "reviews": review_items,
+                "total": total,
+            }
+
+        except Exception as e:
+            logger.error(f"[ReviewService] Error getting guest reviews: {e}")
+            raise ServiceException("Could not fetch reviews. Please try again.")
 
     async def get_review(
         self,

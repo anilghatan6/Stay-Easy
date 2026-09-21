@@ -153,6 +153,36 @@ class ReviewRepository:
             logger.error(f"[ReviewRepository] Failed to fetch reviews: {e}")
             raise RepositoryException("Could not fetch reviews.")
 
+    async def get_reviews_by_guest(
+        self, guest_id: uuid.UUID, skip: int, limit: int
+    ) -> tuple[list[Review], int]:
+        """Get paginated reviews for a guest with property info."""
+        logger.info("[ReviewRepository] Fetching reviews for guest")
+        try:
+            stmt = (
+                select(Review)
+                .options(joinedload(Review.property))
+                .where(Review.guest_id == guest_id)
+                .order_by(Review.created_at.desc())
+                .offset(skip)
+                .limit(limit)
+            )
+            result = await self.db.execute(stmt)
+            reviews = result.unique().scalars().all()
+
+            count_stmt = (
+                select(func.count())
+                .select_from(Review)
+                .where(Review.guest_id == guest_id)
+            )
+            count_result = await self.db.execute(count_stmt)
+            total = count_result.scalar() or 0
+
+            return list(reviews), total
+        except SQLAlchemyError as e:
+            logger.error(f"[ReviewRepository] Failed to fetch guest reviews: {e}")
+            raise RepositoryException("Could not fetch reviews.")
+
     async def get_review_stats(
         self, property_id: uuid.UUID
     ) -> tuple[float, int]:

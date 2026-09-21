@@ -175,3 +175,38 @@ async def get_current_staff(
 
 CurrentStaff = Annotated[User, Depends(get_current_staff)]
 
+
+# =======================================================================================================================================
+# SuperAdmin Authentication — platform-level admin access
+# =======================================================================================================================================
+
+
+async def get_current_superadmin(
+    token: str = Depends(oauth2_scheme_user),
+    user_service: UserService = Depends(get_user_service),
+) -> User:
+    payload = user_service.auth_service.verify_access_token(token)
+    if not payload or payload.get("role") != "superadmin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to access this resource",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    user = await user_service.get_user_by_id(payload["user_id"])
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to access this resource",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
+
+
+CurrentSuperAdmin = Annotated[User, Depends(get_current_superadmin)]
+

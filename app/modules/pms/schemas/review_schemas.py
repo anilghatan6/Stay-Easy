@@ -35,3 +35,26 @@ class PaginatedReviewsResponse(BaseModel):
     reviews: list[ReviewResponse]
     average_rating: float
     total_reviews: int
+
+
+class PropertySummaryResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    city: Optional[str] = None
+    country: Optional[str] = None
+    photos: Optional[dict] = None
+
+
+class GuestReviewResponse(BaseModel):
+    id: uuid.UUID
+    rating: int
+    comment: Optional[str] = None
+    is_edited: bool
+    created_at: datetime
+    updated_at: datetime
+    property: PropertySummaryResponse
+
+
+class PaginatedGuestReviewsResponse(BaseModel):
+    reviews: list[GuestReviewResponse]
+    total: int

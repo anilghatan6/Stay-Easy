@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from app.middlewares.auth_middlewares import CurrentGuest
 from app.modules.pms.dependencies import get_review_service
 from app.modules.pms.schemas.review_schemas import (
+    PaginatedGuestReviewsResponse,
     PaginatedReviewsResponse,
     ReviewCreateRequest,
     ReviewEditRequest,
@@ -15,6 +16,21 @@ from app.modules.pms.services.review_service import ReviewService
 from app.utils.schemas import StandardResponse
 
 router = APIRouter(prefix="/properties", tags=["reviews"])
+
+
+@router.get("/me/reviews", status_code=200)
+async def get_my_reviews(
+    guest: CurrentGuest,
+    review_service: Annotated[ReviewService, Depends(get_review_service)],
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=50),
+):
+    result = await review_service.get_reviews_for_guest(
+        guest=guest,
+        skip=skip,
+        limit=limit,
+    )
+    return StandardResponse(data=PaginatedGuestReviewsResponse(**result))
 
 
 @router.post(

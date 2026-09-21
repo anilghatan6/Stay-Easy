@@ -16,6 +16,7 @@ from app.modules.house_keeping.models import *
 from app.modules.housekeeping_mobile.models import *
 from app.modules.staff_mgmt.models import *
 from app.modules.notifications.models import *
+from app.modules.superadmin.models import *
 from app.config.database_config import Base
 from app.config.settings_config import settings
 import sys
