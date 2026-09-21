@@ -85,6 +85,28 @@ class StaffRepository:
             logger.error(f"[StaffRepository] Failed to fetch staff by email {email}: {e}")
             raise RepositoryException("Could not fetch staff details. Please try again.") from e
 
+    async def get_by_user_id_and_property(
+        self, user_id: uuid.UUID, property_id: uuid.UUID
+    ) -> Optional[Staff]:
+        logger.info(f"[StaffRepository] Fetching staff by user_id {user_id} and property {property_id}")
+        try:
+            stmt = (
+                select(Staff)
+                .join(StaffProperty, StaffProperty.staff_id == Staff.id)
+                .where(
+                    Staff.user_id == user_id,
+                    StaffProperty.property_id == property_id,
+                )
+            )
+            result = await self.db.execute(stmt)
+            return result.scalar_one_or_none()
+
+        except SQLAlchemyError as e:
+            logger.error(
+                f"[StaffRepository] Failed to fetch staff by user_id {user_id} and property {property_id}: {e}"
+            )
+            raise RepositoryException("Could not fetch staff details. Please try again.") from e
+
     async def get_staff_by_user_id(self, user_id: uuid.UUID) -> Optional[Staff]:
         logger.info(f"[StaffRepository] Fetching staff by user_id: {user_id}")
         try:

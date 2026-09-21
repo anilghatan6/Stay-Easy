@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, UTC
 from typing import Sequence
 
-from sqlalchemy import select, func, update
+from sqlalchemy import select, func, update, and_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -50,30 +50,31 @@ class NotificationRepository:
         notif_type: str | None = None,
     ) -> tuple[list[dict], int]:
         try:
-            # Base JOIN condition reused by both count and fetch queries
-            join_cond = (
-                (NotificationRecipient.notification_id == Notification.id)
-                & (NotificationRecipient.user_id == user_id)
+            # 1. Build the join condition
+            join_cond = and_(
+                NotificationRecipient.notification_id == Notification.id,
+                NotificationRecipient.user_id == user_id
             )
+            
+            # 2. Build the dynamic where clauses
             base_where = [Notification.property_id == property_id]
             if notif_type:
                 base_where.append(Notification.type == notif_type)
             if unread_only:
                 base_where.append(NotificationRecipient.is_read == False)
 
-            # Count
-            count_stmt = (
-                select(func.count())
-                .select_from(Notification)
-                .join(NotificationRecipient, join_cond)
-                .where(*base_where)
-            )
-            count_result = await self.db.execute(count_stmt)
-            total = count_result.scalar() or 0
+            # 3. Create the window function for the total count
+            # This counts matches across the entire filtered dataset before limit/offset apply
+            total_count_col = func.count().over().label("total_count")
 
-            # Fetch notifications + recipient read state
+            # 4. Single Query: Fetch data columns AND the total count together
             stmt = (
-                select(Notification, NotificationRecipient.is_read, NotificationRecipient.read_at)
+                select(
+                    Notification, 
+                    NotificationRecipient.is_read, 
+                    NotificationRecipient.read_at,
+                    total_count_col
+                )
                 .join(NotificationRecipient, join_cond)
                 .where(*base_where)
                 .order_by(Notification.created_at.desc())
@@ -84,25 +85,33 @@ class NotificationRepository:
             result = await self.db.execute(stmt)
             rows = result.all()
 
+            # 5. Process results
             notifications = []
-            for notif, is_read, read_at in rows:
-                notifications.append({
-                    "id": notif.id,
-                    "type": notif.type.value,
-                    "priority": notif.priority.value,
-                    "title": notif.title,
-                    "message": notif.message,
-                    "entity_type": notif.entity_type,
-                    "entity_id": notif.entity_id,
-                    "actor_user_id": notif.actor_user_id,
-                    "actor_guest_id": notif.actor_guest_id,
-                    "meta": notif.meta,
-                    "is_read": is_read,
-                    "read_at": read_at,
-                    "created_at": notif.created_at,
-                })
+            total = 0
+
+            if rows:
+                # Grab the total from the very first row (it will be identical across all rows)
+                total = rows[0].total_count
+                
+                for notif, is_read, read_at, _ in rows:
+                    notifications.append({
+                        "id": notif.id,
+                        "type": notif.type.value,
+                        "priority": notif.priority.value,
+                        "title": notif.title,
+                        "message": notif.message,
+                        "entity_type": notif.entity_type,
+                        "entity_id": notif.entity_id,
+                        "actor_user_id": notif.actor_user_id,
+                        "actor_guest_id": notif.actor_guest_id,
+                        "meta": notif.meta,
+                        "is_read": is_read,
+                        "read_at": read_at,
+                        "created_at": notif.created_at,
+                    })
 
             return notifications, total
+
         except SQLAlchemyError as e:
             logger.error(f"[NotificationRepository] Failed to get notifications: {e}")
             raise RepositoryException("Failed to fetch notifications.")
@@ -194,7 +203,8 @@ class NotificationRepository:
                     user_ids.add(admin_id)
 
             # Get staff users for the non-admin roles
-            staff_roles = [r for r in roles if r != "admin"]
+            # Convert to uppercase to match JobRole enum values stored in DB
+            staff_roles = [r.upper() for r in roles if r != "admin"]
             if staff_roles:
                 staff_stmt = (
                     select(Staff.user_id)

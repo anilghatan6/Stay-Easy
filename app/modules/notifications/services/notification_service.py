@@ -138,6 +138,12 @@ class NotificationService:
             user_id=user_id,
             property_id=property_id,
         )
+        logger.info(
+            f"total notification for user {user_id} for property {property_id}: {total}"
+        )
+        logger.info(
+            f"unread notification for user {user_id} for property {property_id}: {unread_count}"
+        )
         return {
             "notifications": notifications,
             "total": total,

@@ -728,6 +728,7 @@ class StaffOperationsService:
                     outstanding = Decimal("0.00")
             else:
                 # No folio: just pay remaining booking balance (room only)
+                folio_total = booking.total_amount
                 outstanding = booking.amount_due
 
             # Record payment if provided
