@@ -354,9 +354,14 @@ class StaffOperationsRepository:
                     MasterBookingStatus.CONFIRMED,
                     MasterBookingStatus.CHECKED_IN,
                 ]),
-                # standard overlap check: existing.checkin < new.checkout AND existing.checkout > new.checkin
                 Booking.checkin_date < checkout_date,
-                Booking.checkout_date > checkin_date,
+                or_(
+                    Booking.checkout_date > checkin_date,
+                    and_(
+                        Booking.status == MasterBookingStatus.CHECKED_IN,
+                        Booking.checkout_date < func.current_date(),
+                    ),
+                ),
             )
         )
         return list(result.scalars().all())
@@ -698,7 +703,13 @@ class StaffOperationsRepository:
                         MasterBookingStatus.CHECKED_IN,
                     ]),
                     Booking.checkin_date < end_date,
-                    Booking.checkout_date > start_date,
+                    or_(
+                        Booking.checkout_date > start_date,
+                        and_(
+                            Booking.status == MasterBookingStatus.CHECKED_IN,
+                            Booking.checkout_date < func.current_date(),
+                        ),
+                    ),
                 )
                 .options(
                     joinedload(Booking.guest),

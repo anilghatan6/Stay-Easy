@@ -2,10 +2,11 @@ import uuid
 from decimal import Decimal
 from typing import Optional, List, Dict, Any
 from sqlalchemy import (
-    String, ForeignKey, Integer, Boolean, Numeric, 
-    UniqueConstraint, Index, CheckConstraint, Enum as SqlEnum
+    String, ForeignKey, Integer, Boolean, Numeric, Column,
+    UniqueConstraint, Index, CheckConstraint, Enum as SqlEnum, event, func
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY
+from geoalchemy2 import Geography
 from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from enum import StrEnum
@@ -28,6 +29,7 @@ class Property(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("tenant_id", "name", name="uq_tenant_property_name"),
         Index("ix_properties_geo_location", "country", "state", "city","address"),
+        Index("ix_properties_geo_location_gist", "geo_location", postgresql_using="gist"),
         Index(
             "ix_properties_amenities_gin",
             "system_amenity_ids",
@@ -82,6 +84,7 @@ class Property(Base, TimestampMixin):
     longitude: Mapped[Optional[Decimal]] = mapped_column(
         Numeric(precision=9, scale=6), nullable=True
     )
+    geo_location = Column(Geography(geometry_type="POINT", srid=4326), nullable=True)
 
     check_in_time: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     check_out_time: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
@@ -157,5 +160,19 @@ class Amenity(Base, TimestampMixin):
 
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     icon:Mapped[str] = mapped_column(String(100), nullable=True)
+
+
+def _sync_geo_location(target, value, oldvalue, initiator=None):
+    """Auto-update geo_location when latitude or longitude changes."""
+    if target.latitude is not None and target.longitude is not None:
+        target.geo_location = func.ST_SetSRID(
+            func.ST_MakePoint(target.longitude, target.latitude), 4326
+        )
+    else:
+        target.geo_location = None
+
+
+event.listen(Property, "before_insert", lambda mapper, connection, target: _sync_geo_location(target, None, None))
+event.listen(Property, "before_update", lambda mapper, connection, target: _sync_geo_location(target, None, None))
 
 

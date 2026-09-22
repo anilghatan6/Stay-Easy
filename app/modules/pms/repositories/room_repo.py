@@ -1,7 +1,7 @@
 from app.utils.exceptions import RoomNotFoundException
 import uuid
 
-from sqlalchemy import func, select, or_, update
+from sqlalchemy import func, select, or_, and_, update
 from sqlalchemy.orm import joinedload,selectinload
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -503,7 +503,13 @@ class RoomRepository:
                         MasterBookingStatus.CHECKED_IN,
                     ]),
                     Booking.checkin_date < check_out,
-                    Booking.checkout_date > check_in,
+                    or_(
+                        Booking.checkout_date > check_in,
+                        and_(
+                            Booking.status == MasterBookingStatus.CHECKED_IN,
+                            Booking.checkout_date < func.current_date(),
+                        ),
+                    ),
                 )
             )
 
@@ -554,7 +560,13 @@ class RoomRepository:
                         ]
                     ),
                     Booking.checkin_date < check_out,
-                    Booking.checkout_date > check_in,
+                    or_(
+                        Booking.checkout_date > check_in,
+                        and_(
+                            Booking.status == MasterBookingStatus.CHECKED_IN,
+                            Booking.checkout_date < func.current_date(),
+                        ),
+                    ),
                 )
             )
 
@@ -641,7 +653,13 @@ class RoomRepository:
                         MasterBookingStatus.CHECKED_IN,
                     ]),
                     Booking.checkin_date < check_out,
-                    Booking.checkout_date > check_in,
+                    or_(
+                        Booking.checkout_date > check_in,
+                        and_(
+                            Booking.status == MasterBookingStatus.CHECKED_IN,
+                            Booking.checkout_date < func.current_date(),
+                        ),
+                    ),
                     BookingRoom.room_unit_id.in_(locked_room_ids),
                 )
             )

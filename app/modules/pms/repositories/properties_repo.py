@@ -662,9 +662,9 @@ class PropertyRepository:
                               SELECT br.room_unit_id
                               FROM booking_rooms br
                               JOIN bookings b ON b.id = br.booking_id
-                              WHERE b.status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN')
-                                AND b.checkin_date < (CURRENT_DATE + INTERVAL '1 day')
-                                AND b.checkout_date > CURRENT_DATE
+                               WHERE b.status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN')
+                                 AND b.checkin_date < (CURRENT_DATE + INTERVAL '1 day')
+                                 AND (b.checkout_date > CURRENT_DATE OR (b.status = 'CHECKED_IN' AND b.checkout_date < CURRENT_DATE))
                           )
                     ) lowest_rate ON true
                     WHERE p.is_active = true
