@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, status, Query
 
 from app.middlewares.auth_middlewares import CurrentUser, CurrentStaff
 from app.modules.pms.dependencies import get_property_service
+from app.modules.subscription.dependencies import get_plan_enforcement
+from app.modules.subscription.enforcement_service import PlanEnforcementService
 from app.modules.pms.schemas.properties_schemas import (
     TenantPropertiesListResponse,
     SystemAmenitiesListResponse,
@@ -56,9 +58,11 @@ async def create_property(
     payload: CreatePropertyRequest,
     current_user: CurrentUser,
     property_service: PropertyService = Depends(get_property_service),
+    enforcement: PlanEnforcementService = Depends(get_plan_enforcement),
 ):
     verify_tenant(current_user)
     tenant_id = current_user.tenant_id
+    await enforcement.check_property_limit(tenant_id)
 
     response = await property_service.create_property(
         payload=payload, tenant_id=tenant_id

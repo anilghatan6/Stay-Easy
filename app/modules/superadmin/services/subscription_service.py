@@ -109,7 +109,9 @@ class SubscriptionService:
             raise ServiceException("Plan not found.")
 
         now = datetime.now(UTC)
-        if billing_cycle == "YEARLY":
+        if plan.slug == "free-trial":
+            expires_at = now + timedelta(days=14)
+        elif billing_cycle == "YEARLY":
             expires_at = now + timedelta(days=365)
         else:
             expires_at = now + timedelta(days=30)
@@ -141,6 +143,56 @@ class SubscriptionService:
 
     async def get_tenant_subscription(self, tenant_id: uuid.UUID):
         sub = await self.subscription_repo.get_tenant_subscription_with_plan(tenant_id)
+        return sub
+
+    async def upgrade_subscription(
+        self,
+        tenant_id: uuid.UUID,
+        plan_id: uuid.UUID,
+        billing_cycle: Optional[str] = None,
+        actor: User = None,
+        ip_address: Optional[str] = None,
+    ):
+        new_plan = await self.subscription_repo.get_plan_by_id(plan_id)
+        if new_plan is None:
+            raise ServiceException("Plan not found.")
+
+        existing_sub = await self.subscription_repo.get_tenant_subscription(tenant_id)
+        if existing_sub is None:
+            raise ServiceException("Tenant has no existing subscription. Use assign instead.")
+
+        cycle = billing_cycle or existing_sub.billing_cycle.value
+
+        now = datetime.now(UTC)
+        if cycle == "YEARLY":
+            expires_at = now + timedelta(days=365)
+        else:
+            expires_at = now + timedelta(days=30)
+
+        sub = await self.subscription_repo.assign_subscription(
+            tenant_id=tenant_id,
+            plan_id=plan_id,
+            billing_cycle=cycle,
+            starts_at=now,
+            expires_at=expires_at,
+        )
+
+        await self.audit_repo.log(
+            actor_id=actor.id,
+            actor_email=actor.email,
+            action="upgrade_subscription",
+            target_type="tenant",
+            target_id=tenant_id,
+            details={
+                "old_plan_id": str(existing_sub.plan_id),
+                "new_plan_name": new_plan.name,
+                "billing_cycle": cycle,
+                "expires_at": expires_at.isoformat(),
+            },
+            ip_address=ip_address,
+        )
+        await self.db.commit()
+        logger.info(f"[SubscriptionService] Subscription upgraded: tenant {tenant_id} -> plan {new_plan.name}")
         return sub
 
     # ─── Dashboard ───

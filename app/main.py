@@ -61,6 +61,7 @@ from app.modules.superadmin.routers.subscription_router import router as subscri
 from app.modules.superadmin.routers.feature_flag_router import router as feature_flag_router
 from app.modules.superadmin.routers.announcement_router import router as announcement_router
 from app.modules.superadmin.routers.dashboard_router import router as superadmin_dashboard_router
+from app.modules.subscription.router import router as subscription_usage_router
 
 from app.middlewares.cors import configure_cors
 from app.utils.exception_handlers import register_exception_handlers
@@ -145,6 +146,7 @@ app.include_router(notification_router)
 app.include_router(websocket_router)
 app.include_router(superadmin_router)
 app.include_router(subscription_router)
+app.include_router(subscription_usage_router)
 app.include_router(feature_flag_router)
 app.include_router(announcement_router)
 app.include_router(superadmin_dashboard_router)

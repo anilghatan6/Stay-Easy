@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, status, HTTPException, Query
 
 from app.middlewares.auth_middlewares import CurrentUser
 from app.modules.pms.dependencies import get_room_service
+from app.modules.subscription.dependencies import get_plan_enforcement
+from app.modules.subscription.enforcement_service import PlanEnforcementService
 from app.modules.pms.schemas.room_schemas import (
     RoomBulkCreateRequest,
     RoomBulkCreateResponse,
@@ -77,9 +79,11 @@ async def create_rooms(
     payload: RoomBulkCreateRequest,
     user: CurrentUser,
     room_service: RoomService = Depends(get_room_service),
+    enforcement: PlanEnforcementService = Depends(get_plan_enforcement),
 ) -> StandardResponse[RoomBulkCreateResponse]:
 
     verify_tenant(user)
+    await enforcement.check_room_limit(user.tenant_id, property_id)
     response = await room_service.create_rooms(
         property_id=property_id,
         tenant_id=user.tenant_id,

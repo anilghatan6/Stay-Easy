@@ -15,6 +15,8 @@ class CreatePlanRequest(BaseModel):
     price_yearly: Optional[Decimal] = None
     max_properties: int = 1
     max_staff: int = 5
+    max_rooms_per_property: int = 10
+    max_bookings_per_month: int = 50
     features: Optional[dict] = None
 
 
@@ -24,6 +26,8 @@ class UpdatePlanRequest(BaseModel):
     price_yearly: Optional[Decimal] = None
     max_properties: Optional[int] = None
     max_staff: Optional[int] = None
+    max_rooms_per_property: Optional[int] = None
+    max_bookings_per_month: Optional[int] = None
     features: Optional[dict] = None
     is_active: Optional[bool] = None
 
@@ -38,6 +42,8 @@ class PlanResponse(BaseModel):
     price_yearly: Optional[Decimal] = None
     max_properties: int
     max_staff: int
+    max_rooms_per_property: int
+    max_bookings_per_month: int
     features: Optional[dict] = None
     is_active: bool
     created_at: datetime
@@ -53,6 +59,11 @@ class PlanListResponse(BaseModel):
 class AssignSubscriptionRequest(BaseModel):
     plan_id: uuid.UUID
     billing_cycle: str = "MONTHLY"
+
+
+class UpgradeSubscriptionRequest(BaseModel):
+    plan_id: uuid.UUID
+    billing_cycle: Optional[str] = None
 
 
 class TenantSubscriptionResponse(BaseModel):

@@ -3,6 +3,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, status, Query
 from app.modules.staff_mgmt.services.staffs_services import StaffService
 from app.modules.staff_mgmt.dependencies import get_staff_service
+from app.modules.subscription.dependencies import get_plan_enforcement
+from app.modules.subscription.enforcement_service import PlanEnforcementService
 from app.middlewares.auth_middlewares import CurrentUser
 from app.utils.schemas import StandardResponse
 from app.utils.validation import verify_tenant
@@ -17,9 +19,11 @@ async def create_staff(
     current_user: CurrentUser,
     payload:CreateStaffRequest,
     staff_service: StaffService = Depends(get_staff_service),
+    enforcement: PlanEnforcementService = Depends(get_plan_enforcement),
 ):
     verify_tenant(current_user)
     tenant_id = current_user.tenant_id
+    await enforcement.check_staff_limit(tenant_id)
 
     response = await staff_service.create_staff(
         tenant_id,

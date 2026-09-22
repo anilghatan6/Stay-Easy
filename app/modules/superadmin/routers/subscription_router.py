@@ -10,6 +10,7 @@ from app.modules.superadmin.schemas.subscription_schemas import (
     PlanResponse,
     PlanListResponse,
     AssignSubscriptionRequest,
+    UpgradeSubscriptionRequest,
     TenantSubscriptionResponse,
 )
 from app.modules.superadmin.services.subscription_service import SubscriptionService
@@ -146,4 +147,26 @@ async def get_tenant_subscription(
     sub = await subscription_service.get_tenant_subscription(tenant_id)
     if sub is None:
         return StandardResponse(data=None, meta={"message": "No subscription found"})
+    return StandardResponse(data=TenantSubscriptionResponse.model_validate(sub))
+
+
+@router.patch(
+    "/tenants/{tenant_id}/subscription",
+    response_model=StandardResponse[TenantSubscriptionResponse],
+    summary="Upgrade or change a tenant's subscription plan",
+)
+async def upgrade_subscription(
+    tenant_id: uuid.UUID,
+    payload: UpgradeSubscriptionRequest,
+    request: Request,
+    staff: CurrentSuperAdmin,
+    subscription_service: SubscriptionService = Depends(get_subscription_service),
+):
+    sub = await subscription_service.upgrade_subscription(
+        tenant_id=tenant_id,
+        plan_id=payload.plan_id,
+        billing_cycle=payload.billing_cycle,
+        actor=staff,
+        ip_address=request.client.host if request.client else None,
+    )
     return StandardResponse(data=TenantSubscriptionResponse.model_validate(sub))

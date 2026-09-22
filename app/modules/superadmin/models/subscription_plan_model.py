@@ -32,6 +32,8 @@ class SubscriptionPlan(Base, TimestampMixin):
 
     max_properties: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     max_staff: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    max_rooms_per_property: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
+    max_bookings_per_month: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
 
     features: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 

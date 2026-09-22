@@ -438,3 +438,10 @@ class PermissionException(AppBaseException):
         super().__init__(
             user_message=user_message, internal_detail=user_message, status_code=403
         )
+
+
+class PlanLimitExceededException(AppBaseException):
+    def __init__(self, message: str):
+        super().__init__(
+            user_message=message, internal_detail=message, status_code=403
+        )

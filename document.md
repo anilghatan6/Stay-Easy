@@ -449,3 +449,18 @@ uvicorn app.main:app --reload
 # Run tests
 pytest
 ```
+
+
+
+Register → Verify OTP → Login → Create Tenant
+                                      ↓
+                              Tenant created
+                         + Free trial assigned (14 days)
+                                      ↓
+                              User starts using app
+                                      ↓
+                        After 14 days → subscription expires
+                        Enforcement blocks new creations
+                                      ↓
+                     User must upgrade via superadmin
+When a tenant is created, they immediately get the free trial plan with limits: 1 property, 10 rooms/property, 3 staff, 50 bookings/month — active for 14 days.
