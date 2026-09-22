@@ -232,6 +232,21 @@ class UserService:
             raise UserNotFoundException("User not found", f"ID {user_id} not found")
         return user
 
+    async def update_user(self, user_id: str, update_data: dict) -> User:
+        """Updates the authenticated user's own profile (full_name, phone, nationality)."""
+        logger.info(f"[UserService] Updating profile for user: {user_id}")
+        try:
+            user = await self.get_user_by_id(user_id)
+            for field, value in update_data.items():
+                if field in {"full_name", "phone", "nationality"}:
+                    setattr(user, field, value)
+            return await self.user_repository.update_user(user)
+        except UserNotFoundException:
+            raise
+        except Exception as e:
+            logger.error(f"[UserService] Error in update_user_profile: {str(e)}")
+            raise ServiceException(str(e))
+
     async def refresh_token(self, refresh_token: str) -> dict:
         logger.info("[UserService] Refreshing tokens")
         try:

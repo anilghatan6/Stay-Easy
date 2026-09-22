@@ -1,5 +1,9 @@
 from fastapi import APIRouter, Depends, status
-from app.modules.auth.schemas.users_schema import UserCreate, UserResponse
+from app.modules.auth.schemas.users_schema import (
+    UserCreate,
+    UserResponse,
+    UserUpdate,
+)
 from app.modules.auth.schemas.token_schema import (
     VerifyOTP,
     ResendOTP,
@@ -105,3 +109,19 @@ async def refresh_token(
 )
 async def get_current_user(current_user: CurrentStaff) -> UserResponse:
     return current_user
+
+
+@router.patch(
+    "/me",
+    response_model=UserResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def update_current_user(
+    update_data: UserUpdate,
+    current_user: CurrentStaff,
+    user_service: UserService = Depends(get_user_service),
+) -> UserResponse:
+    updated_user = await user_service.update_user(
+        str(current_user.id), update_data.model_dump(exclude_unset=True)
+    )
+    return updated_user

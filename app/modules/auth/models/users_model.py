@@ -25,6 +25,7 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(50), nullable=False)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    nationality: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=True)
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 

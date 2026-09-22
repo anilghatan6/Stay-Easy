@@ -217,6 +217,21 @@ class GuestService:
             logger.error(f"[GuestService] Error in get_guest_by_id: {str(e)}")
             raise ServiceException(str(e))
 
+    async def update_guest_profile(self, guest_id: str, update_data: dict) -> Guest:
+        """Updates the authenticated guest's own profile (full_name, phone, nationality)."""
+        logger.info(f"[GuestService] Updating profile for guest: {guest_id}")
+        try:
+            guest = await self.get_guest_by_id(guest_id)
+            for field, value in update_data.items():
+                if field in {"full_name", "phone", "nationality"}:
+                    setattr(guest, field, value)
+            return await self.guest_repository.update_guest(guest)
+        except UserNotFoundException:
+            raise
+        except Exception as e:
+            logger.error(f"[GuestService] Error in update_guest_profile: {str(e)}")
+            raise ServiceException(str(e))
+
     async def refresh_token(self, refresh_token: str) -> dict:
         logger.info("[GuestService] Refreshing tokens")
         try:

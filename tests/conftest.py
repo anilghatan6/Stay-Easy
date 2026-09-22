@@ -11,6 +11,7 @@ from sqlalchemy.dialects.postgresql import ARRAY
 
 SQLiteTypeCompiler.visit_ARRAY = lambda self, type_, **kw: "JSON"
 SQLiteTypeCompiler.visit_JSONB = lambda self, type_, **kw: "JSON"
+SQLiteTypeCompiler.visit_user_defined = lambda self, type_, **kw: "JSON"
 
 def _array_bind_processor(self, dialect):
     if dialect.name == "sqlite":
@@ -46,6 +47,31 @@ from app.config.database_config import Base, get_db
 from app.config.redis_config import get_redis_client
 from app.modules.auth.models import *   # noqa: F401,F403  registers all ORM models
 from app.modules.pms.models import *    # noqa: F401,F403  registers all PMS ORM models
+
+# ── Neutralize geoalchemy2 DDL admin for SQLite (no SpatiaLite in tests) ──
+from geoalchemy2 import admin as _geoalchemy_admin
+
+_real_select_dialect = _geoalchemy_admin.select_dialect
+
+
+class _NoopDialectAdmin:
+    def before_execute(self, conn, clauseelement, multiparams, params, execution_options):
+        return clauseelement, multiparams, params
+
+    def __getattr__(self, name):
+        def _noop(*args, **kwargs):
+            return None
+
+        return _noop
+
+
+def _sqlite_safe_select_dialect(dialect_name):
+    if dialect_name == "sqlite":
+        return _NoopDialectAdmin()
+    return _real_select_dialect(dialect_name)
+
+
+_geoalchemy_admin.select_dialect = _sqlite_safe_select_dialect
 
 import fakeredis.aioredis
 

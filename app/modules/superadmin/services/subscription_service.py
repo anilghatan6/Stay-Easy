@@ -139,7 +139,7 @@ class SubscriptionService:
         )
         await self.db.commit()
         logger.info(f"[SubscriptionService] Subscription assigned: tenant {tenant_id} -> plan {plan.name}")
-        return sub
+        return await self.subscription_repo.get_tenant_subscription_with_plan(tenant_id)
 
     async def get_tenant_subscription(self, tenant_id: uuid.UUID):
         sub = await self.subscription_repo.get_tenant_subscription_with_plan(tenant_id)
@@ -193,7 +193,7 @@ class SubscriptionService:
         )
         await self.db.commit()
         logger.info(f"[SubscriptionService] Subscription upgraded: tenant {tenant_id} -> plan {new_plan.name}")
-        return sub
+        return await self.subscription_repo.get_tenant_subscription_with_plan(tenant_id)
 
     # ─── Dashboard ───
 

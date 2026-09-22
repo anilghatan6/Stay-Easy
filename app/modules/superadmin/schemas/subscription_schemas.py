@@ -50,6 +50,8 @@ class PlanResponse(BaseModel):
 
 
 class PlanListResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     plans: list[PlanResponse]
     total: int
 
@@ -76,4 +78,4 @@ class TenantSubscriptionResponse(BaseModel):
     billing_cycle: str
     starts_at: datetime
     expires_at: Optional[datetime] = None
-    plan: Optional[PlanResponse] = None
+    plan: PlanResponse

@@ -81,6 +81,7 @@ class UserRepository:
                 .values(
                     full_name=user.full_name,
                     phone=user.phone,
+                    nationality=user.nationality,
                     role=user.role,
                     tenant_id=user.tenant_id,
                     hashed_password=user.hashed_password,
@@ -89,6 +90,7 @@ class UserRepository:
             )
             await self.session.execute(stmt)
             await self.session.commit()
+            await self.session.refresh(user)
             logger.info("[UserRepository] User updated successfully")
             return user
         except SQLAlchemyError as e:

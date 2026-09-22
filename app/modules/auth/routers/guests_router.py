@@ -1,7 +1,11 @@
 from fastapi import APIRouter, Depends, status
 from app.modules.auth.services.guests_services import GuestService
 from app.modules.auth.dependencies import get_guest_service
-from app.modules.auth.schemas.guests_schema import GuestCreate, GuestResponse
+from app.modules.auth.schemas.guests_schema import (
+    GuestCreate,
+    GuestResponse,
+    GuestProfileUpdate,
+)
 
 # from fastapi.security import OAuth2PasswordRequestForm
 from typing import Annotated
@@ -70,15 +74,6 @@ async def resend_otp(
     return {"message": "Verification code resent successfully."}
 
 
-# @router.post("/login", response_model=Token, status_code=status.HTTP_200_OK)
-# async def login_guest(
-#     guest: Annotated[OAuth2PasswordRequestForm, Depends()],
-#     guest_service: Annotated[GuestService, Depends(get_guest_service)],
-# ):
-#     guest_dict = {"email": guest.username, "password": guest.password}
-#     return await guest_service.login_guest(guest_dict)
-
-
 @router.post(
     "/refresh",
     response_model=AccessTokenResponse,
@@ -104,3 +99,19 @@ async def get_current_guest(
     guest: CurrentGuest,
 ):
     return guest
+
+
+@router.patch(
+    "/me",
+    response_model=GuestResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def update_current_guest(
+    update_data: GuestProfileUpdate,
+    guest: CurrentGuest,
+    guest_service: Annotated[GuestService, Depends(get_guest_service)],
+):
+    updated_guest = await guest_service.update_guest_profile(
+        str(guest.id), update_data.model_dump(exclude_unset=True)
+    )
+    return updated_guest

@@ -165,6 +165,75 @@ async def test_get_current_user_success(async_client: AsyncClient, token_store: 
     assert "role" in data
 
 
+# ── PATCH /auth/users/me ────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_update_current_user_unauthorized(async_client: AsyncClient):
+    resp = await async_client.patch("/auth/users/me", json={"full_name": "New Name"})
+    assert resp.status_code in (401, 403), resp.text
+
+
+@pytest.mark.asyncio
+async def test_update_current_user_invalid_token(async_client: AsyncClient):
+    resp = await async_client.patch(
+        "/auth/users/me",
+        json={"full_name": "New Name"},
+        headers={"Authorization": "Bearer invalid"},
+    )
+    assert resp.status_code in (401, 403), resp.text
+
+
+@pytest.mark.asyncio
+async def test_update_current_user_success(async_client: AsyncClient, token_store: dict):
+    headers = {"Authorization": f"Bearer {token_store['user_access']}"}
+    payload = {"full_name": "Jane Doe", "nationality": "US", "phone": "5556667777"}
+    resp = await async_client.patch("/auth/users/me", json=payload, headers=headers)
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["email"] == "admin@example.com"
+    assert data["full_name"] == "Jane Doe"
+    assert data["nationality"] == "US"
+    assert data["phone"] == "5556667777"
+
+
+@pytest.mark.asyncio
+async def test_update_current_user_partial(async_client: AsyncClient, token_store: dict):
+    headers = {"Authorization": f"Bearer {token_store['user_access']}"}
+    resp = await async_client.patch(
+        "/auth/users/me", json={"phone": "9998887777"}, headers=headers
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["phone"] == "9998887777"
+    assert data["full_name"] == "Jane Doe"
+    assert data["nationality"] == "US"
+
+
+@pytest.mark.asyncio
+async def test_update_current_user_invalid_phone(async_client: AsyncClient, token_store: dict):
+    headers = {"Authorization": f"Bearer {token_store['user_access']}"}
+    resp = await async_client.patch("/auth/users/me", json={"phone": "12345"}, headers=headers)
+    assert resp.status_code == 422, resp.text
+
+
+@pytest.mark.asyncio
+async def test_update_current_user_invalid_name(async_client: AsyncClient, token_store: dict):
+    headers = {"Authorization": f"Bearer {token_store['user_access']}"}
+    resp = await async_client.patch(
+        "/auth/users/me", json={"full_name": "John123"}, headers=headers
+    )
+    assert resp.status_code == 422, resp.text
+
+
+@pytest.mark.asyncio
+async def test_update_current_user_invalid_nationality(async_client: AsyncClient, token_store: dict):
+    headers = {"Authorization": f"Bearer {token_store['user_access']}"}
+    resp = await async_client.patch(
+        "/auth/users/me", json={"nationality": "US123"}, headers=headers
+    )
+    assert resp.status_code == 422, resp.text
+
+
 # ── POST /auth/users/refresh ────────────────────────────────────────────────
 
 @pytest.mark.asyncio

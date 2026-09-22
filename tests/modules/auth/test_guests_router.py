@@ -164,6 +164,75 @@ async def test_get_current_guest_success(async_client: AsyncClient, token_store:
     assert data["full_name"] == "John Doe"
 
 
+# ── PATCH /auth/guests/me ───────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_update_current_guest_unauthorized(async_client: AsyncClient):
+    resp = await async_client.patch("/auth/guests/me", json={"full_name": "New Name"})
+    assert resp.status_code in (401, 403), resp.text
+
+
+@pytest.mark.asyncio
+async def test_update_current_guest_invalid_token(async_client: AsyncClient):
+    resp = await async_client.patch(
+        "/auth/guests/me",
+        json={"full_name": "New Name"},
+        headers={"Authorization": "Bearer invalid"},
+    )
+    assert resp.status_code in (401, 403), resp.text
+
+
+@pytest.mark.asyncio
+async def test_update_current_guest_success(async_client: AsyncClient, token_store: dict):
+    headers = {"Authorization": f"Bearer {token_store['guest_access']}"}
+    payload = {"full_name": "Jane Guest", "nationality": "IN", "phone": "5556667777"}
+    resp = await async_client.patch("/auth/guests/me", json=payload, headers=headers)
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["email"] == "guest@example.com"
+    assert data["full_name"] == "Jane Guest"
+    assert data["nationality"] == "IN"
+    assert data["phone"] == "5556667777"
+
+
+@pytest.mark.asyncio
+async def test_update_current_guest_partial(async_client: AsyncClient, token_store: dict):
+    headers = {"Authorization": f"Bearer {token_store['guest_access']}"}
+    resp = await async_client.patch(
+        "/auth/guests/me", json={"phone": "9998887777"}, headers=headers
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["phone"] == "9998887777"
+    assert data["full_name"] == "Jane Guest"
+    assert data["nationality"] == "IN"
+
+
+@pytest.mark.asyncio
+async def test_update_current_guest_invalid_phone(async_client: AsyncClient, token_store: dict):
+    headers = {"Authorization": f"Bearer {token_store['guest_access']}"}
+    resp = await async_client.patch("/auth/guests/me", json={"phone": "12345"}, headers=headers)
+    assert resp.status_code == 422, resp.text
+
+
+@pytest.mark.asyncio
+async def test_update_current_guest_invalid_name(async_client: AsyncClient, token_store: dict):
+    headers = {"Authorization": f"Bearer {token_store['guest_access']}"}
+    resp = await async_client.patch(
+        "/auth/guests/me", json={"full_name": "John123"}, headers=headers
+    )
+    assert resp.status_code == 422, resp.text
+
+
+@pytest.mark.asyncio
+async def test_update_current_guest_invalid_nationality(async_client: AsyncClient, token_store: dict):
+    headers = {"Authorization": f"Bearer {token_store['guest_access']}"}
+    resp = await async_client.patch(
+        "/auth/guests/me", json={"nationality": "IN123"}, headers=headers
+    )
+    assert resp.status_code == 422, resp.text
+
+
 # ── POST /auth/guests/refresh ───────────────────────────────────────────────
 
 @pytest.mark.asyncio
