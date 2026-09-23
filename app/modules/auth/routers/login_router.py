@@ -16,8 +16,6 @@ router = APIRouter(
         Depends(RateLimiter(max_requests=30, window_seconds=60, scope="login")),
     ],
 )
-
-
 @router.post("/login", response_model=Token, status_code=status.HTTP_200_OK)
 async def login(
     credentials: Annotated[OAuth2PasswordRequestForm, Depends()],
@@ -45,7 +43,7 @@ async def login(
     try:
         return await user_service.login_user(login_data)
     except (UserNotFoundException, AccountInactiveException):
-        pass
+        pass 
 
     try:
         return await guest_service.login_guest(login_data)

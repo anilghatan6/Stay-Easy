@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, status, Query
@@ -24,6 +25,7 @@ from app.modules.booking.models.booking_model import (
     PaymentMethod,
     BookingType,
 )
+from app.utils.exceptions import InvalidDateException
 from app.utils.schemas import StandardResponse
 from app.utils.validation import verify_tenant
 
@@ -187,6 +189,9 @@ async def get_number_of_floors(
 async def get_property_bookings(
     property_id: uuid.UUID,
     current_user: CurrentStaff,
+    search: Optional[str] = Query(default=None, description="Search by guest name, email, booking reference number or room name"),
+    date_from: Optional[date] = Query(default=None, description="Overlap window start - return bookings whose stay ends on/after this date"),
+    date_to: Optional[date] = Query(default=None, description="Overlap window end - return bookings whose stay starts on/before this date"),
     skip: int = Query(default=0, ge=0, description="Number of bookings to skip"),
     limit: int = Query(default=10, ge=1, le=50, description="Max bookings to return"),
     status: Optional[MasterBookingStatus] = Query(default=None, description="Filter by booking status"),
@@ -197,6 +202,8 @@ async def get_property_bookings(
     property_service: PropertyService = Depends(get_property_service),
 ):
     verify_tenant(current_user)
+    if date_from and date_to and date_from > date_to:
+        raise InvalidDateException("date_from must be on or before date_to")
     tenant_id = current_user.tenant_id
     response, total_count = await property_service.get_property_bookings(
         property_id, tenant_id, skip, limit,
@@ -205,6 +212,9 @@ async def get_property_bookings(
         payment_method=payment_method,
         payment_gateway=payment_gateway,
         booking_type=booking_type,
+        search=search,
+        date_from=date_from,
+        date_to=date_to,
     )
     has_more = skip + len(response) < total_count
     return {

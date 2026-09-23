@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 from typing import Optional
 from sqlalchemy.exc import SQLAlchemyError
 from app.modules.pms.models import Property
@@ -481,6 +482,9 @@ class PropertyService:
         payment_method: Optional[PaymentMethod] = None,
         payment_gateway: Optional[PaymentGateway] = None,
         booking_type: Optional[BookingType] = None,
+        search: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
     ) -> tuple[list[PropertyBookingsResponse], int]:
         logger.info(
             f"[PropertyService] Getting the property bookings for property {property_id}"
@@ -498,6 +502,9 @@ class PropertyService:
                 payment_method=payment_method,
                 payment_gateway=payment_gateway,
                 booking_type=booking_type,
+                search=search,
+                date_from=date_from,
+                date_to=date_to,
             )
 
             formatted_bookings = []

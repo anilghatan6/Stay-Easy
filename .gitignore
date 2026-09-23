@@ -19,3 +19,7 @@ dev.db
 .pytest_cache
 # static
 static/uploads/properties/
+
+
+# create superadmin script
+app/modules/superadmin/create_superadmin.py

@@ -1,6 +1,7 @@
 import uuid
+from datetime import date
 from typing import Optional
-from sqlalchemy import func, select, or_, text
+from sqlalchemy import func, select, or_, exists, text
 from sqlalchemy.orm import joinedload,selectinload
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +22,10 @@ from app.modules.booking.models.booking_model import (
     PaymentStatus,
     PaymentMethod,
     BookingType,
+    BookingGuest,
 )
+from app.modules.auth.models.guests_model import Guest
+from app.modules.pms.models.rooms_model import Rooms
 # from app.modules.pms.models.rooms_model import Rooms, RoomStatus
 from app.utils.exceptions import (
     RepositoryException,
@@ -710,6 +714,9 @@ class PropertyRepository:
         payment_method: Optional[PaymentMethod] = None,
         payment_gateway: Optional[PaymentGateway] = None,
         booking_type: Optional[BookingType] = None,
+        search: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
     ):
         logger.info("[PropertyRepository] getting property bookings")
         try:
@@ -736,6 +743,49 @@ class PropertyRepository:
                 base_conditions.append(Booking.payment_gateway == payment_gateway)
             if booking_type is not None:
                 base_conditions.append(Booking.booking_type == booking_type)
+
+            # Add single search-bar filter across guest name/email,
+            # booking reference number, and room name.
+            if search:
+                pattern = f"%{search.strip()}%"
+                base_conditions.append(
+                    or_(
+                        Booking.ref_number.ilike(pattern),
+                        exists(
+                            select(1).where(
+                                Guest.id == Booking.guest_id,
+                                or_(
+                                    Guest.full_name.ilike(pattern),
+                                    Guest.email.ilike(pattern),
+                                ),
+                            )
+                        ),
+                        exists(
+                            select(1).where(
+                                BookingGuest.id == Booking.booking_guest_id,
+                                or_(
+                                    BookingGuest.full_name.ilike(pattern),
+                                    BookingGuest.email.ilike(pattern),
+                                ),
+                            )
+                        ),
+                        exists(
+                            select(1)
+                            .select_from(BookingRoom)
+                            .join(Rooms, Rooms.id == BookingRoom.room_unit_id)
+                            .where(
+                                BookingRoom.booking_id == Booking.id,
+                                Rooms.room_name.ilike(pattern),
+                            )
+                        ),
+                    )
+                )
+
+            # Add overlap-window filter on stay dates (AND logic)
+            if date_to is not None:
+                base_conditions.append(Booking.checkin_date <= date_to)
+            if date_from is not None:
+                base_conditions.append(Booking.checkout_date >= date_from)
 
             count_stmt = (
             select(func.count())
