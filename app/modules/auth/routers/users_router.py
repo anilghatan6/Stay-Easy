@@ -1,9 +1,5 @@
 from fastapi import APIRouter, Depends, status
-from app.modules.auth.schemas.users_schema import (
-    UserCreate,
-    UserResponse,
-    UserUpdate,
-)
+from app.modules.auth.schemas.users_schema import UserCreate, UserResponse,UserUpdate
 from app.modules.auth.schemas.token_schema import (
     VerifyOTP,
     ResendOTP,
@@ -75,18 +71,6 @@ async def resend_otp(
     return {"message": "Verification code resent successfully."}
 
 
-# @router.post("/login", response_model=Token, status_code=status.HTTP_200_OK)
-# async def login_user(
-#     user_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-#     user_service: UserService = Depends(get_user_service),
-# ):
-#     user_info = {
-#         "email": user_data.username ,
-#         "password": user_data.password,
-#     }
-#     return await user_service.login_user(user_info)
-
-
 @router.post(
     "/refresh",
     response_model=AccessTokenResponse,
@@ -110,6 +94,7 @@ async def refresh_token(
 async def get_current_user(current_user: CurrentStaff) -> UserResponse:
     return current_user
 
+    
 
 @router.patch(
     "/me",
@@ -118,10 +103,10 @@ async def get_current_user(current_user: CurrentStaff) -> UserResponse:
 )
 async def update_current_user(
     update_data: UserUpdate,
-    current_user: CurrentStaff,
+    user: CurrentUser,
     user_service: UserService = Depends(get_user_service),
-) -> UserResponse:
+):
     updated_user = await user_service.update_user(
-        str(current_user.id), update_data.model_dump(exclude_unset=True)
+        str(user.id), update_data.model_dump(exclude_unset=True)
     )
     return updated_user
